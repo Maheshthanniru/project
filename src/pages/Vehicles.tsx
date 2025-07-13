@@ -33,15 +33,15 @@ const Vehicles: React.FC = () => {
     dateRange: '',
   });
 
+  // Vehicle state according to schema
   const [newVehicle, setNewVehicle] = useState({
-    vehicle_no: '',
-    vehicle_type: '',
-    owner_name: '',
-    contact_no: '',
-    insurance_expiry: '',
-    permit_expiry: '',
-    fitness_expiry: '',
-    puc_expiry: '',
+    v_no: '',
+    v_type: '',
+    particulars: '',
+    tax_exp_date: '',
+    insurance_exp_date: '',
+    fitness_exp_date: '',
+    permit_exp_date: '',
   });
 
   // Summary stats
@@ -80,15 +80,15 @@ const Vehicles: React.FC = () => {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(vehicle =>
-        vehicle.vehicle_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        vehicle.vehicle_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        vehicle.owner_name.toLowerCase().includes(searchTerm.toLowerCase())
+        (vehicle.v_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (vehicle.v_type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (vehicle.particulars || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Vehicle type filter
     if (filters.vehicleType) {
-      filtered = filtered.filter(vehicle => vehicle.vehicle_type === filters.vehicleType);
+      filtered = filtered.filter(vehicle => vehicle.v_type === filters.vehicleType);
     }
 
     // Expiry status filter
@@ -152,12 +152,12 @@ const Vehicles: React.FC = () => {
   };
 
   const hasExpiredDocuments = (vehicle: Vehicle) => {
-    const dates = [vehicle.insurance_expiry, vehicle.permit_expiry, vehicle.fitness_expiry, vehicle.puc_expiry];
+    const dates = [vehicle.tax_exp_date, vehicle.insurance_exp_date, vehicle.fitness_exp_date, vehicle.permit_exp_date];
     return dates.some(date => date && getExpiryStatus(date).status === 'expired');
   };
 
   const hasExpiringDocuments = (vehicle: Vehicle) => {
-    const dates = [vehicle.insurance_expiry, vehicle.permit_expiry, vehicle.fitness_expiry, vehicle.puc_expiry];
+    const dates = [vehicle.tax_exp_date, vehicle.insurance_exp_date, vehicle.fitness_exp_date, vehicle.permit_exp_date];
     return dates.some(date => date && getExpiryStatus(date).status === 'expiring');
   };
 
@@ -186,18 +186,27 @@ const Vehicles: React.FC = () => {
         }
       } else {
         // Add new vehicle
-        const newVehicleData = await supabaseDB.addVehicle(newVehicle);
+        const newVehicleData = await supabaseDB.addVehicle({
+          sno: vehicles.length + 1,
+          v_no: newVehicle.v_no,
+          v_type: newVehicle.v_type || '',
+          particulars: newVehicle.particulars || '',
+          tax_exp_date: newVehicle.tax_exp_date || '',
+          insurance_exp_date: newVehicle.insurance_exp_date || '',
+          fitness_exp_date: newVehicle.fitness_exp_date || '',
+          permit_exp_date: newVehicle.permit_exp_date || '',
+          date_added: new Date().toISOString(),
+        });
         if (newVehicleData) {
           await loadVehicles();
           setNewVehicle({
-            vehicle_no: '',
-            vehicle_type: '',
-            owner_name: '',
-            contact_no: '',
-            insurance_expiry: '',
-            permit_expiry: '',
-            fitness_expiry: '',
-            puc_expiry: '',
+            v_no: '',
+            v_type: '',
+            particulars: '',
+            tax_exp_date: '',
+            insurance_exp_date: '',
+            fitness_exp_date: '',
+            permit_exp_date: '',
           });
           setShowAddForm(false);
           toast.success('Vehicle added successfully!');
@@ -207,7 +216,7 @@ const Vehicles: React.FC = () => {
       }
     } catch (error) {
       console.error('Error saving vehicle:', error);
-      toast.error('Failed to save vehicle');
+      toast.error('Failed to save vehicle: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -232,14 +241,15 @@ const Vehicles: React.FC = () => {
 
   const exportToExcel = () => {
     const exportData = filteredVehicles.map(vehicle => ({
-      'Vehicle Number': vehicle.vehicle_no,
-      'Type': vehicle.vehicle_type,
-      'Owner': vehicle.owner_name,
-      'Contact': vehicle.contact_no,
-      'Insurance Expiry': vehicle.insurance_expiry,
-      'Permit Expiry': vehicle.permit_expiry,
-      'Fitness Expiry': vehicle.fitness_expiry,
-      'PUC Expiry': vehicle.puc_expiry,
+      'S.No': vehicle.sno,
+      'Vehicle Number': vehicle.v_no,
+      'Type': vehicle.v_type,
+      'Particulars': vehicle.particulars,
+      'Tax Expiry': vehicle.tax_exp_date,
+      'Insurance Expiry': vehicle.insurance_exp_date,
+      'Fitness Expiry': vehicle.fitness_exp_date,
+      'Permit Expiry': vehicle.permit_exp_date,
+      'Date Added': vehicle.date_added,
     }));
 
     // Create CSV content
@@ -262,9 +272,9 @@ const Vehicles: React.FC = () => {
 
   const vehicleTypeOptions = [
     { value: '', label: 'All Types' },
-    ...Array.from(new Set(vehicles.map(v => v.vehicle_type))).map(type => ({
-      value: type,
-      label: type
+    ...Array.from(new Set(vehicles.map(v => v.v_type).filter(Boolean))).map(type => ({
+      value: type as string,
+      label: type as string
     }))
   ];
 
@@ -356,15 +366,19 @@ const Vehicles: React.FC = () => {
       {/* Filters */}
       <Card className="bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search vehicles..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-col justify-end">
+            <label htmlFor="vehicle-search" className="text-sm font-medium text-gray-700 mb-1">Search</label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                id="vehicle-search"
+                type="text"
+                placeholder="Search vehicles..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 h-12 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+              />
+            </div>
           </div>
 
           <Select
@@ -386,6 +400,8 @@ const Vehicles: React.FC = () => {
               <strong>{filteredVehicles.length}</strong> vehicles found
             </div>
           </div>
+          {/* Add an empty div to keep the grid aligned with Bank Guarantees page */}
+          {/* <div /> */}
         </div>
       </Card>
 
@@ -395,87 +411,56 @@ const Vehicles: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
-                label="Vehicle No."
-                value={editingVehicle ? editingVehicle.vehicle_no : newVehicle.vehicle_no}
-                onChange={(value) => handleInputChange('vehicle_no', value)}
+                label="Vehicle Number"
+                value={editingVehicle ? editingVehicle.v_no : newVehicle.v_no}
+                onChange={(value) => handleInputChange('v_no', value)}
                 placeholder="AP23AB1234"
                 required
               />
-              
-              <Select
-                label="Type"
-                value={editingVehicle ? editingVehicle.vehicle_type : newVehicle.vehicle_type}
-                onChange={(value) => handleInputChange('vehicle_type', value)}
-                options={vehicleTypes}
-                placeholder="Select vehicle type..."
-                required
-              />
-
               <Input
-                label="Owner Name"
-                value={editingVehicle ? editingVehicle.owner_name : newVehicle.owner_name}
-                onChange={(value) => handleInputChange('owner_name', value)}
-                placeholder="Owner name..."
-                required
+                label="Type"
+                value={editingVehicle ? editingVehicle.v_type || '' : newVehicle.v_type}
+                onChange={(value) => handleInputChange('v_type', value)}
+                placeholder="Truck/Car/Bus..."
+              />
+              <Input
+                label="Particulars"
+                value={editingVehicle ? editingVehicle.particulars || '' : newVehicle.particulars}
+                onChange={(value) => handleInputChange('particulars', value)}
+                placeholder="Description..."
               />
             </div>
-
-            <Input
-              label="Contact Number"
-              value={editingVehicle ? editingVehicle.contact_no : newVehicle.contact_no}
-              onChange={(value) => handleInputChange('contact_no', value)}
-              placeholder="Contact number..."
-            />
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Input
-                label="Insurance Exp Date"
+                label="Tax Expiry Date"
                 type="date"
-                value={editingVehicle ? editingVehicle.insurance_expiry : newVehicle.insurance_expiry}
-                onChange={(value) => handleInputChange('insurance_expiry', value)}
-                required
+                value={editingVehicle ? editingVehicle.tax_exp_date || '' : newVehicle.tax_exp_date}
+                onChange={(value) => handleInputChange('tax_exp_date', value)}
               />
-              
               <Input
-                label="Permit Exp Date"
+                label="Insurance Expiry Date"
                 type="date"
-                value={editingVehicle ? editingVehicle.permit_expiry : newVehicle.permit_expiry}
-                onChange={(value) => handleInputChange('permit_expiry', value)}
-                required
+                value={editingVehicle ? editingVehicle.insurance_exp_date || '' : newVehicle.insurance_exp_date}
+                onChange={(value) => handleInputChange('insurance_exp_date', value)}
               />
-              
               <Input
-                label="Fitness Exp Date"
+                label="Fitness Expiry Date"
                 type="date"
-                value={editingVehicle ? editingVehicle.fitness_expiry : newVehicle.fitness_expiry}
-                onChange={(value) => handleInputChange('fitness_expiry', value)}
-                required
+                value={editingVehicle ? editingVehicle.fitness_exp_date || '' : newVehicle.fitness_exp_date}
+                onChange={(value) => handleInputChange('fitness_exp_date', value)}
               />
-
               <Input
-                label="PUC Exp Date"
+                label="Permit Expiry Date"
                 type="date"
-                value={editingVehicle ? editingVehicle.puc_expiry : newVehicle.puc_expiry}
-                onChange={(value) => handleInputChange('puc_expiry', value)}
+                value={editingVehicle ? editingVehicle.permit_exp_date || '' : newVehicle.permit_exp_date}
+                onChange={(value) => handleInputChange('permit_exp_date', value)}
               />
             </div>
-
             <div className="flex gap-4">
-              <Button
-                type="submit"
-                disabled={loading}
-              >
+              <Button type="submit" disabled={loading}>
                 {loading ? 'Saving...' : (editingVehicle ? 'Update' : 'Add')}
               </Button>
-              
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowAddForm(false);
-                  setEditingVehicle(null);
-                }}
-              >
+              <Button type="button" variant="secondary" onClick={() => { setShowAddForm(false); setEditingVehicle(null); }}>
                 Close
               </Button>
             </div>
@@ -499,88 +484,63 @@ const Vehicles: React.FC = () => {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">S.No</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Number</th>
+                  <th className="px-3 py-2 text-left font-bold text-blue-700">S.No</th>
+                  <th className="px-3 py-2 text-left font-bold text-blue-700">Vehicle Number</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Type</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Particulars</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Tax Exp Date</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Ins Exp Date</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Permit Exp Date</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Fitness Exp Date</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Tax Expiry</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Insurance Expiry</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Fitness Expiry</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Permit Expiry</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Date Added</th>
                   <th className="px-3 py-2 text-center font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredVehicles.map((vehicle, index) => {
-                  const taxStatus = getExpiryStatus(vehicle.tax_exp_date);
-                  const insuranceStatus = getExpiryStatus(vehicle.insurance_expiry);
-                  const fitnessStatus = getExpiryStatus(vehicle.fitness_expiry);
-                  const permitStatus = getExpiryStatus(vehicle.permit_expiry);
-                  
-                  return (
-                    <tr key={vehicle.id} className={`border-b hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                    }`}>
-                      <td className="px-3 py-2 font-medium">{vehicle.sno}</td>
-                      <td className="px-3 py-2 font-medium text-blue-600">{vehicle.vehicle_no}</td>
-                      <td className="px-3 py-2">{vehicle.vehicle_type}</td>
-                      <td className="px-3 py-2 max-w-xs truncate" title={vehicle.owner_name}>
-                        {vehicle.owner_name}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${taxStatus.color}`}>
-                          {format(new Date(vehicle.tax_exp_date), 'dd-MM-yyyy')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${insuranceStatus.color}`}>
-                          {format(new Date(vehicle.insurance_expiry), 'dd-MM-yyyy')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${permitStatus.color}`}>
-                          {format(new Date(vehicle.permit_expiry), 'dd-MM-yyyy')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${fitnessStatus.color}`}>
-                          {format(new Date(vehicle.fitness_expiry), 'dd-MM-yyyy')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={Eye}
-                            onClick={() => handleViewDetails(vehicle)}
-                            className="px-2"
-                          >
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={Edit}
-                            onClick={() => handleEdit(vehicle)}
-                            className="px-2"
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            icon={Trash2}
-                            onClick={() => handleDelete(vehicle.id)}
-                            className="px-2"
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filteredVehicles.map((vehicle) => (
+                  <tr key={vehicle.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-2 font-medium">{vehicle.sno}</td>
+                    <td className="px-3 py-2 font-bold text-blue-700">{vehicle.v_no}</td>
+                    <td className="px-3 py-2">{vehicle.v_type || ''}</td>
+                    <td className="px-3 py-2">{vehicle.particulars || ''}</td>
+                    <td className="px-3 py-2 text-center">{vehicle.tax_exp_date ? format(new Date(vehicle.tax_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2 text-center">{vehicle.insurance_exp_date ? format(new Date(vehicle.insurance_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2 text-center">{vehicle.fitness_exp_date ? format(new Date(vehicle.fitness_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2 text-center">{vehicle.permit_exp_date ? format(new Date(vehicle.permit_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2 text-center">{vehicle.date_added ? format(new Date(vehicle.date_added || ''), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={Eye}
+                          onClick={() => handleViewDetails(vehicle)}
+                          className="px-2"
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={Edit}
+                          onClick={() => handleEdit(vehicle)}
+                          className="px-2"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          icon={Trash2}
+                          onClick={() => handleDelete(vehicle.id)}
+                          className="px-2"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -595,7 +555,7 @@ const Vehicles: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Truck className="w-5 h-5" />
-                  Vehicle Details - {selectedVehicle.vehicle_no}
+                  Vehicle Details - {selectedVehicle.v_no}
                 </h3>
                 <Button
                   size="sm"
@@ -613,10 +573,9 @@ const Vehicles: React.FC = () => {
                     <h4 className="font-medium text-blue-900 mb-3">Vehicle Information</h4>
                     <div className="space-y-2 text-sm">
                       <div><strong>S.No:</strong> {selectedVehicle.sno}</div>
-                      <div><strong>Vehicle Number:</strong> {selectedVehicle.vehicle_no}</div>
-                      <div><strong>Type:</strong> {selectedVehicle.vehicle_type}</div>
-                      <div><strong>Particulars:</strong> {selectedVehicle.owner_name}</div>
-                      <div><strong>Date Added:</strong> {format(new Date(selectedVehicle.date_added), 'MMM dd, yyyy')}</div>
+                      <div><strong>Vehicle Number:</strong> {selectedVehicle.v_no}</div>
+                      <div><strong>Type:</strong> {selectedVehicle.v_type}</div>
+                      <div><strong>Particulars:</strong> {selectedVehicle.particulars}</div>
                     </div>
                   </div>
                 </div>
@@ -627,9 +586,9 @@ const Vehicles: React.FC = () => {
                     <div className="space-y-3 text-sm">
                       {[
                         { label: 'Tax Expiry', date: selectedVehicle.tax_exp_date },
-                        { label: 'Insurance Expiry', date: selectedVehicle.insurance_expiry },
-                        { label: 'Fitness Expiry', date: selectedVehicle.fitness_expiry },
-                        { label: 'Permit Expiry', date: selectedVehicle.permit_expiry },
+                        { label: 'Insurance Expiry', date: selectedVehicle.insurance_exp_date },
+                        { label: 'Fitness Expiry', date: selectedVehicle.fitness_exp_date },
+                        { label: 'Permit Expiry', date: selectedVehicle.permit_exp_date },
                       ].map(({ label, date }) => {
                         const status = getExpiryStatus(date);
                         return (
@@ -637,7 +596,7 @@ const Vehicles: React.FC = () => {
                             <span><strong>{label}:</strong></span>
                             <div className="text-right">
                               <div className={`px-2 py-1 rounded text-xs font-medium ${status.color}`}>
-                                {format(new Date(date), 'MMM dd, yyyy')}
+                                {date ? format(new Date(date || ''), 'MMM dd, yyyy') : '-'}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {status.status === 'expired' 

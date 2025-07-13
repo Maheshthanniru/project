@@ -327,19 +327,352 @@ const NewEntry: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="max-w-4xl w-full mx-auto space-y-6">
-        {/* Responsive form layout */}
-        <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-          <form className="flex flex-col gap-4 md:gap-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Form fields here, use w-full and responsive spacing */}
-            </div>
-            <div className="flex flex-col md:flex-row gap-4 mt-4">
-              <Button className="w-full md:w-auto">Save</Button>
-              <Button className="w-full md:w-auto" variant="secondary">Reset</Button>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">New Entry</h1>
+            <p className="text-gray-600">Create new cash book entries with automatic daily entry numbering</p>
           </div>
-        </form>
-      </Card>
+          <div className="text-right">
+            <div className="text-sm text-gray-600">Daily Entry #</div>
+            <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
+          </div>
         </div>
+
+        {/* Main Form */}
+        <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Basic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                label="Date"
+                type="date"
+                value={entry.date}
+                onChange={(value) => handleInputChange('date', value)}
+                required
+              />
+              
+              <div className="relative">
+                <Select
+                  label="Company Name"
+                  value={entry.companyName}
+                  onChange={(value) => handleInputChange('companyName', value)}
+                  options={companies}
+                  placeholder="Select company..."
+                  required
+                />
+                <div className="absolute right-2 top-8 flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowNewCompany(true)}
+                    className="px-2"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                  {entry.companyName && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete('company')}
+                      className="px-2"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Select
+                label="Staff"
+                value={entry.staff}
+                onChange={(value) => handleInputChange('staff', value)}
+                options={users}
+                placeholder="Select staff..."
+                required
+              />
+            </div>
+
+            {/* Account Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Select
+                  label="Main Account"
+                  value={entry.accountName}
+                  onChange={(value) => handleInputChange('accountName', value)}
+                  options={accounts}
+                  placeholder="Select account..."
+                  required
+                  disabled={!entry.companyName}
+                />
+                <div className="absolute right-2 top-8 flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowNewAccount(true)}
+                    className="px-2"
+                    disabled={!entry.companyName}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                  {entry.accountName && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete('account')}
+                      className="px-2"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative">
+                <Select
+                  label="Sub Account"
+                  value={entry.subAccount}
+                  onChange={(value) => handleInputChange('subAccount', value)}
+                  options={subAccounts}
+                  placeholder="Select sub account..."
+                  disabled={!entry.accountName}
+                />
+                <div className="absolute right-2 top-8 flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowNewSubAccount(true)}
+                    className="px-2"
+                    disabled={!entry.accountName}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                  {entry.subAccount && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete('subAccount')}
+                      className="px-2"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Particulars */}
+            <Input
+              label="Particulars"
+              value={entry.particulars}
+              onChange={(value) => handleInputChange('particulars', value)}
+              placeholder="Enter transaction details..."
+              required
+            />
+
+            {/* Amounts */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Input
+                label="Credit Amount"
+                type="number"
+                value={entry.credit}
+                onChange={(value) => handleInputChange('credit', parseFloat(value) || 0)}
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                className={entry.credit > 0 ? 'border-green-300 bg-green-50' : ''}
+              />
+              
+              <Input
+                label="Debit Amount"
+                type="number"
+                value={entry.debit}
+                onChange={(value) => handleInputChange('debit', parseFloat(value) || 0)}
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                className={entry.debit > 0 ? 'border-red-300 bg-red-50' : ''}
+              />
+
+              <Input
+                label="Sale Quantity"
+                type="number"
+                value={entry.saleQ}
+                onChange={(value) => handleInputChange('saleQ', parseFloat(value) || 0)}
+                placeholder="0"
+                min="0"
+                step="0.01"
+              />
+
+              <Input
+                label="Purchase Quantity"
+                type="number"
+                value={entry.purchaseQ}
+                onChange={(value) => handleInputChange('purchaseQ', parseFloat(value) || 0)}
+                placeholder="0"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              <Button type="submit" disabled={loading} className="flex-1 md:flex-none">
+                {loading ? 'Saving...' : 'Save Entry'}
+              </Button>
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={() => {
+                  setEntry({
+                    date: entry.date,
+                    companyName: '',
+                    accountName: '',
+                    subAccount: '',
+                    particulars: '',
+                    saleQ: 0,
+                    purchaseQ: 0,
+                    credit: 0,
+                    debit: 0,
+                    staff: user?.username || '',
+                  });
+                  setAccounts([]);
+                  setSubAccounts([]);
+                }}
+                className="flex-1 md:flex-none"
+              >
+                Reset Form
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+
+      {/* Create Company Modal */}
+      {showNewCompany && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Create New Company</h3>
+            <div className="space-y-4">
+              <Input
+                label="Company Name"
+                value={newCompanyName}
+                onChange={(value) => setNewCompanyName(value)}
+                placeholder="Enter company name..."
+                required
+              />
+              <Input
+                label="Address"
+                value={newCompanyAddress}
+                onChange={(value) => setNewCompanyAddress(value)}
+                placeholder="Enter company address..."
+              />
+              <div className="flex gap-2">
+                <Button onClick={handleCreateCompany} className="flex-1">
+                  Create
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setShowNewCompany(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Account Modal */}
+      {showNewAccount && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Create New Account</h3>
+            <div className="space-y-4">
+              <Input
+                label="Account Name"
+                value={newAccountName}
+                onChange={(value) => setNewAccountName(value)}
+                placeholder="Enter account name..."
+                required
+              />
+              <div className="flex gap-2">
+                <Button onClick={handleCreateAccount} className="flex-1">
+                  Create
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setShowNewAccount(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Sub Account Modal */}
+      {showNewSubAccount && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Create New Sub Account</h3>
+            <div className="space-y-4">
+              <Input
+                label="Sub Account Name"
+                value={newSubAccountName}
+                onChange={(value) => setNewSubAccountName(value)}
+                placeholder="Enter sub account name..."
+                required
+              />
+              <div className="flex gap-2">
+                <Button onClick={handleCreateSubAccount} className="flex-1">
+                  Create
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setShowNewSubAccount(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to delete this {deleteType}? This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={confirmDelete} variant="danger" className="flex-1">
+                Delete
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

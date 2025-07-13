@@ -43,41 +43,12 @@ const Login: React.FC = () => {
       <Toaster position="top-right" />
       
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Header with Deity Image */}
-        <div className="bg-gradient-to-br from-orange-500 via-red-600 to-yellow-600 px-8 py-6 text-center relative">
-          {/* Decorative pattern */}
-          <div className="absolute inset-0 opacity-20">
-            <div className="absolute top-2 left-4 w-8 h-8 border-2 border-yellow-300 rounded-full"></div>
-            <div className="absolute top-4 right-6 w-6 h-6 border-2 border-orange-300 rounded-full"></div>
-            <div className="absolute bottom-3 left-6 w-4 h-4 border-2 border-red-300 rounded-full"></div>
-            <div className="absolute bottom-2 right-4 w-10 h-10 border-2 border-yellow-300 rounded-full"></div>
-          </div>
-          
-          {/* Deity representation */}
-          <div className="w-20 h-24 bg-gradient-to-b from-yellow-200 to-orange-300 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg relative z-10">
-            <div className="w-16 h-20 bg-gradient-to-b from-amber-100 to-orange-200 rounded-lg flex items-center justify-center relative">
-              {/* Main deity figure */}
-              <div className="w-12 h-16 bg-gradient-to-b from-yellow-300 to-orange-400 rounded-full relative">
-                {/* Face */}
-                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-red-600 rounded-full"></div>
-                {/* Eyes */}
-                <div className="absolute top-4 left-2 w-1 h-1 bg-black rounded-full"></div>
-                <div className="absolute top-4 right-2 w-1 h-1 bg-black rounded-full"></div>
-                {/* Ornaments */}
-                <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-6 h-2 bg-red-700 rounded"></div>
-                <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-4 bg-gradient-to-t from-red-600 to-orange-500 rounded-b-full"></div>
-              </div>
-              {/* Crown */}
-              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-12 h-3 bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 rounded-t-full"></div>
-              {/* Side ornaments */}
-              <div className="absolute top-4 -left-1 w-2 h-6 bg-gradient-to-b from-yellow-400 to-red-500 rounded-l-full"></div>
-              <div className="absolute top-4 -right-1 w-2 h-6 bg-gradient-to-b from-yellow-400 to-red-500 rounded-r-full"></div>
-            </div>
-          </div>
-          
-          <h1 className="text-2xl font-bold text-white relative z-10">Thirumala Group</h1>
-          <p className="text-orange-100 mt-1 relative z-10">Cotton Business Management</p>
-          <p className="text-yellow-200 text-sm mt-1 relative z-10">श्री तिरुमला कॉटन मिल्स</p>
+        {/* Logo/Image and Title */}
+        <div className="flex flex-col items-center justify-center px-8 pt-8 pb-4">
+          <img src="/download.jpeg" alt="Login Illustration" className="w-48 h-48 object-contain mb-4 rounded-xl shadow" />
+          <h1 className="text-2xl font-bold text-gray-900 text-center">Thirumala Group</h1>
+          <p className="text-gray-600 mt-1 text-center">Cotton Business Management</p>
+          <p className="text-gray-500 text-sm mt-1 text-center">श्री तिरुमला कॉटन मिल्स</p>
         </div>
 
         {/* Login Form */}

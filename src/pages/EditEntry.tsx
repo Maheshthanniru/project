@@ -295,16 +295,7 @@ const EditEntry: React.FC = () => {
     try {
       const data = await supabaseDB.exportData();
       
-      if (exportFormat === 'json') {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `thirumala-backup-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success('Data exported successfully!');
-      } else if (exportFormat === 'excel') {
+      if (exportFormat === 'excel') {
         // Export to Excel - use the current filtered entries instead of all data
         const currentEntries = entries.length > 0 ? entries : await supabaseDB.getCashBookEntries();
         
@@ -553,13 +544,6 @@ const EditEntry: React.FC = () => {
             Activity Log
           </Button>
           <div className="flex items-center gap-2">
-            <Button
-              icon={Download}
-              variant="secondary"
-              onClick={() => exportData('json')}
-            >
-              Export JSON
-            </Button>
             <Button
               icon={Download}
               variant="secondary"

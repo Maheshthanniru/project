@@ -76,27 +76,30 @@ export interface BankGuarantee {
 
 export interface Vehicle {
   id: string;
-  vehicle_no: string;
-  vehicle_type: string;
-  owner_name: string;
-  contact_no: string;
-  insurance_expiry: string;
-  permit_expiry: string;
-  fitness_expiry: string;
-  puc_expiry: string;
-  created_at: string;
-  updated_at: string;
+  sno: number;
+  v_no: string;
+  v_type: string | null;
+  particulars: string | null;
+  tax_exp_date: string | null;
+  insurance_exp_date: string | null;
+  fitness_exp_date: string | null;
+  permit_exp_date: string | null;
+  date_added: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface Driver {
   id: string;
+  sno: number;
   driver_name: string;
-  license_no: string;
-  contact_no: string;
-  license_expiry: string;
-  address: string;
-  created_at: string;
-  updated_at: string;
+  license_no: string | null;
+  exp_date: string | null;
+  particulars: string | null;
+  phone: string | null;
+  address: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 // Supabase Database Service
@@ -554,7 +557,7 @@ class SupabaseDatabase {
     const { data, error } = await supabase
       .from('vehicles')
       .select('*')
-      .order('vehicle_no');
+      .order('v_no');
     
     if (error) {
       console.error('Error fetching vehicles:', error);

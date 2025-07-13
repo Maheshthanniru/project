@@ -16,11 +16,13 @@ const Drivers: React.FC = () => {
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Driver state according to schema
   const [newDriver, setNewDriver] = useState({
     driver_name: '',
     license_no: '',
-    contact_no: '',
-    license_expiry: '',
+    exp_date: '',
+    particulars: '',
+    phone: '',
     address: '',
   });
 
@@ -86,8 +88,9 @@ const Drivers: React.FC = () => {
           setNewDriver({
             driver_name: '',
             license_no: '',
-            contact_no: '',
-            license_expiry: '',
+            exp_date: '',
+            particulars: '',
+            phone: '',
             address: '',
           });
           setShowAddForm(false);
@@ -146,33 +149,27 @@ const Drivers: React.FC = () => {
                   placeholder="Enter driver name"
                   required
                 />
-                
                 <Input
                   label="License Number"
                   value={editingDriver ? editingDriver.license_no : newDriver.license_no}
                   onChange={(value) => handleInputChange('license_no', value)}
-                  placeholder="TN-123456789"
-                  required
+                  placeholder="License number"
                 />
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="License Expiry Date"
                   type="date"
-                  value={editingDriver ? editingDriver.license_expiry : newDriver.license_expiry}
-                  onChange={(value) => handleInputChange('license_expiry', value)}
-                  required
+                  value={editingDriver ? editingDriver.exp_date : newDriver.exp_date}
+                  onChange={(value) => handleInputChange('exp_date', value)}
                 />
-                
                 <Input
-                  label="Phone Number"
-                  value={editingDriver ? editingDriver.contact_no : newDriver.contact_no}
-                  onChange={(value) => handleInputChange('contact_no', value)}
-                  placeholder="9876543210"
+                  label="Phone"
+                  value={editingDriver ? editingDriver.phone : newDriver.phone}
+                  onChange={(value) => handleInputChange('phone', value)}
+                  placeholder="Phone number"
                 />
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Address"
@@ -180,24 +177,18 @@ const Drivers: React.FC = () => {
                   onChange={(value) => handleInputChange('address', value)}
                   placeholder="Driver address..."
                 />
+                <Input
+                  label="Particulars"
+                  value={editingDriver ? editingDriver.particulars : newDriver.particulars}
+                  onChange={(value) => handleInputChange('particulars', value)}
+                  placeholder="Description..."
+                />
               </div>
-
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={loading}
-                >
+                <Button type="submit" disabled={loading}>
                   {loading ? 'Saving...' : (editingDriver ? 'Update Driver' : 'Add Driver')}
                 </Button>
-                
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setEditingDriver(null);
-                  }}
-                >
+                <Button type="button" variant="secondary" onClick={() => { setShowAddForm(false); setEditingDriver(null); }}>
                   Cancel
                 </Button>
               </div>
@@ -207,77 +198,32 @@ const Drivers: React.FC = () => {
 
         {/* Drivers List */}
         <Card title="Drivers List" subtitle={`${drivers.length} drivers registered`}>
-          <div className="space-y-4">
-            {drivers.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No drivers registered yet.
-              </div>
-            ) : (
-              drivers.map((driver) => {
-                const licenseStatus = getExpiryStatus(driver.license_expiry);
-                
-                return (
-                  <div key={driver.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <Users className="w-5 h-5 text-blue-600" />
-                          <h3 className="text-lg font-semibold text-gray-900">{driver.driver_name}</h3>
-                          <span className={`px-2 py-1 text-sm rounded-full ${
-                            licenseStatus.status === 'expired' ? 'bg-red-100 text-red-800' :
-                            licenseStatus.status === 'expiring' ? 'bg-orange-100 text-orange-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {licenseStatus.status === 'expired' ? 'License Expired' :
-                             licenseStatus.status === 'expiring' ? 'License Expiring' : 'License Valid'}
-                          </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-3">
-                          <div>
-                            <span className="font-medium text-gray-700">License No:</span>
-                            <div className="text-gray-600">{driver.license_no}</div>
-                          </div>
-                          
-                          <div className={`${licenseStatus.color} p-2 rounded-lg`}>
-                            <span className="font-medium">License Expiry:</span>
-                            <div>{format(new Date(driver.license_expiry), 'MMM dd, yyyy')}</div>
-                            <div className="text-xs">
-                              {licenseStatus.status === 'expired' 
-                                ? `Expired ${licenseStatus.days} days ago`
-                                : `${licenseStatus.days} days remaining`
-                              }
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <span className="font-medium text-gray-700">Address:</span>
-                            <div className="text-gray-600">{driver.address}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-6 text-sm text-gray-600">
-                          {driver.contact_no && (
-                            <div className="flex items-center gap-1">
-                              <Phone className="w-4 h-4" />
-                              {driver.contact_no}
-                            </div>
-                          )}
-                          
-                          {driver.address && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {driver.address}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 ml-4">
-                        {licenseStatus.status !== 'valid' && (
-                          <AlertTriangle className="w-5 h-5 text-orange-500" />
-                        )}
-                        
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-bold text-blue-700">S.No</th>
+                  <th className="px-3 py-2 text-left font-bold text-blue-700">Driver Name</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">License Number</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">License Expiry</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">Phone</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">Address</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">Particulars</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drivers.map((driver) => (
+                  <tr key={driver.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-2 font-medium">{driver.sno}</td>
+                    <td className="px-3 py-2 font-bold text-blue-700">{driver.driver_name}</td>
+                    <td className="px-3 py-2">{driver.license_no}</td>
+                    <td className="px-3 py-2">{driver.exp_date ? format(new Date(driver.exp_date), 'dd-MM-yyyy') : '-'}</td>
+                    <td className="px-3 py-2">{driver.phone}</td>
+                    <td className="px-3 py-2">{driver.address}</td>
+                    <td className="px-3 py-2">{driver.particulars}</td>
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -287,11 +233,11 @@ const Drivers: React.FC = () => {
                           Edit
                         </Button>
                       </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
       </div>
