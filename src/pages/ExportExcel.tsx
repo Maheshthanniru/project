@@ -311,209 +311,186 @@ const ExportExcel: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Export Excel</h1>
-          <p className="text-gray-600">Export your business data to Excel format</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            icon={RefreshCw}
-            variant="secondary"
-            onClick={() => setShowPreview(false)}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
+      <div className="max-w-5xl w-full mx-auto space-y-6">
+        {/* Responsive export controls */}
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          {/* Report Type */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Report Type
+            </label>
+            <Select
+              value={exportOptions.reportType}
+              onChange={(value) => handleOptionChange('reportType', value)}
+              options={reportTypes.map(type => ({
+                value: type.value,
+                label: type.label
+              }))}
+            />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Export Options */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card title="Export Configuration" subtitle="Configure your export settings">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Report Type */}
-              <div>
+          {/* Date Range */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date Range
+            </label>
+            <Select
+              value={exportOptions.dateRange}
+              onChange={(value) => handleOptionChange('dateRange', value)}
+              options={dateRangeOptions}
+            />
+          </div>
+
+          {/* Custom Date Range */}
+          {exportOptions.dateRange === 'custom' && (
+            <>
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Report Type
+                  From Date
                 </label>
-                <Select
-                  value={exportOptions.reportType}
-                  onChange={(value) => handleOptionChange('reportType', value)}
-                  options={reportTypes.map(type => ({
-                    value: type.value,
-                    label: type.label
-                  }))}
+                <Input
+                  type="date"
+                  value={exportOptions.fromDate}
+                  onChange={(value) => handleOptionChange('fromDate', value)}
                 />
               </div>
-
-              {/* Date Range */}
-              <div>
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date Range
+                  To Date
                 </label>
-                <Select
-                  value={exportOptions.dateRange}
-                  onChange={(value) => handleOptionChange('dateRange', value)}
-                  options={dateRangeOptions}
+                <Input
+                  type="date"
+                  value={exportOptions.toDate}
+                  onChange={(value) => handleOptionChange('toDate', value)}
                 />
               </div>
+            </>
+          )}
 
-              {/* Custom Date Range */}
-              {exportOptions.dateRange === 'custom' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      From Date
-                    </label>
-                    <Input
-                      type="date"
-                      value={exportOptions.fromDate}
-                      onChange={(value) => handleOptionChange('fromDate', value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      To Date
-                    </label>
-                    <Input
-                      type="date"
-                      value={exportOptions.toDate}
-                      onChange={(value) => handleOptionChange('toDate', value)}
-                    />
-                  </div>
-                </>
-              )}
+          {/* Company Filter */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Company Filter
+            </label>
+            <Select
+              value={exportOptions.companyFilter}
+              onChange={(value) => handleOptionChange('companyFilter', value)}
+              options={companies}
+            />
+          </div>
 
-              {/* Company Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Company Filter
-                </label>
-                <Select
-                  value={exportOptions.companyFilter}
-                  onChange={(value) => handleOptionChange('companyFilter', value)}
-                  options={companies}
-                />
-              </div>
+          {/* Account Filter */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Filter
+            </label>
+            <Select
+              value={exportOptions.accountFilter}
+              onChange={(value) => handleOptionChange('accountFilter', value)}
+              options={accounts}
+            />
+          </div>
 
-              {/* Account Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Account Filter
-                </label>
-                <Select
-                  value={exportOptions.accountFilter}
-                  onChange={(value) => handleOptionChange('accountFilter', value)}
-                  options={accounts}
-                />
-              </div>
-
-              {/* Export Format */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Export Format
-                </label>
-                <Select
-                  value={exportOptions.format}
-                  onChange={(value) => handleOptionChange('format', value)}
-                  options={[
-                    { value: 'xlsx', label: 'Excel (.xlsx)' },
-                    { value: 'csv', label: 'CSV (.csv)' },
-                    { value: 'pdf', label: 'PDF (.pdf)' }
-                  ]}
-                />
-              </div>
-            </div>
-
-            {/* Options */}
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={exportOptions.includeHeaders}
-                    onChange={(e) => handleOptionChange('includeHeaders', e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Include Headers</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={exportOptions.includeTotals}
-                    onChange={(e) => handleOptionChange('includeTotals', e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Include Totals</span>
-                </label>
-              </div>
-            </div>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-4">
-            <Button
-              icon={Download}
-              onClick={handleExport}
-              disabled={loading}
-              className="flex-1"
-            >
-              {loading ? 'Exporting...' : `Export to ${exportOptions.format.toUpperCase()}`}
-            </Button>
-            <Button
-              icon={Eye}
-              variant="secondary"
-              onClick={handlePreview}
-              disabled={loading}
-            >
-              Preview Data
-            </Button>
+          {/* Export Format */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Export Format
+            </label>
+            <Select
+              value={exportOptions.format}
+              onChange={(value) => handleOptionChange('format', value)}
+              options={[
+                { value: 'xlsx', label: 'Excel (.xlsx)' },
+                { value: 'csv', label: 'CSV (.csv)' },
+                { value: 'pdf', label: 'PDF (.pdf)' }
+              ]}
+            />
           </div>
         </div>
 
+        {/* Options */}
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={exportOptions.includeHeaders}
+                onChange={(e) => handleOptionChange('includeHeaders', e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-700">Include Headers</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={exportOptions.includeTotals}
+                onChange={(e) => handleOptionChange('includeTotals', e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-700">Include Totals</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <Button
+            icon={Download}
+            onClick={handleExport}
+            disabled={loading}
+            className="flex-1"
+          >
+            {loading ? 'Exporting...' : `Export to ${exportOptions.format.toUpperCase()}`}
+          </Button>
+          <Button
+            icon={Eye}
+            variant="secondary"
+            onClick={handlePreview}
+            disabled={loading}
+          >
+            Preview Data
+          </Button>
+        </div>
+
         {/* Preview Panel */}
-        <div className="lg:col-span-1">
-          <Card title="Export Preview" subtitle="Preview your export data">
-            {showPreview && previewData.length > 0 ? (
-              <div className="space-y-4">
-                <div className="text-sm text-gray-600">
-                  Showing first {previewData.length} rows of {getDataForExport().length} total records
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  <table className="min-w-full text-xs">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        {Object.keys(previewData[0] || {}).map((key) => (
-                          <th key={key} className="px-2 py-1 text-left font-medium text-gray-700">
-                            {key}
-                          </th>
+        <Card title="Export Preview" subtitle="Preview your export data" className="overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          {showPreview && previewData.length > 0 ? (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600">
+                Showing first {previewData.length} rows of {getDataForExport().length} total records
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {Object.keys(previewData[0] || {}).map((key) => (
+                        <th key={key} className="px-2 py-1 text-left font-medium text-gray-700">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {previewData.map((row, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        {Object.values(row).map((value: any, cellIndex) => (
+                          <td key={cellIndex} className="px-2 py-1 text-gray-900">
+                            {typeof value === 'number' ? value.toLocaleString() : String(value)}
+                          </td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {previewData.map((row, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          {Object.values(row).map((value: any, cellIndex) => (
-                            <td key={cellIndex} className="px-2 py-1 text-gray-900">
-                              {typeof value === 'number' ? value.toLocaleString() : String(value)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Click "Preview Data" to see a sample of your export</p>
-              </div>
-            )}
-          </Card>
-        </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>Click "Preview Data" to see a sample of your export</p>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

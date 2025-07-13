@@ -591,8 +591,8 @@ const EditEntry: React.FC = () => {
 
       {/* Search and Filter */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="relative">
+        <div className="flex flex-col md:flex-row md:items-end md:gap-4 gap-3 w-full">
+          <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -602,22 +602,23 @@ const EditEntry: React.FC = () => {
               className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          
-          <Input
-            label="Date Filter"
-            type="date"
-            value={dateFilter}
-            onChange={setDateFilter}
-          />
-
-          <Select
-            label="Status Filter"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={statusOptions}
-          />
-          
-          <div className="flex items-end">
+          <div className="flex-1">
+            <Input
+              label="Date Filter"
+              type="date"
+              value={dateFilter}
+              onChange={setDateFilter}
+            />
+          </div>
+          <div className="flex-1">
+            <Select
+              label="Status Filter"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={statusOptions}
+            />
+          </div>
+          <div className="flex-1 flex items-end">
             <Button
               onClick={() => {
                 setSearchTerm('');
@@ -631,8 +632,7 @@ const EditEntry: React.FC = () => {
               Clear Filters
             </Button>
           </div>
-
-          <div className="flex items-end">
+          <div className="flex-1 flex items-end">
             <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center">
               <strong>{entries.length}</strong> entries found
             </div>
