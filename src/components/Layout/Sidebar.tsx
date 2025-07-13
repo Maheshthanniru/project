@@ -15,15 +15,17 @@ const Sidebar: React.FC = () => {
     { icon: FileText, label: 'Daily Report', path: '/daily-report' },
     { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger' },
     { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary' },
-    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records' },
+    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records', adminOnly: true },
     { icon: FileEdit, label: 'Edited Records', path: '/edited-records' },
     { icon: Replace, label: 'Replace Form', path: '/replace-form' },
     { icon: Download, label: 'Export', path: '/export-excel' },
-    { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet' },
+    { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet', adminOnly: true },
     { icon: Truck, label: 'Vehicles', path: '/vehicles' },
     { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees' },
     { icon: Users, label: 'Drivers', path: '/drivers' },
   ];
+
+  const isOperator = user?.user_type?.toLowerCase() === 'operator';
 
   return (
     <aside className="w-64 h-screen sticky top-0 left-0 z-30 bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-xl rounded-r-2xl flex flex-col border-r border-blue-100">
@@ -60,25 +62,27 @@ const Sidebar: React.FC = () => {
       {/* Scrollable Menu */}
       <nav className="flex-1 overflow-y-auto custom-scrollbar px-2 py-4">
         <ul className="space-y-1">
-          {menuItems.map((item) => (
-            <li key={item.path}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all relative
-                  ${isActive
-                    ? 'bg-blue-100 text-blue-700 font-bold border-l-4 border-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:bg-blue-50 hover:text-blue-800'}
-                  `
-                }
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                </span>
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            </li>
-          ))}
+          {menuItems
+            .filter(item => !(isOperator && item.adminOnly))
+            .map((item) => (
+              <li key={item.path}>
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all relative
+                    ${isActive
+                      ? 'bg-blue-100 text-blue-700 font-bold border-l-4 border-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:bg-blue-50 hover:text-blue-800'}
+                    `
+                  }
+                >
+                  <span className="w-5 h-5 flex items-center justify-center">
+                    <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  </span>
+                  <span className="truncate">{item.label}</span>
+                </NavLink>
+              </li>
+            ))}
         </ul>
       </nav>
       {/* Sticky Logout at Bottom */}
