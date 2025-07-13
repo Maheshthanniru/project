@@ -574,8 +574,8 @@ const EditEntry: React.FC = () => {
       </div>
 
       {/* Search and Filter */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="flex flex-col md:flex-row md:items-end md:gap-4 gap-3 w-full">
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-end md:gap-6 gap-3 w-full">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
@@ -673,199 +673,165 @@ const EditEntry: React.FC = () => {
         </Card>
       )}
 
-      {/* Entries List */}
-      <Card title="Cash Book Entries" subtitle={`Manage and edit your transaction records`}>
-        <div className="space-y-3">
+      {/* Entries List - Redesigned as Responsive Grid */}
+      <Card title="Cash Book Entries" subtitle={`Manage and edit your transaction records`} className="p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {entries.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="col-span-full text-center py-8 text-gray-500">
               No entries found matching your criteria.
             </div>
           ) : (
             entries.map((entry) => (
               <div
                 key={entry.id}
-                className={`border rounded-lg ${
+                className={`flex flex-col justify-between border rounded-lg shadow-sm h-full transition-shadow hover:shadow-lg ${
                   entry.locked ? 'bg-gray-50 border-gray-300' : 'bg-white border-gray-200'
-                } hover:shadow-sm transition-shadow`}
+                }`}
               >
-                <div className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-bold text-gray-900">#{entry.sno}</h4>
-                        <span className="text-sm font-medium text-blue-600">{entry.company_name}</span>
-                        <span className="text-sm text-gray-500">→ {entry.acc_name}</span>
-                        {entry.sub_acc_name && (
-                          <span className="text-sm text-gray-500">→ {entry.sub_acc_name}</span>
-                        )}
-                        
-                        {/* Status badges */}
-                        {entry.locked && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            <Lock className="w-3 h-3 mr-1" />
-                            Locked
-                          </span>
-                        )}
-                        {entry.edited && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Edited ({entry.editCount}x)
-                          </span>
-                        )}
-                        {entry.approved ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Approved
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                            Pending
-                          </span>
-                        )}
-                      </div>
-                      
-                      <p className="text-sm text-gray-600 mb-2">{entry.particulars}</p>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">Date:</span>
-                          <div>{format(new Date(entry.c_date), 'MMM dd, yyyy')}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Staff:</span>
-                          <div>{entry.staff}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Credit:</span>
-                          <div className="text-green-600 font-medium">₹{entry.credit.toLocaleString()}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Debit:</span>
-                          <div className="text-red-600 font-medium">₹{entry.debit.toLocaleString()}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Sale Q:</span>
-                          <div>{entry.sale_qty}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Purchase Q:</span>
-                          <div>{entry.purchase_qty || 0}</div>
-                        </div>
-                      </div>
-
-                      {entry.lastEditedBy && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          Last edited by {entry.lastEditedBy} on {format(new Date(entry.lastEditedAt), 'MMM dd, yyyy HH:mm')}
-                        </div>
+                {/* Summary Row */}
+                <div className="p-6 pb-2 border-b border-gray-100 flex flex-col gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl font-bold text-blue-700">#{entry.sno}</span>
+                      <span className="text-sm font-medium text-gray-700">{entry.company_name}</span>
+                      <span className="text-sm text-gray-500">{entry.acc_name}</span>
+                      {entry.sub_acc_name && (
+                        <span className="text-sm text-gray-400">/ {entry.sub_acc_name}</span>
                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-2 ml-4">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={expandedEntry === entry.id ? ChevronUp : ChevronDown}
-                        onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
-                      >
-                        Details
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={History}
-                        onClick={() => {
-                          loadEntryHistory(entry.id);
-                          setShowHistory(true);
-                        }}
-                      >
-                        History
-                      </Button>
-
-                      {isAdmin && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={entry.locked ? Unlock : Lock}
-                          onClick={() => toggleLock(entry)}
-                        >
-                          {entry.locked ? 'Unlock' : 'Lock'}
-                        </Button>
+                    <div className="flex gap-2">
+                      {entry.locked && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <Lock className="w-3 h-3 mr-1" />Locked
+                        </span>
                       )}
-
-                      {isAdmin && !entry.approved && (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          icon={Check}
-                          onClick={() => toggleApproval(entry)}
-                        >
-                          Approve
-                        </Button>
+                      {entry.edited && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Edited ({entry.editCount}x)
+                        </span>
                       )}
-                      
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={Eye}
-                        onClick={() => setSelectedEntry(entry)}
-                      >
-                        View
-                      </Button>
-                      
-                      <Button
-                        size="sm"
-                        icon={Edit}
-                        onClick={() => handleEdit(entry)}
-                        disabled={entry.locked && !isAdmin}
-                      >
-                        Edit
-                      </Button>
-
-                      {isAdmin && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon={Trash2}
-                          onClick={() => handleDelete(entry)}
-                          disabled={entry.locked}
-                        >
-                          Delete
-                        </Button>
+                      {entry.approved ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          Pending
+                        </span>
                       )}
                     </div>
                   </div>
-
-                  {/* Expanded Details */}
-                  {expandedEntry === entry.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div className="bg-blue-50 p-3 rounded-lg">
-                          <h5 className="font-medium text-blue-900 mb-2">Entry Details</h5>
-                          <div className="space-y-1">
-                            <div><strong>Entry ID:</strong> {entry.id}</div>
-                            <div><strong>Entry Time:</strong> {format(new Date(entry.entry_time), 'MMM dd, yyyy HH:mm:ss')}</div>
-                            <div><strong>User:</strong> {entry.user}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-green-50 p-3 rounded-lg">
-                          <h5 className="font-medium text-green-900 mb-2">Financial Summary</h5>
-                          <div className="space-y-1">
-                            <div><strong>Credit:</strong> ₹{entry.credit.toLocaleString()}</div>
-                            <div><strong>Debit:</strong> ₹{entry.debit.toLocaleString()}</div>
-                            <div><strong>Balance:</strong> ₹{(entry.credit - entry.debit).toLocaleString()}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-purple-50 p-3 rounded-lg">
-                          <h5 className="font-medium text-purple-900 mb-2">Status Information</h5>
-                          <div className="space-y-1">
-                            <div><strong>Approved:</strong> {entry.approved ? 'Yes' : 'No'}</div>
-                            <div><strong>Locked:</strong> {entry.locked ? 'Yes' : 'No'}</div>
-                            <div><strong>Edit Count:</strong> {entry.editCount}</div>
-                          </div>
-                        </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-base text-gray-600 truncate max-w-[60%]">{entry.particulars}</span>
+                    <span className="text-sm text-gray-500">{format(new Date(entry.c_date), 'MMM dd, yyyy')}</span>
+                  </div>
+                  <div className="flex gap-6 mt-2">
+                    <div className="flex flex-col items-start">
+                      <span className="text-xs text-gray-500">Credit</span>
+                      <span className="text-lg font-semibold text-green-600">₹{entry.credit.toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="text-xs text-gray-500">Debit</span>
+                      <span className="text-lg font-semibold text-red-600">₹{entry.debit.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Expanded Details */}
+                {expandedEntry === entry.id && (
+                  <div className="px-6 pt-4 pb-2 border-b border-gray-100 bg-gray-50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
+                      {/* Left: Transaction Details */}
+                      <div className="space-y-2">
+                        <div><span className="font-medium text-gray-700">Staff:</span> {entry.staff}</div>
+                        <div><span className="font-medium text-gray-700">Entry Time:</span> {format(new Date(entry.entry_time), 'MMM dd, yyyy HH:mm:ss')}</div>
+                        <div><span className="font-medium text-gray-700">User:</span> {entry.user}</div>
+                        <div><span className="font-medium text-gray-700">Sale Qty:</span> {entry.sale_qty}</div>
+                        <div><span className="font-medium text-gray-700">Purchase Qty:</span> {entry.purchase_qty || 0}</div>
+                      </div>
+                      {/* Right: Financials */}
+                      <div className="space-y-2">
+                        <div><span className="font-medium text-gray-700">Credit:</span> <span className="text-green-600">₹{entry.credit.toLocaleString()}</span></div>
+                        <div><span className="font-medium text-gray-700">Debit:</span> <span className="text-red-600">₹{entry.debit.toLocaleString()}</span></div>
+                        <div><span className="font-medium text-gray-700">Balance:</span> <span className="text-blue-700">₹{(entry.credit - entry.debit).toLocaleString()}</span></div>
+                        <div><span className="font-medium text-gray-700">Approved:</span> {entry.approved ? 'Yes' : 'No'}</div>
+                        <div><span className="font-medium text-gray-700">Locked:</span> {entry.locked ? 'Yes' : 'No'}</div>
+                        <div><span className="font-medium text-gray-700">Edit Count:</span> {entry.editCount}</div>
                       </div>
                     </div>
+                    {entry.lastEditedBy && (
+                      <div className="mt-2 text-xs text-gray-500">
+                        Last edited by {entry.lastEditedBy} on {format(new Date(entry.lastEditedAt), 'MMM dd, yyyy HH:mm')}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Action Buttons Row */}
+                <div className="flex flex-wrap items-center gap-2 p-4 border-t border-gray-100 bg-white mt-auto">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={expandedEntry === entry.id ? ChevronUp : ChevronDown}
+                    onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
+                  >
+                    Details
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={History}
+                    onClick={() => {
+                      loadEntryHistory(entry.id);
+                      setShowHistory(true);
+                    }}
+                  >
+                    History
+                  </Button>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={entry.locked ? Unlock : Lock}
+                      onClick={() => toggleLock(entry)}
+                    >
+                      {entry.locked ? 'Unlock' : 'Lock'}
+                    </Button>
+                  )}
+                  {isAdmin && !entry.approved && (
+                    <Button
+                      size="sm"
+                      variant="success"
+                      icon={Check}
+                      onClick={() => toggleApproval(entry)}
+                    >
+                      Approve
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={Eye}
+                    onClick={() => setSelectedEntry(entry)}
+                  >
+                    View
+                  </Button>
+                  <Button
+                    size="sm"
+                    icon={Edit}
+                    onClick={() => handleEdit(entry)}
+                    disabled={entry.locked && !isAdmin}
+                  >
+                    Edit
+                  </Button>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={Trash2}
+                      onClick={() => handleDelete(entry)}
+                      disabled={entry.locked}
+                    >
+                      Delete
+                    </Button>
                   )}
                 </div>
               </div>
@@ -940,11 +906,11 @@ const EditEntry: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Modal - Use Two Column Grid and Sticky Save/Cancel Bar */}
       {selectedEntry && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-lg">
+            <div className="p-8">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold">
                   {editMode ? 'Edit Entry' : 'View Entry'} #{selectedEntry.sno}
@@ -969,10 +935,9 @@ const EditEntry: React.FC = () => {
                   </Button>
                 </div>
               </div>
-
-              <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-6">
                   <Input
                     label="Date"
                     type="date"
@@ -980,7 +945,6 @@ const EditEntry: React.FC = () => {
                     onChange={(value) => handleInputChange('c_date', value)}
                     disabled={!editMode}
                   />
-                  
                   <Select
                     label="Company Name"
                     value={selectedEntry.company_name}
@@ -988,7 +952,6 @@ const EditEntry: React.FC = () => {
                     options={companies}
                     disabled={!editMode}
                   />
-                  
                   <Select
                     label="Staff"
                     value={selectedEntry.staff}
@@ -996,10 +959,6 @@ const EditEntry: React.FC = () => {
                     options={users}
                     disabled={!editMode}
                   />
-                </div>
-
-                {/* Account Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select
                     label="Main Account"
                     value={selectedEntry.acc_name}
@@ -1007,7 +966,6 @@ const EditEntry: React.FC = () => {
                     options={accounts}
                     disabled={!editMode}
                   />
-                  
                   <Select
                     label="Sub Account"
                     value={selectedEntry.sub_acc_name || ''}
@@ -1016,31 +974,28 @@ const EditEntry: React.FC = () => {
                     disabled={!editMode}
                   />
                 </div>
-
-                {/* Particulars */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Particulars
-                  </label>
-                  <textarea
-                    value={selectedEntry.particulars || ''}
-                    onChange={(e) => handleInputChange('particulars', e.target.value)}
-                    disabled={!editMode}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  />
-                </div>
-
-                {/* Financial Information */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Financials and Particulars */}
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Particulars
+                    </label>
+                    <textarea
+                      value={selectedEntry.particulars || ''}
+                      onChange={(e) => handleInputChange('particulars', e.target.value)}
+                      disabled={!editMode}
+                      rows={3}
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 text-base min-h-12"
+                    />
+                  </div>
                   <Input
                     label="Sale Quantity"
                     type="number"
                     value={selectedEntry.sale_qty}
                     onChange={(value) => handleInputChange('sale_qty', parseFloat(value) || 0)}
                     disabled={!editMode}
+                    className="min-h-12 text-base"
                   />
-
                   <Input
                     label="Purchase Quantity"
                     type="number"
@@ -1048,7 +1003,6 @@ const EditEntry: React.FC = () => {
                     onChange={(value) => handleInputChange('purchase_qty', parseFloat(value) || 0)}
                     disabled={!editMode}
                   />
-                  
                   <Input
                     label="Credit Amount"
                     type="number"
@@ -1057,7 +1011,6 @@ const EditEntry: React.FC = () => {
                     disabled={!editMode}
                     className={selectedEntry.credit > 0 ? 'border-green-300 bg-green-50' : ''}
                   />
-                  
                   <Input
                     label="Debit Amount"
                     type="number"
@@ -1067,51 +1020,49 @@ const EditEntry: React.FC = () => {
                     className={selectedEntry.debit > 0 ? 'border-red-300 bg-red-50' : ''}
                   />
                 </div>
-
-                {/* Entry Metadata */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-3">Entry Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-700">Entry Time:</span>
-                      <div>{format(new Date(selectedEntry.entry_time), 'MMM dd, yyyy HH:mm:ss')}</div>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Created By:</span>
-                      <div>{selectedEntry.users}</div>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Edit Count:</span>
-                      <div>{selectedEntry.e_count}</div>
-                    </div>
+              </div>
+              {/* Entry Metadata */}
+              <div className="bg-gray-50 p-4 rounded-lg mt-8">
+                <h4 className="font-medium text-gray-900 mb-3">Entry Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">Entry Time:</span>
+                    <div>{format(new Date(selectedEntry.entry_time), 'MMM dd, yyyy HH:mm:ss')}</div>
                   </div>
-                  {selectedEntry.edited && (
-                    <div className="mt-2 text-sm">
-                      <span className="font-medium text-gray-700">Last Edited:</span>
-                      <div>on {format(new Date(selectedEntry.updated_at), 'MMM dd, yyyy HH:mm')}</div>
-                    </div>
-                  )}
+                  <div>
+                    <span className="font-medium text-gray-700">Created By:</span>
+                    <div>{selectedEntry.users}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Edit Count:</span>
+                    <div>{selectedEntry.e_count}</div>
+                  </div>
                 </div>
-
-                {editMode && (
-                  <div className="flex gap-4 pt-4 border-t border-gray-200">
-                    <Button
-                      icon={Check}
-                      onClick={handleSave}
-                      disabled={loading}
-                    >
-                      {loading ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                    
-                    <Button
-                      variant="secondary"
-                      onClick={handleCancel}
-                    >
-                      Cancel
-                    </Button>
+                {selectedEntry.edited && (
+                  <div className="mt-2 text-sm">
+                    <span className="font-medium text-gray-700">Last Edited:</span>
+                    <div>on {format(new Date(selectedEntry.updated_at), 'MMM dd, yyyy HH:mm')}</div>
                   </div>
                 )}
               </div>
+              {/* Sticky Save/Cancel Bar */}
+              {editMode && (
+                <div className="sticky bottom-0 left-0 right-0 bg-white py-4 flex gap-4 border-t border-gray-200 mt-8 z-10">
+                  <Button
+                    icon={Check}
+                    onClick={handleSave}
+                    disabled={loading}
+                  >
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleCancel}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

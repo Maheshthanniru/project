@@ -15,10 +15,10 @@ interface NewEntryForm {
   accountName: string;
   subAccount: string;
   particulars: string;
-  saleQ: number;
-  purchaseQ: number;
-  credit: number;
-  debit: number;
+  saleQ: string;
+  purchaseQ: string;
+  credit: string;
+  debit: string;
   staff: string;
 }
 
@@ -31,10 +31,10 @@ const NewEntry: React.FC = () => {
     accountName: '',
     subAccount: '',
     particulars: '',
-    saleQ: 0,
-    purchaseQ: 0,
-    credit: 0,
-    debit: 0,
+    saleQ: '',
+    purchaseQ: '',
+    credit: '',
+    debit: '',
     staff: user?.username || '',
   });
 
@@ -158,7 +158,10 @@ const NewEntry: React.FC = () => {
       return;
     }
 
-    if (entry.credit === 0 && entry.debit === 0) {
+    const creditAmount = parseFloat(entry.credit) || 0;
+    const debitAmount = parseFloat(entry.debit) || 0;
+
+    if (creditAmount === 0 && debitAmount === 0) {
       toast.error('Please enter either credit or debit amount');
       return;
     }
@@ -172,14 +175,14 @@ const NewEntry: React.FC = () => {
         sub_acc_name: entry.subAccount,
         particulars: entry.particulars,
         c_date: entry.date,
-        credit: entry.credit,
-        debit: entry.debit,
+        credit: creditAmount,
+        debit: debitAmount,
         company_name: entry.companyName,
         address: '', // Will be filled from company data
         staff: entry.staff,
         users: user?.username || '',
-        sale_qty: entry.saleQ,
-        purchase_qty: entry.purchaseQ,
+        sale_qty: parseFloat(entry.saleQ) || 0,
+        purchase_qty: parseFloat(entry.purchaseQ) || 0,
         cb: 'CB' // Cash Book identifier
       });
 
@@ -193,10 +196,10 @@ const NewEntry: React.FC = () => {
           accountName: '',
           subAccount: '',
           particulars: '',
-          saleQ: 0,
-          purchaseQ: 0,
-          credit: 0,
-          debit: 0,
+          saleQ: '',
+          purchaseQ: '',
+          credit: '',
+          debit: '',
           staff: user?.username || '',
         });
         
@@ -482,29 +485,29 @@ const NewEntry: React.FC = () => {
                 label="Credit Amount"
                 type="number"
                 value={entry.credit}
-                onChange={(value) => handleInputChange('credit', parseFloat(value) || 0)}
+                onChange={(value) => handleInputChange('credit', value)}
                 placeholder="0.00"
                 min="0"
                 step="0.01"
-                className={entry.credit > 0 ? 'border-green-300 bg-green-50' : ''}
+                className={parseFloat(entry.credit) > 0 ? 'border-green-300 bg-green-50' : ''}
               />
               
               <Input
                 label="Debit Amount"
                 type="number"
                 value={entry.debit}
-                onChange={(value) => handleInputChange('debit', parseFloat(value) || 0)}
+                onChange={(value) => handleInputChange('debit', value)}
                 placeholder="0.00"
                 min="0"
                 step="0.01"
-                className={entry.debit > 0 ? 'border-red-300 bg-red-50' : ''}
+                className={parseFloat(entry.debit) > 0 ? 'border-red-300 bg-red-50' : ''}
               />
 
               <Input
                 label="Sale Quantity"
                 type="number"
                 value={entry.saleQ}
-                onChange={(value) => handleInputChange('saleQ', parseFloat(value) || 0)}
+                onChange={(value) => handleInputChange('saleQ', value)}
                 placeholder="0"
                 min="0"
                 step="0.01"
@@ -514,7 +517,7 @@ const NewEntry: React.FC = () => {
                 label="Purchase Quantity"
                 type="number"
                 value={entry.purchaseQ}
-                onChange={(value) => handleInputChange('purchaseQ', parseFloat(value) || 0)}
+                onChange={(value) => handleInputChange('purchaseQ', value)}
                 placeholder="0"
                 min="0"
                 step="0.01"
@@ -536,10 +539,10 @@ const NewEntry: React.FC = () => {
                     accountName: '',
                     subAccount: '',
                     particulars: '',
-                    saleQ: 0,
-                    purchaseQ: 0,
-                    credit: 0,
-                    debit: 0,
+                    saleQ: '',
+                    purchaseQ: '',
+                    credit: '',
+                    debit: '',
                     staff: user?.username || '',
                   });
                   setAccounts([]);
