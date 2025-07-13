@@ -15,7 +15,6 @@ import EditedRecords from './pages/EditedRecords';
 import ReplaceForm from './pages/ReplaceForm';
 import BalanceSheet from './pages/BalanceSheet';
 import ExportExcel from './pages/ExportExcel';
-import ExportPDF from './pages/ExportPDF';
 import Vehicles from './pages/Vehicles';
 import BankGuarantees from './pages/BankGuarantees';
 import Drivers from './pages/Drivers';
@@ -88,7 +87,6 @@ const AppContent: React.FC = () => {
           <Route path="replace-form" element={<ReplaceForm />} />
           <Route path="balance-sheet" element={<BalanceSheet />} />
           <Route path="export-excel" element={<ExportExcel />} />
-          <Route path="export-pdf" element={<ExportPDF />} />
           <Route path="vehicles" element={<Vehicles />} />
           <Route path="bank-guarantees" element={<BankGuarantees />} />
           <Route path="drivers" element={<Drivers />} />

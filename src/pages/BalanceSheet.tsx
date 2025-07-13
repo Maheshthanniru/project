@@ -259,11 +259,73 @@ const BalanceSheet: React.FC = () => {
       <div className="max-w-6xl w-full mx-auto space-y-6">
         {/* Responsive filter bar */}
         <div className="flex flex-col md:flex-row gap-4 items-end">
-          {/* Filter controls here */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+            <select
+              value={filters.companyName}
+              onChange={e => handleFilterChange('companyName', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {companies.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+            <input
+              type="date"
+              value={filters.fromDate}
+              onChange={e => handleFilterChange('fromDate', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+            <input
+              type="date"
+              value={filters.toDate}
+              onChange={e => handleFilterChange('toDate', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex flex-row gap-2 mt-2 md:mt-0">
+            <Button icon={RefreshCw} variant="secondary" onClick={refreshData}>Refresh</Button>
+            <Button icon={Download} variant="secondary" onClick={exportToExcel}>Export</Button>
+            <Button icon={Printer} variant="secondary" onClick={printReport}>Print</Button>
+            <Button icon={X} variant="secondary" onClick={resetFilters}>Reset</Button>
+          </div>
         </div>
         {/* Responsive table/card layout */}
         <Card className="overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          {/* Table content here */}
+          {loading ? (
+            <div className="text-center text-gray-500 py-8">Loading...</div>
+          ) : balanceSheetData.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">No accounts found for these filters.</div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="bg-blue-100">
+                <tr>
+                  <th className="px-3 py-2 text-left">Account Name</th>
+                  <th className="px-3 py-2 text-right">Credit</th>
+                  <th className="px-3 py-2 text-right">Debit</th>
+                  <th className="px-3 py-2 text-right">Balance</th>
+                  <th className="px-3 py-2 text-center">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {balanceSheetData.map((acc, idx) => (
+                  <tr key={acc.accountName} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                    <td className="px-3 py-2">{acc.accountName}</td>
+                    <td className="px-3 py-2 text-right text-green-700">{acc.credit > 0 ? `₹${acc.credit.toLocaleString()}` : '-'}</td>
+                    <td className="px-3 py-2 text-right text-red-700">{acc.debit > 0 ? `₹${acc.debit.toLocaleString()}` : '-'}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{acc.balance > 0 ? `₹${acc.balance.toLocaleString()}` : '-'}</td>
+                    <td className="px-3 py-2 text-center font-bold">{acc.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       </div>
     </div>

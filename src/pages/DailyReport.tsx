@@ -211,11 +211,86 @@ const DailyReport: React.FC = () => {
       <div className="max-w-6xl w-full mx-auto space-y-6">
         {/* Responsive filter bar */}
         <div className="flex flex-col md:flex-row gap-4 items-end">
-          {/* Filter controls here */}
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+            <select
+              value={selectedCompany}
+              onChange={e => setSelectedCompany(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {companies.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex flex-row gap-2 mt-2 md:mt-0">
+            <Button icon={RefreshCw} variant="secondary" onClick={generateReport}>Refresh</Button>
+            <Button icon={Printer} variant="secondary" onClick={printReport}>Print</Button>
+            <Button icon={Download} variant="secondary" onClick={exportToExcel}>Export</Button>
+          </div>
         </div>
         {/* Responsive table/card layout */}
         <Card className="overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          <></>
+          {loading ? (
+            <div className="text-center text-gray-500 py-8">Loading...</div>
+          ) : reportData.entries.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">No entries found for this date.</div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="bg-blue-100">
+                <tr>
+                  <th className="px-3 py-2 text-left">S.No</th>
+                  <th className="px-3 py-2 text-left">Date</th>
+                  <th className="px-3 py-2 text-left">Company</th>
+                  <th className="px-3 py-2 text-left">Account</th>
+                  <th className="px-3 py-2 text-left">Sub Account</th>
+                  <th className="px-3 py-2 text-left">Particulars</th>
+                  <th className="px-3 py-2 text-right">Credit</th>
+                  <th className="px-3 py-2 text-right">Debit</th>
+                  <th className="px-3 py-2 text-left">Staff</th>
+                  <th className="px-3 py-2 text-left">Approved</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.entries.map((entry: any, idx: number) => (
+                  <tr key={entry.sno} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                    <td className="px-3 py-2">{entry.sno}</td>
+                    <td className="px-3 py-2">{entry.c_date}</td>
+                    <td className="px-3 py-2">{entry.company_name}</td>
+                    <td className="px-3 py-2">{entry.acc_name}</td>
+                    <td className="px-3 py-2">{entry.sub_acc_name || '-'}</td>
+                    <td className="px-3 py-2 max-w-xs truncate" title={entry.particulars}>{entry.particulars}</td>
+                    <td className="px-3 py-2 text-right text-green-700">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                    <td className="px-3 py-2 text-right text-red-700">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
+                    <td className="px-3 py-2">{entry.staff}</td>
+                    <td className="px-3 py-2">{entry.approved ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       </div>
     </div>

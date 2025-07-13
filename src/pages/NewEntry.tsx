@@ -92,21 +92,21 @@ const NewEntry: React.FC = () => {
 
   const loadDropdownData = async () => {
     try {
-      // Load companies
+    // Load companies
       const companies = await supabaseDB.getCompanies();
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name
-      }));
-      setCompanies(companiesData);
+    }));
+    setCompanies(companiesData);
 
-      // Load users
+    // Load users
       const users = await supabaseDB.getUsers();
       const usersData = users.filter(u => u.is_active).map(user => ({
-        value: user.username,
-        label: user.username
-      }));
-      setUsers(usersData);
+      value: user.username,
+      label: user.username
+    }));
+    setUsers(usersData);
     } catch (error) {
       console.error('Error loading dropdown data:', error);
       toast.error('Failed to load dropdown data');
@@ -119,9 +119,9 @@ const NewEntry: React.FC = () => {
       const accountsData = accounts.map(account => ({
         value: account.acc_name,
         label: account.acc_name
-      }));
-      setAccounts(accountsData);
-      setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
+    }));
+    setAccounts(accountsData);
+    setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
     } catch (error) {
       console.error('Error loading accounts:', error);
       toast.error('Failed to load accounts');
@@ -134,9 +134,9 @@ const NewEntry: React.FC = () => {
       const subAccountsData = subAccounts.map(subAcc => ({
         value: subAcc.sub_acc,
         label: subAcc.sub_acc
-      }));
-      setSubAccounts(subAccountsData);
-      setEntry(prev => ({ ...prev, subAccount: '' }));
+    }));
+    setSubAccounts(subAccountsData);
+    setEntry(prev => ({ ...prev, subAccount: '' }));
     } catch (error) {
       console.error('Error loading sub accounts:', error);
       toast.error('Failed to load sub accounts');
@@ -184,28 +184,28 @@ const NewEntry: React.FC = () => {
       });
 
       toast.success(`Entry saved successfully! Entry #${newEntry.sno}`);
-      
-      // Reset form but keep the date
-      const currentDate = entry.date;
-      setEntry({
-        date: currentDate,
-        companyName: '',
-        accountName: '',
-        subAccount: '',
-        particulars: '',
-        saleQ: 0,
-        purchaseQ: 0,
-        credit: 0,
-        debit: 0,
-        staff: user?.username || '',
-      });
-      
-      // Reset dropdowns
-      setAccounts([]);
-      setSubAccounts([]);
-      
-      // Update daily entry number for next entry
-      updateDailyEntryNumber();
+        
+        // Reset form but keep the date
+        const currentDate = entry.date;
+        setEntry({
+          date: currentDate,
+          companyName: '',
+          accountName: '',
+          subAccount: '',
+          particulars: '',
+          saleQ: 0,
+          purchaseQ: 0,
+          credit: 0,
+          debit: 0,
+          staff: user?.username || '',
+        });
+        
+        // Reset dropdowns
+        setAccounts([]);
+        setSubAccounts([]);
+        
+        // Update daily entry number for next entry
+        updateDailyEntryNumber();
     } catch (error) {
       console.error('Error saving entry:', error);
       toast.error(`Failed to save entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -336,10 +336,10 @@ const NewEntry: React.FC = () => {
             <div className="flex flex-col md:flex-row gap-4 mt-4">
               <Button className="w-full md:w-auto">Save</Button>
               <Button className="w-full md:w-auto" variant="secondary">Reset</Button>
-            </div>
-          </form>
-        </Card>
-      </div>
+          </div>
+        </form>
+      </Card>
+        </div>
     </div>
   );
 };

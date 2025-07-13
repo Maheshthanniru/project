@@ -149,31 +149,6 @@ const EditedRecords = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Export to PDF
-  const handleExportPDF = () => {
-    const doc = new jsPDF();
-    const tableData = filteredLog.map((log, idx) => {
-      const oldObj = log.old_values ? JSON.parse(log.old_values) : {};
-      const newObj = log.new_values ? JSON.parse(log.new_values) : {};
-      return [
-        idx + 1,
-        ...FIELDS.map(f => getFieldDisplay(f.key, oldObj[f.key])),
-        ...FIELDS.map(f => getFieldDisplay(f.key, newObj[f.key])),
-        userMap[log.edited_by] || log.edited_by,
-        log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : '',
-      ];
-    });
-    const tableHeader = [
-      'S.No',
-      ...FIELDS.map(f => f.label + ' (Before)'),
-      ...FIELDS.map(f => f.label + ' (After)'),
-      'Edited By',
-      'Edited At',
-    ];
-    doc.autoTable({ head: [tableHeader], body: tableData, styles: { fontSize: 7 } });
-    doc.save('edit_audit_log.pdf');
-  };
-
   // Print
   const handlePrint = () => {
     const printWindow = window.open('', '', 'width=1200,height=800');
@@ -221,7 +196,6 @@ const EditedRecords = () => {
           className="w-48"
         />
         <Button onClick={handleExportExcel} icon={Download} variant="secondary" size="sm">Export Excel</Button>
-        <Button onClick={handleExportPDF} icon={FileText} variant="secondary" size="sm">Export PDF</Button>
         <Button onClick={handlePrint} icon={Printer} variant="secondary" size="sm">Print</Button>
       </div>
       {loading ? (

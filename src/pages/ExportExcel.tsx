@@ -14,7 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 interface ExportOptions {
   reportType: 'cashbook' | 'ledger' | 'balancesheet' | 'vehicles' | 'bankguarantees' | 'drivers' | 'dailyreport' | 'ledgersummary';
@@ -173,24 +173,51 @@ const ExportExcel: React.FC = () => {
     }
   };
 
+  const exportToCSV = (data: any[], filename: string) => {
+    if (!data || data.length === 0) {
+      toast.error('No data to export as CSV');
+      return;
+    }
+    const headers = Object.keys(data[0]);
+    const csvRows = [headers.join(',')];
+    data.forEach(row => {
+      const values = headers.map(header => {
+        const val = row[header];
+        // Escape quotes and commas
+        if (typeof val === 'string') {
+          return '"' + val.replace(/"/g, '""') + '"';
+        }
+        return val;
+      });
+      csvRows.push(values.join(','));
+    });
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`CSV exported successfully! File: ${filename}.csv`);
+  };
+
   const handleExport = async () => {
     setLoading(true);
     try {
       const data = await getDataForExport();
-      
       if (data.length === 0) {
         toast.error('No data found for the selected criteria');
         return;
       }
-
       const dateRange = getDateRange();
       const filename = `${exportOptions.reportType}-${dateRange.from}-to-${dateRange.to}`;
-      
       if (exportOptions.format === 'pdf') {
         exportToPDF(data, filename, exportOptions.reportType);
+      } else if (exportOptions.format === 'csv') {
+        exportToCSV(data, filename);
       } else {
         const result = exportToExcel(data, filename, exportOptions.reportType);
-        
         if (result.success) {
           toast.success(`Export completed! File: ${filename}.xlsx`);
         } else {
@@ -207,47 +234,55 @@ const ExportExcel: React.FC = () => {
 
   const exportToPDF = (data: any[], filename: string, reportType: string) => {
     try {
+      if (!data || data.length === 0) {
+        toast.error('No data to export as PDF');
+        return;
+      }
       const doc = new jsPDF();
-      
-      // Add title
+      doc.setFont('helvetica');
       doc.setFontSize(18);
       doc.text('Thirumala Group', 105, 20, { align: 'center' });
-      
       doc.setFontSize(14);
       doc.text(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`, 105, 30, { align: 'center' });
-      
       doc.setFontSize(10);
       doc.text(`Generated on ${format(new Date(), 'dd-MMM-yyyy HH:mm')}`, 105, 40, { align: 'center' });
-      
-      // Get headers from first row
       const headers = Object.keys(data[0] || {});
-      
-      // Convert data to array format for autoTable
-      const tableData = data.map(row => 
-        headers.map(header => row[header as keyof typeof row])
-      );
-      
-      // Add table
-      (doc as any).autoTable({
-        head: [headers],
-        body: tableData,
-        startY: 50,
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: 255,
-          fontStyle: 'bold',
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        margin: { top: 50 },
-      });
-      
-      // Save PDF
+      const tableData = data.map(row => headers.map(header => row[header]));
+      toast('PDF debug: headers=' + JSON.stringify(headers) + ', rows=' + tableData.length);
+      console.log('PDF export headers:', headers);
+      console.log('PDF export tableData:', tableData);
+      if (headers.length === 0 || tableData.length === 0) {
+        doc.text('No data available for this report.', 105, 60, { align: 'center' });
+      } else {
+        try {
+          autoTable(doc, {
+            head: [headers],
+            body: tableData,
+            startY: 50,
+            styles: {
+              fontSize: 8,
+              cellPadding: 2,
+              lineColor: [44, 62, 80],
+              lineWidth: 0.2,
+            },
+            headStyles: {
+              fillColor: [59, 130, 246],
+              textColor: 255,
+              fontStyle: 'bold',
+            },
+            alternateRowStyles: {
+              fillColor: [245, 245, 245],
+            },
+            margin: { top: 50 },
+            tableLineColor: [44, 62, 80],
+            tableLineWidth: 0.2,
+          });
+        } catch (tableError) {
+          doc.text('Error rendering table: ' + String(tableError), 105, 60, { align: 'center' });
+          toast.error('PDF table error: ' + String(tableError));
+          console.error('autoTable error:', tableError);
+        }
+      }
       doc.save(`${filename}.pdf`);
       toast.success(`PDF exported successfully! File: ${filename}.pdf`);
     } catch (error) {
@@ -457,7 +492,7 @@ const ExportExcel: React.FC = () => {
           {showPreview && previewData.length > 0 ? (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">
-                Showing first {previewData.length} rows of {getDataForExport().length} total records
+                Showing first {previewData.length} rows
               </div>
               <div className="max-h-96 overflow-y-auto">
                 <table className="min-w-full text-xs">
