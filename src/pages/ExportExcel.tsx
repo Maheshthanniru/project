@@ -310,7 +310,7 @@ const ExportExcel: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

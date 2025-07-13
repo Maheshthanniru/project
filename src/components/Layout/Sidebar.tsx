@@ -1,28 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  Home,
-  Plus,
-  Edit,
-  FileText,
-  Book,
-  BookOpen,
-  CheckCircle,
-  FileEdit,
-  Download,
-  PieChart,
-  Truck,
-  CreditCard,
-  Users,
-  LogOut,
-  Replace,
-  Calculator,
-  FileDown,
+  Home, Plus, Edit, FileText, Book, BookOpen, CheckCircle, FileEdit, Download, FileDown, Calculator, Truck, CreditCard, Users, LogOut, Replace
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Sidebar: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
 
   const menuItems = [
     { icon: Home, label: 'Dashboard', path: '/' },
@@ -31,13 +15,9 @@ const Sidebar: React.FC = () => {
     { icon: FileText, label: 'Daily Report', path: '/daily-report' },
     { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger' },
     { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary' },
-    ...(isAdmin ? [
-      { icon: CheckCircle, label: 'Approve Records', path: '/approve-records' },
-    ] : []),
+    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records' },
     { icon: FileEdit, label: 'Edited Records', path: '/edited-records' },
-    ...(isAdmin ? [
-      { icon: Replace, label: 'Replace Form', path: '/replace-form' },
-    ] : []),
+    { icon: Replace, label: 'Replace Form', path: '/replace-form' },
     { icon: Download, label: 'Export Excel', path: '/export-excel' },
     { icon: FileDown, label: 'Export PDF', path: '/export-pdf' },
     { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet' },
@@ -47,78 +27,72 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <div className="w-64 bg-white shadow-lg h-full flex flex-col">
-      {/* Logo/Brand Section with Deity Image */}
-      <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-orange-50 to-red-50">
-        <div className="flex flex-col items-center gap-3">
-          {/* Deity Image */}
-          <div className="w-16 h-20 bg-gradient-to-b from-orange-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
-            <div className="w-12 h-16 bg-gradient-to-b from-yellow-300 to-orange-500 rounded-md flex items-center justify-center relative">
-              {/* Simplified deity representation */}
-              <div className="w-8 h-10 bg-gradient-to-b from-amber-200 to-orange-400 rounded-full relative">
+    <aside className="w-64 h-screen sticky top-0 left-0 z-30 bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-xl rounded-r-2xl flex flex-col border-r border-blue-100">
+      {/* Top: Logo/Brand and User Info */}
+      <div className="flex flex-col gap-0">
+        {/* Logo/Brand */}
+        <div className="p-5 border-b border-blue-200 bg-gradient-to-br from-orange-50 to-red-50 shadow-sm flex flex-col items-center">
+          <div className="w-14 h-16 bg-gradient-to-b from-orange-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg mb-2">
+            <div className="w-10 h-12 bg-gradient-to-b from-yellow-300 to-orange-500 rounded-md flex items-center justify-center relative">
+              <div className="w-7 h-9 bg-gradient-to-b from-amber-200 to-orange-400 rounded-full relative">
                 <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-600 rounded-full"></div>
                 <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-4 h-1 bg-red-700 rounded"></div>
                 <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-6 h-3 bg-gradient-to-t from-red-600 to-orange-500 rounded-b-full"></div>
               </div>
-              {/* Crown/ornaments */}
-              <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-10 h-2 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-t-full"></div>
+              <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-8 h-2 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-t-full"></div>
             </div>
           </div>
-          
-          <div className="text-center">
-            <h1 className="text-lg font-bold text-gray-900">Thirumala Group</h1>
-            <p className="text-sm text-orange-700 font-medium">Business Management</p>
-            <p className="text-xs text-gray-600">Blessed by Divine Grace</p>
-          </div>
+          <h1 className="text-lg font-bold text-gray-900 tracking-wide">Thirumala Group</h1>
+          <p className="text-xs text-orange-700 font-medium">Business Management</p>
         </div>
-      </div>
-
-      {/* User Info */}
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium text-white">
+        {/* User Info */}
+        <div className="p-4 border-b border-blue-100 bg-blue-50 flex items-center gap-3">
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow">
+            <span className="text-base font-bold text-white">
               {user?.username.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-900">{user?.username}</p>
-            <p className="text-xs text-gray-500">{user?.user_type}</p>
+            <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.username}</p>
+            <p className="text-xs text-blue-600 font-medium capitalize">{user?.user_type}</p>
           </div>
         </div>
       </div>
-
-      {/* Navigation Menu */}
-      <nav className="flex-1 p-4 space-y-1">
-        {menuItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`
-            }
-          >
-            <item.icon className="w-5 h-5" />
-            {item.label}
-          </NavLink>
-        ))}
+      {/* Scrollable Menu */}
+      <nav className="flex-1 overflow-y-auto custom-scrollbar px-2 py-4">
+        <ul className="space-y-1">
+          {menuItems.map((item) => (
+            <li key={item.path}>
+              <NavLink
+                to={item.path}
+                className={({ isActive }) =>
+                  `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all relative
+                  ${isActive
+                    ? 'bg-blue-100 text-blue-700 font-bold border-l-4 border-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:bg-blue-50 hover:text-blue-800'}
+                  `
+                }
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  <item.icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
       </nav>
-
-      {/* Logout Button */}
-      <div className="p-4 border-t border-gray-200">
+      {/* Sticky Logout at Bottom */}
+      <div className="p-4 bg-gradient-to-t from-blue-50 to-transparent border-t border-blue-100">
         <button
           onClick={logout}
-          className="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm"
         >
           <LogOut className="w-5 h-5" />
           Logout
         </button>
       </div>
-    </div>
+    </aside>
   );
 };
 
