@@ -1,0 +1,522 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Download, FileText, Calendar, Building, Filter, 
+  RefreshCw, CheckSquare, Square, AlertCircle, 
+  TrendingUp, TrendingDown, Users, Truck, CreditCard, Eye
+} from 'lucide-react';
+import Card from '../components/UI/Card';
+import Button from '../components/UI/Button';
+import Input from '../components/UI/Input';
+import Select from '../components/UI/Select';
+import { supabaseDB } from '../lib/supabaseDatabase';
+import { exportToExcel, formatDataForExcel } from '../utils/excel';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
+import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+interface ExportOptions {
+  reportType: 'cashbook' | 'ledger' | 'balancesheet' | 'vehicles' | 'bankguarantees' | 'drivers' | 'dailyreport' | 'ledgersummary';
+  dateRange: 'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'custom';
+  fromDate: string;
+  toDate: string;
+  companyFilter: string;
+  accountFilter: string;
+  includeHeaders: boolean;
+  includeTotals: boolean;
+  format: 'xlsx' | 'csv' | 'pdf';
+}
+
+const ExportExcel: React.FC = () => {
+  const { user } = useAuth();
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({
+    reportType: 'cashbook',
+    dateRange: 'thisMonth',
+    fromDate: format(new Date().setDate(1), 'yyyy-MM-dd'), // First day of current month
+    toDate: format(new Date(), 'yyyy-MM-dd'),
+    companyFilter: '',
+    accountFilter: '',
+    includeHeaders: true,
+    includeTotals: true,
+    format: 'xlsx'
+  });
+
+  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ value: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+
+  useEffect(() => {
+    loadDropdownData();
+  }, []);
+
+  useEffect(() => {
+    if (exportOptions.reportType === 'cashbook' && exportOptions.companyFilter) {
+      loadAccountsByCompany();
+    }
+  }, [exportOptions.companyFilter, exportOptions.reportType]);
+
+  const loadDropdownData = async () => {
+    try {
+      const companies = await supabaseDB.getCompanies();
+      const companiesData = companies.map(company => ({
+        value: company.company_name,
+        label: company.company_name
+      }));
+      setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
+
+      const accounts = await supabaseDB.getAccounts();
+      const accountsData = accounts.map(account => ({
+        value: account.acc_name,
+        label: account.acc_name
+      }));
+      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
+    } catch (error) {
+      console.error('Error loading dropdown data:', error);
+      toast.error('Failed to load dropdown data');
+    }
+  };
+
+  const loadAccountsByCompany = async () => {
+    if (exportOptions.companyFilter) {
+      try {
+        const accounts = await supabaseDB.getAccountsByCompany(exportOptions.companyFilter);
+        const accountsData = accounts.map(account => ({
+          value: account.acc_name,
+          label: account.acc_name
+        }));
+        setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
+      } catch (error) {
+        console.error('Error loading accounts by company:', error);
+        toast.error('Failed to load accounts');
+      }
+    } else {
+      loadDropdownData();
+    }
+  };
+
+  const getDateRange = () => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(today.getDate() - today.getDay());
+    
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    switch (exportOptions.dateRange) {
+      case 'today':
+        return { from: format(today, 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd') };
+      case 'yesterday':
+        return { from: format(yesterday, 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') };
+      case 'thisWeek':
+        return { from: format(thisWeekStart, 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd') };
+      case 'thisMonth':
+        return { from: format(thisMonthStart, 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd') };
+      case 'custom':
+        return { from: exportOptions.fromDate, to: exportOptions.toDate };
+      default:
+        return { from: exportOptions.fromDate, to: exportOptions.toDate };
+    }
+  };
+
+  const getDataForExport = async () => {
+    const dateRange = getDateRange();
+    
+    switch (exportOptions.reportType) {
+      case 'cashbook':
+        let entries = await supabaseDB.getCashBookEntries();
+        entries = entries.filter(entry => 
+          entry.c_date >= dateRange.from && entry.c_date <= dateRange.to
+        );
+        
+        if (exportOptions.companyFilter) {
+          entries = entries.filter(entry => entry.company_name === exportOptions.companyFilter);
+        }
+        if (exportOptions.accountFilter) {
+          entries = entries.filter(entry => entry.acc_name === exportOptions.accountFilter);
+        }
+        
+        return formatDataForExcel(entries, 'cashbook');
+        
+      case 'ledger':
+        const ledgerData = await supabaseDB.getCashBookEntries();
+        const filteredLedgerData = ledgerData.filter(entry => 
+          entry.c_date >= dateRange.from && entry.c_date <= dateRange.to
+        );
+        return formatDataForExcel(filteredLedgerData, 'ledger');
+        
+      case 'balancesheet':
+        const balanceData = await supabaseDB.getCashBookEntries();
+        const filteredBalanceData = balanceData.filter(entry => 
+          entry.c_date >= dateRange.from && entry.c_date <= dateRange.to
+        );
+        return formatDataForExcel(filteredBalanceData, 'balancesheet');
+        
+      case 'vehicles':
+        const vehicleData = await supabaseDB.getVehicles();
+        return formatDataForExcel(vehicleData, 'vehicles');
+        
+      case 'bankguarantees':
+        const bgData = await supabaseDB.getBankGuarantees();
+        return formatDataForExcel(bgData, 'bankguarantees');
+        
+      case 'drivers':
+        const driverData = await supabaseDB.getDrivers();
+        return formatDataForExcel(driverData, 'drivers');
+        
+      default:
+        return [];
+    }
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const data = await getDataForExport();
+      
+      if (data.length === 0) {
+        toast.error('No data found for the selected criteria');
+        return;
+      }
+
+      const dateRange = getDateRange();
+      const filename = `${exportOptions.reportType}-${dateRange.from}-to-${dateRange.to}`;
+      
+      if (exportOptions.format === 'pdf') {
+        exportToPDF(data, filename, exportOptions.reportType);
+      } else {
+        const result = exportToExcel(data, filename, exportOptions.reportType);
+        
+        if (result.success) {
+          toast.success(`Export completed! File: ${filename}.xlsx`);
+        } else {
+          toast.error('Export failed. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Export failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportToPDF = (data: any[], filename: string, reportType: string) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Thirumala Group', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(14);
+      doc.text(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`, 105, 30, { align: 'center' });
+      
+      doc.setFontSize(10);
+      doc.text(`Generated on ${format(new Date(), 'dd-MMM-yyyy HH:mm')}`, 105, 40, { align: 'center' });
+      
+      // Get headers from first row
+      const headers = Object.keys(data[0] || {});
+      
+      // Convert data to array format for autoTable
+      const tableData = data.map(row => 
+        headers.map(header => row[header as keyof typeof row])
+      );
+      
+      // Add table
+      (doc as any).autoTable({
+        head: [headers],
+        body: tableData,
+        startY: 50,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+        },
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: 255,
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        margin: { top: 50 },
+      });
+      
+      // Save PDF
+      doc.save(`${filename}.pdf`);
+      toast.success(`PDF exported successfully! File: ${filename}.pdf`);
+    } catch (error) {
+      console.error('PDF export error:', error);
+      toast.error('PDF export failed. Please try again.');
+    }
+  };
+
+  const handlePreview = async () => {
+    setLoading(true);
+    try {
+      const data = await getDataForExport();
+      setPreviewData(data.slice(0, 10)); // Show first 10 records
+      setShowPreview(true);
+      toast.success(`Preview: ${data.length} records found`);
+    } catch (error) {
+      console.error('Error generating preview:', error);
+      toast.error('Failed to generate preview');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOptionChange = (field: keyof ExportOptions, value: any) => {
+    setExportOptions(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const getReportTypeIcon = (type: string) => {
+    switch (type) {
+      case 'cashbook': return FileText;
+      case 'ledger': return TrendingUp;
+      case 'balancesheet': return TrendingDown;
+      case 'vehicles': return Truck;
+      case 'bankguarantees': return CreditCard;
+      case 'drivers': return Users;
+      default: return FileText;
+    }
+  };
+
+  const reportTypes = [
+    { value: 'cashbook', label: 'Cash Book Entries', icon: FileText },
+    { value: 'ledger', label: 'Ledger Report', icon: TrendingUp },
+    { value: 'balancesheet', label: 'Balance Sheet', icon: TrendingDown },
+    { value: 'vehicles', label: 'Vehicles', icon: Truck },
+    { value: 'bankguarantees', label: 'Bank Guarantees', icon: CreditCard },
+    { value: 'drivers', label: 'Drivers', icon: Users },
+    { value: 'dailyreport', label: 'Daily Report', icon: Calendar },
+    { value: 'ledgersummary', label: 'Ledger Summary', icon: Building }
+  ];
+
+  const dateRangeOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'thisWeek', label: 'This Week' },
+    { value: 'thisMonth', label: 'This Month' },
+    { value: 'custom', label: 'Custom Range' }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Export Excel</h1>
+          <p className="text-gray-600">Export your business data to Excel format</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            icon={RefreshCw}
+            variant="secondary"
+            onClick={() => setShowPreview(false)}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Export Options */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card title="Export Configuration" subtitle="Configure your export settings">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Report Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Report Type
+                </label>
+                <Select
+                  value={exportOptions.reportType}
+                  onChange={(value) => handleOptionChange('reportType', value)}
+                  options={reportTypes.map(type => ({
+                    value: type.value,
+                    label: type.label
+                  }))}
+                />
+              </div>
+
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date Range
+                </label>
+                <Select
+                  value={exportOptions.dateRange}
+                  onChange={(value) => handleOptionChange('dateRange', value)}
+                  options={dateRangeOptions}
+                />
+              </div>
+
+              {/* Custom Date Range */}
+              {exportOptions.dateRange === 'custom' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      From Date
+                    </label>
+                    <Input
+                      type="date"
+                      value={exportOptions.fromDate}
+                      onChange={(value) => handleOptionChange('fromDate', value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      To Date
+                    </label>
+                    <Input
+                      type="date"
+                      value={exportOptions.toDate}
+                      onChange={(value) => handleOptionChange('toDate', value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Company Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company Filter
+                </label>
+                <Select
+                  value={exportOptions.companyFilter}
+                  onChange={(value) => handleOptionChange('companyFilter', value)}
+                  options={companies}
+                />
+              </div>
+
+              {/* Account Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Account Filter
+                </label>
+                <Select
+                  value={exportOptions.accountFilter}
+                  onChange={(value) => handleOptionChange('accountFilter', value)}
+                  options={accounts}
+                />
+              </div>
+
+              {/* Export Format */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Export Format
+                </label>
+                <Select
+                  value={exportOptions.format}
+                  onChange={(value) => handleOptionChange('format', value)}
+                  options={[
+                    { value: 'xlsx', label: 'Excel (.xlsx)' },
+                    { value: 'csv', label: 'CSV (.csv)' },
+                    { value: 'pdf', label: 'PDF (.pdf)' }
+                  ]}
+                />
+              </div>
+            </div>
+
+            {/* Options */}
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={exportOptions.includeHeaders}
+                    onChange={(e) => handleOptionChange('includeHeaders', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Include Headers</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={exportOptions.includeTotals}
+                    onChange={(e) => handleOptionChange('includeTotals', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Include Totals</span>
+                </label>
+              </div>
+            </div>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-4">
+            <Button
+              icon={Download}
+              onClick={handleExport}
+              disabled={loading}
+              className="flex-1"
+            >
+              {loading ? 'Exporting...' : `Export to ${exportOptions.format.toUpperCase()}`}
+            </Button>
+            <Button
+              icon={Eye}
+              variant="secondary"
+              onClick={handlePreview}
+              disabled={loading}
+            >
+              Preview Data
+            </Button>
+          </div>
+        </div>
+
+        {/* Preview Panel */}
+        <div className="lg:col-span-1">
+          <Card title="Export Preview" subtitle="Preview your export data">
+            {showPreview && previewData.length > 0 ? (
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
+                  Showing first {previewData.length} rows of {getDataForExport().length} total records
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {Object.keys(previewData[0] || {}).map((key) => (
+                          <th key={key} className="px-2 py-1 text-left font-medium text-gray-700">
+                            {key}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {previewData.map((row, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          {Object.values(row).map((value: any, cellIndex) => (
+                            <td key={cellIndex} className="px-2 py-1 text-gray-900">
+                              {typeof value === 'number' ? value.toLocaleString() : String(value)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>Click "Preview Data" to see a sample of your export</p>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ExportExcel; 
