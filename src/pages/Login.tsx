@@ -45,7 +45,7 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Logo/Image and Title */}
         <div className="flex flex-col items-center justify-center px-8 pt-8 pb-4">
-          <img src={`${import.meta.env.BASE_URL}download.jpeg`} alt="Login Illustration" className="w-48 h-48 object-contain mb-4 rounded-xl shadow" />
+          <img src="download.jpeg" alt="Login Illustration" className="w-48 h-48 object-contain mb-4 rounded-xl shadow" />
           <h1 className="text-2xl font-bold text-gray-900 text-center">Thirumala Group</h1>
           <p className="text-gray-600 mt-1 text-center">Cotton Business Management</p>
           <p className="text-gray-500 text-sm mt-1 text-center">श्री तिरुमला कॉटन मिल्स</p>
