@@ -6,7 +6,7 @@ import Card from '../components/UI/Card';
 import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronUp, Edit as EditIcon, X as XIcon, Save as SaveIcon } from 'lucide-react';
 
 interface Feature {
   key: string;
@@ -29,6 +29,8 @@ const UserManagement: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editFeatures, setEditFeatures] = useState<string[]>([]);
 
   useEffect(() => {
     loadUsers();
@@ -300,9 +302,74 @@ const UserManagement: React.FC = () => {
                     <div className="text-gray-800 font-medium">{u.is_admin ? 'Admin' : 'User'}</div>
                   </div>
                   <div className="md:col-span-2">
-                    <div className="mb-1 text-xs text-gray-500">Feature Access</div>
+                    <div className="mb-1 text-xs text-gray-500 flex items-center gap-2">
+                      Feature Access
+                      {!u.is_admin && (
+                        editingUserId === u.id ? (
+                          <>
+                            <button
+                              className="ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1"
+                              onClick={() => { setEditingUserId(null); setEditFeatures([]); }}
+                              type="button"
+                            >
+                              <XIcon className="w-4 h-4" /> Cancel
+                            </button>
+                            <button
+                              className="ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                              onClick={async () => {
+                                // Save feature access changes
+                                setLoading(true);
+                                // Remove all current access
+                                await supabase.from('user_access').delete().eq('user_id', u.id);
+                                // Add new access
+                                for (const feature of editFeatures) {
+                                  await supabase.from('user_access').insert({ user_id: u.id, feature_key: feature });
+                                }
+                                setEditingUserId(null);
+                                setEditFeatures([]);
+                                await loadUsers();
+                                setLoading(false);
+                                toast.success('Feature access updated!');
+                              }}
+                              type="button"
+                              disabled={loading}
+                            >
+                              <SaveIcon className="w-4 h-4" /> Save
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                            onClick={() => { setEditingUserId(u.id); setEditFeatures(u.features); }}
+                            type="button"
+                          >
+                            <EditIcon className="w-4 h-4" /> Edit
+                          </button>
+                        )
+                      )}
+                    </div>
                     {u.is_admin ? (
                       <span className="inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm">All Access (Admin)</span>
+                    ) : editingUserId === u.id ? (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {features.map(f => (
+                          <label key={f.key} className={`flex items-center gap-2 px-3 py-1.5 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs font-medium
+                            ${editFeatures.includes(f.key)
+                              ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                              : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'}
+                          `}>
+                            <input
+                              type="checkbox"
+                              checked={editFeatures.includes(f.key)}
+                              onChange={() => setEditFeatures(prev => prev.includes(f.key)
+                                ? prev.filter(k => k !== f.key)
+                                : [...prev, f.key])}
+                              className="accent-blue-600 w-5 h-5"
+                            />
+                            <span>{f.name}</span>
+                          </label>
+                        ))}
+                      </div>
                     ) : u.features.length === 0 ? (
                       <span className="inline-block bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-medium border border-gray-200">No access assigned</span>
                     ) : (
@@ -311,7 +378,6 @@ const UserManagement: React.FC = () => {
                           const f = features.find(ff => ff.key === fk);
                           return f ? (
                             <span key={fk} className="flex items-center gap-1 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium border border-blue-200 shadow-sm">
-                              {/* Optionally add an icon here */}
                               {f.name}
                             </span>
                           ) : null;
