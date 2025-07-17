@@ -258,38 +258,64 @@ const DailyReport: React.FC = () => {
           ) : reportData.entries.length === 0 ? (
             <div className="text-center text-gray-500 py-8">No entries found for this date.</div>
           ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-blue-100">
-                <tr>
-                  <th className="px-3 py-2 text-left">S.No</th>
-                  <th className="px-3 py-2 text-left">Date</th>
-                  <th className="px-3 py-2 text-left">Company</th>
-                  <th className="px-3 py-2 text-left">Account</th>
-                  <th className="px-3 py-2 text-left">Sub Account</th>
-                  <th className="px-3 py-2 text-left">Particulars</th>
-                  <th className="px-3 py-2 text-right">Credit</th>
-                  <th className="px-3 py-2 text-right">Debit</th>
-                  <th className="px-3 py-2 text-left">Staff</th>
-                  <th className="px-3 py-2 text-left">Approved</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.entries.map((entry: any, idx: number) => (
-                  <tr key={entry.sno} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                    <td className="px-3 py-2">{entry.sno}</td>
-                    <td className="px-3 py-2">{entry.c_date}</td>
-                    <td className="px-3 py-2">{entry.company_name}</td>
-                    <td className="px-3 py-2">{entry.acc_name}</td>
-                    <td className="px-3 py-2">{entry.sub_acc_name || '-'}</td>
-                    <td className="px-3 py-2 max-w-xs truncate" title={entry.particulars}>{entry.particulars}</td>
-                    <td className="px-3 py-2 text-right text-green-700">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
-                    <td className="px-3 py-2 text-right text-red-700">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
-                    <td className="px-3 py-2">{entry.staff}</td>
-                    <td className="px-3 py-2">{entry.approved ? 'Yes' : 'No'}</td>
+            <>
+              <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="text-lg font-semibold">Daily Report for {selectedDate}</div>
+                <div className="flex flex-col md:flex-row md:items-center gap-4 text-sm text-gray-600">
+                  <span>Total Entries: {reportData.entries.length}</span>
+                  <span>Total Credits: ₹{reportData.totalCredit.toLocaleString()}</span>
+                  <span>Total Debits: ₹{reportData.totalDebit.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="flex flex-col md:flex-row gap-4 mb-6">
+                <div className="flex-1 bg-green-100 rounded-lg p-4 flex flex-col items-start justify-center">
+                  <span className="text-green-900 font-semibold text-sm">Total Credit:</span>
+                  <span className="text-2xl font-bold text-green-900">₹{reportData.totalCredit.toLocaleString()}</span>
+                </div>
+                <div className="flex-1 bg-red-100 rounded-lg p-4 flex flex-col items-start justify-center">
+                  <span className="text-red-700 font-semibold text-sm">Total Debit:</span>
+                  <span className="text-2xl font-bold text-red-700">₹{reportData.totalDebit.toLocaleString()}</span>
+                </div>
+                <div className="flex-1 bg-blue-100 rounded-lg p-4 flex flex-col items-start justify-center">
+                  <span className="text-blue-800 font-semibold text-sm">Balance:</span>
+                  <span className="text-2xl font-bold text-blue-800">
+                    ₹{Math.abs((reportData.totalCredit - reportData.totalDebit)).toLocaleString()} {reportData.totalCredit - reportData.totalDebit >= 0 ? 'CR' : 'DR'}
+                  </span>
+                </div>
+              </div>
+              <table className="min-w-full text-sm">
+                <thead className="bg-blue-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">S.No</th>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Company</th>
+                    <th className="px-3 py-2 text-left">Account</th>
+                    <th className="px-3 py-2 text-left">Sub Account</th>
+                    <th className="px-3 py-2 text-left">Particulars</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-left">Staff</th>
+                    <th className="px-3 py-2 text-left">Approved</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {reportData.entries.map((entry: any, idx: number) => (
+                    <tr key={entry.sno} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                      <td className="px-3 py-2">{entry.sno}</td>
+                      <td className="px-3 py-2">{entry.c_date}</td>
+                      <td className="px-3 py-2">{entry.company_name}</td>
+                      <td className="px-3 py-2">{entry.acc_name}</td>
+                      <td className="px-3 py-2">{entry.sub_acc_name || '-'}</td>
+                      <td className="px-3 py-2 max-w-xs truncate" title={entry.particulars}>{entry.particulars}</td>
+                      <td className="px-3 py-2 text-right text-green-700">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                      <td className="px-3 py-2 text-right text-red-700">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
+                      <td className="px-3 py-2">{entry.staff}</td>
+                      <td className="px-3 py-2">{entry.approved ? 'Yes' : 'No'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </Card>
       </div>

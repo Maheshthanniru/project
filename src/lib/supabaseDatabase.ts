@@ -47,6 +47,8 @@ export interface CashBookEntry {
   cb: string;
   created_at: string;
   updated_at: string;
+  credit_mode?: string;
+  debit_mode?: string;
 }
 
 export interface User {
@@ -87,6 +89,8 @@ export interface Vehicle {
   date_added: string | null;
   created_at: string | null;
   updated_at: string | null;
+  rc_front_url?: string;
+  rc_back_url?: string;
 }
 
 export interface Driver {
@@ -100,6 +104,8 @@ export interface Driver {
   address: string | null;
   created_at: string | null;
   updated_at: string | null;
+  license_front_url?: string | null;
+  license_back_url?: string | null;
 }
 
 // Supabase Database Service
@@ -312,7 +318,7 @@ class SupabaseDatabase {
         ...entry,
         sno: nextSno,
         entry_time: new Date().toISOString(),
-        approved: false,
+        approved: '', // Set to pending by default
         edited: false,
         e_count: 0,
         lock_record: false
@@ -383,7 +389,125 @@ class SupabaseDatabase {
     return data;
   }
 
-  async deleteCashBookEntry(id: string): Promise<boolean> {
+  // Lock a cash book entry
+  async lockEntry(id: string, lockedBy: string): Promise<CashBookEntry | null> {
+    // Fetch the old entry for audit logging
+    const { data: oldEntry, error: fetchError } = await supabase
+      .from('cash_book')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (fetchError) {
+      console.error('Error fetching old cash book entry for lock:', fetchError);
+    }
+
+    const { data, error } = await supabase
+      .from('cash_book')
+      .update({ lock_record: true, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error locking cash book entry:', error);
+      return null;
+    }
+
+    // Insert audit log if update succeeded and old entry was fetched
+    if (oldEntry && data) {
+      const auditLog = {
+        cash_book_id: id,
+        old_values: JSON.stringify(oldEntry),
+        new_values: JSON.stringify(data),
+        edited_by: lockedBy || 'unknown',
+        edited_at: new Date().toISOString(),
+        action: 'LOCK',
+      };
+      const { error: auditError } = await supabase
+        .from('edit_cash_book')
+        .insert(auditLog);
+      if (auditError) {
+        console.error('Error inserting lock audit log into edit_cash_book:', auditError);
+      }
+    }
+
+    return data;
+  }
+
+  // Unlock a cash book entry
+  async unlockEntry(id: string, unlockedBy: string): Promise<CashBookEntry | null> {
+    // Fetch the old entry for audit logging
+    const { data: oldEntry, error: fetchError } = await supabase
+      .from('cash_book')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (fetchError) {
+      console.error('Error fetching old cash book entry for unlock:', fetchError);
+    }
+
+    const { data, error } = await supabase
+      .from('cash_book')
+      .update({ lock_record: false, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error unlocking cash book entry:', error);
+      return null;
+    }
+
+    // Insert audit log if update succeeded and old entry was fetched
+    if (oldEntry && data) {
+      const auditLog = {
+        cash_book_id: id,
+        old_values: JSON.stringify(oldEntry),
+        new_values: JSON.stringify(data),
+        edited_by: unlockedBy || 'unknown',
+        edited_at: new Date().toISOString(),
+        action: 'UNLOCK',
+      };
+      const { error: auditError } = await supabase
+        .from('edit_cash_book')
+        .insert(auditLog);
+      if (auditError) {
+        console.error('Error inserting unlock audit log into edit_cash_book:', auditError);
+      }
+    }
+
+    return data;
+  }
+
+  async deleteCashBookEntry(id: string, deletedBy: string): Promise<boolean> {
+    // Fetch the old entry for backup
+    const { data: oldEntry, error: fetchError } = await supabase
+      .from('cash_book')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (fetchError) {
+      console.error('Error fetching old cash book entry for deletion:', fetchError);
+      return false;
+    }
+
+    // Insert into deleted_cash_book BEFORE deleting the record
+    if (oldEntry) {
+      const deletedRecord = {
+        ...oldEntry,
+        deleted_by: deletedBy || 'unknown',
+        deleted_at: new Date().toISOString(),
+      };
+      const { error: insertError } = await supabase
+        .from('deleted_cash_book')
+        .insert(deletedRecord);
+      if (insertError) {
+        console.error('Error inserting into deleted_cash_book:', insertError);
+        return false;
+      }
+    }
+
+    // Now delete the record
     const { error } = await supabase
       .from('cash_book')
       .delete()
@@ -869,6 +993,18 @@ class SupabaseDatabase {
       .order('edited_at', { ascending: false });
     if (error) {
       console.error('Error fetching edit audit log:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async getDeletedCashBook(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('deleted_cash_book')
+      .select('*')
+      .order('deleted_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching deleted cash book:', error);
       return [];
     }
     return data || [];

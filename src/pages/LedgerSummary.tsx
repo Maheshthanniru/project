@@ -99,6 +99,12 @@ const LedgerSummary: React.FC = () => {
     }
   }, [filters.companyName, filters.mainAccount]);
 
+  // Implement live filtering: call generateSummary automatically when filters change
+  useEffect(() => {
+    generateSummary();
+    // eslint-disable-next-line
+  }, [filters, activeTab]);
+
   const loadDropdownData = async () => {
     try {
       // Load companies
@@ -612,6 +618,7 @@ const LedgerSummary: React.FC = () => {
           <p className="text-gray-600">Comprehensive financial summary with company, account, and sub-account analysis</p>
         </div>
         <div className="flex items-center gap-3">
+          {/*
           <Button
             icon={RefreshCw}
             variant="secondary"
@@ -619,6 +626,7 @@ const LedgerSummary: React.FC = () => {
           >
             Refresh
           </Button>
+          */}
           <Button
             icon={Printer}
             variant="secondary"
@@ -750,6 +758,7 @@ const LedgerSummary: React.FC = () => {
           </div>
 
           {/* Action Buttons */}
+          {/*
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={generateSummary}
@@ -772,6 +781,7 @@ const LedgerSummary: React.FC = () => {
               Close
             </Button>
           </div>
+          */}
         </div>
       </Card>
 

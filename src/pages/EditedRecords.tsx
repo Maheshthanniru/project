@@ -20,6 +20,7 @@ type AuditLogEntry = {
   new_values: string;
   edited_by: string;
   edited_at: string;
+  action?: string;
 };
 
 const FIELDS = [
@@ -68,6 +69,7 @@ const getChangedFields = (oldObj: CashBookPartial, newObj: CashBookPartial) => {
 
 const EditedRecords = () => {
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -79,10 +81,12 @@ const EditedRecords = () => {
     Promise.all([
       supabaseDB.getEditAuditLog(),
       supabaseDB.getUsers(),
+      supabaseDB.getDeletedCashBook(),
     ])
-      .then(([log, users]) => {
+      .then(([log, users, deleted]) => {
         setAuditLog(log as AuditLogEntry[]);
         setUsers(users as User[]);
+        setDeletedRecords(deleted as any[]);
       })
       .catch(() => toast.error('Failed to load edit audit log'))
       .finally(() => setLoading(false));
@@ -108,9 +112,20 @@ const EditedRecords = () => {
       ].join(' ').toLowerCase();
       const matchesSearch = search === '' || searchText.includes(search.toLowerCase());
       const matchesUser = userFilter === '' || log.edited_by === userFilter;
-      return matchesSearch && matchesUser;
+      // Exclude deletes from main table
+      const isDelete = (log.new_values == null && log.old_values != null);
+      return matchesSearch && matchesUser && !isDelete;
     });
   }, [auditLog, search, userFilter, userMap]);
+
+  // Deleted records log (from deleted_cash_book)
+  // No filtering for now, but you can add search/userFilter if needed
+  const deletedLog = useMemo(() => {
+    return deletedRecords.filter((log) => {
+      // Consider as deleted if new_values is null and old_values is present
+      return log.new_values == null && log.old_values != null;
+    });
+  }, [deletedRecords]);
 
   // Pagination
   const totalPages = Math.ceil(filteredLog.length / PAGE_SIZE);
@@ -208,8 +223,8 @@ const EditedRecords = () => {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-2 py-1">S.No</th>
-                {FIELDS.map(f => <th key={f.key + '-before'} className="px-2 py-1">{f.label} (Before)</th>)}
-                {FIELDS.map(f => <th key={f.key + '-after'} className="px-2 py-1">{f.label} (After)</th>)}
+                <th className="px-2 py-1">Type</th>
+                {FIELDS.map(f => <th key={f.key} className="px-2 py-1">{f.label}</th>)}
                 <th className="px-2 py-1">Edited By</th>
                 <th className="px-2 py-1">Edited At</th>
               </tr>
@@ -220,17 +235,28 @@ const EditedRecords = () => {
                 const newObj = log.new_values ? JSON.parse(log.new_values) : {};
                 const changed = getChangedFields(oldObj, newObj);
                 return (
-                  <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-2 py-1 text-center">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                    {FIELDS.map(f => (
-                      <td key={f.key + '-before'} className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}>{getFieldDisplay(f.key, oldObj[f.key])}</td>
-                    ))}
-                    {FIELDS.map(f => (
-                      <td key={f.key + '-after'} className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}>{getFieldDisplay(f.key, newObj[f.key])}</td>
-                    ))}
-                    <td className="px-2 py-1">{userMap[log.edited_by] || log.edited_by}</td>
-                    <td className="px-2 py-1">{log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : ''}</td>
-                  </tr>
+                  <React.Fragment key={log.id}>
+                    {/* Before Edit Row */}
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-2 py-1 text-center" rowSpan={1}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                      <td className="px-2 py-1 font-semibold text-red-600">Before</td>
+                      {FIELDS.map(f => (
+                        <td key={f.key + '-before'} className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}>{getFieldDisplay(f.key, oldObj[f.key])}</td>
+                      ))}
+                      <td className="px-2 py-1">{userMap[log.edited_by] || log.edited_by}</td>
+                      <td className="px-2 py-1">{log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : ''}</td>
+                    </tr>
+                    {/* After Edit Row */}
+                    <tr className="border-b border-gray-100 hover:bg-gray-50 bg-green-50">
+                      <td className="px-2 py-1 text-center"></td>
+                      <td className="px-2 py-1 font-semibold text-green-700">After</td>
+                      {FIELDS.map(f => (
+                        <td key={f.key + '-after'} className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}>{getFieldDisplay(f.key, newObj[f.key])}</td>
+                      ))}
+                      <td className="px-2 py-1">{userMap[log.edited_by] || log.edited_by}</td>
+                      <td className="px-2 py-1">{log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : ''}</td>
+                    </tr>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -245,6 +271,39 @@ const EditedRecords = () => {
           )}
         </div>
       )}
+
+      {/* Deleted Records Table */}
+      <div className="mt-10">
+        <h3 className="text-lg font-semibold mb-2">Deleted Records</h3>
+        {deletedRecords.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">No deleted records found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border border-gray-200">
+              <thead className="bg-red-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-2 py-1">S.No</th>
+                  {FIELDS.map(f => <th key={f.key + '-before'} className="px-2 py-1">{f.label}</th>)}
+                  <th className="px-2 py-1">Deleted By</th>
+                  <th className="px-2 py-1">Deleted At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deletedRecords.map((rec, idx) => (
+                  <tr key={rec.id} className="border-b border-gray-100 hover:bg-red-50">
+                    <td className="px-2 py-1 text-center">{idx + 1}</td>
+                    {FIELDS.map(f => (
+                      <td key={f.key + '-before'} className="px-2 py-1">{getFieldDisplay(f.key, rec[f.key])}</td>
+                    ))}
+                    <td className="px-2 py-1">{rec.deleted_by}</td>
+                    <td className="px-2 py-1">{rec.deleted_at && !isNaN(new Date(rec.deleted_at).getTime()) ? format(new Date(rec.deleted_at), 'dd/MM/yyyy HH:mm') : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </Card>
   );
 };

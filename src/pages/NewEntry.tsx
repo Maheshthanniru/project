@@ -20,6 +20,10 @@ interface NewEntryForm {
   credit: string;
   debit: string;
   staff: string;
+  credit_mode: string;
+  debit_mode: string;
+  saleQChecked: boolean;
+  purchaseQChecked: boolean;
 }
 
 const NewEntry: React.FC = () => {
@@ -36,6 +40,10 @@ const NewEntry: React.FC = () => {
     credit: '',
     debit: '',
     staff: user?.username || '',
+    credit_mode: 'Offline',
+    debit_mode: 'Offline',
+    saleQChecked: false,
+    purchaseQChecked: false,
   });
 
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
@@ -44,6 +52,7 @@ const NewEntry: React.FC = () => {
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentDailyEntryNo, setCurrentDailyEntryNo] = useState(0);
+  const [recentEntries, setRecentEntries] = useState<any[]>([]);
 
   // Modal states for creating new items
   const [showNewCompany, setShowNewCompany] = useState(false);
@@ -77,6 +86,22 @@ const NewEntry: React.FC = () => {
       loadSubAccountsByAccount();
     }
   }, [entry.companyName, entry.accountName]);
+
+  useEffect(() => {
+    const fetchRecentEntries = async () => {
+      const entries = await supabaseDB.getCashBookEntries();
+      setRecentEntries(
+        entries
+          .sort((a, b) => {
+            const aTime = a.created_at ? new Date(a.created_at).getTime() : a.sno;
+            const bTime = b.created_at ? new Date(b.created_at).getTime() : b.sno;
+            return bTime - aTime;
+          })
+          .slice(0, 5)
+      );
+    };
+    fetchRecentEntries();
+  }, []);
 
   const updateDailyEntryNumber = async () => {
     try {
@@ -181,9 +206,11 @@ const NewEntry: React.FC = () => {
         address: '', // Will be filled from company data
         staff: entry.staff,
         users: user?.username || '',
-        sale_qty: parseFloat(entry.saleQ) || 0,
-        purchase_qty: parseFloat(entry.purchaseQ) || 0,
-        cb: 'CB' // Cash Book identifier
+        sale_qty: entry.saleQChecked ? parseFloat(entry.saleQ) || 0 : 0,
+        purchase_qty: entry.purchaseQChecked ? parseFloat(entry.purchaseQ) || 0 : 0,
+        cb: 'CB', // Cash Book identifier
+        credit_mode: entry.credit_mode,
+        debit_mode: entry.debit_mode,
       });
 
       toast.success(`Entry saved successfully! Entry #${newEntry.sno}`);
@@ -201,6 +228,10 @@ const NewEntry: React.FC = () => {
           credit: '',
           debit: '',
           staff: user?.username || '',
+          credit_mode: 'Offline',
+          debit_mode: 'Offline',
+          saleQChecked: false,
+          purchaseQChecked: false,
         });
         
         // Reset dropdowns
@@ -329,7 +360,7 @@ const NewEntry: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="max-w-4xl w-full mx-auto space-y-6">
+      <div className="w-full max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -480,48 +511,87 @@ const NewEntry: React.FC = () => {
             />
 
             {/* Amounts */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Input
-                label="Credit Amount"
-                type="number"
-                value={entry.credit}
-                onChange={(value) => handleInputChange('credit', value)}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                className={parseFloat(entry.credit) > 0 ? 'border-green-300 bg-green-50' : ''}
-              />
-              
-              <Input
-                label="Debit Amount"
-                type="number"
-                value={entry.debit}
-                onChange={(value) => handleInputChange('debit', value)}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                className={parseFloat(entry.debit) > 0 ? 'border-red-300 bg-red-50' : ''}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Input
+                  label="Credit"
+                  value={entry.credit}
+                  onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
+                  placeholder="Enter credit amount"
+                  type="number"
+                  min="0"
+                />
+                <Select
+                  label="Credit Mode"
+                  value={entry.credit_mode}
+                  onChange={val => setEntry(prev => ({ ...prev, credit_mode: val }))}
+                  options={[
+                    { value: 'Online', label: 'Online' },
+                    { value: 'Offline', label: 'Offline' },
+                  ]}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Input
+                  label="Debit"
+                  value={entry.debit}
+                  onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
+                  placeholder="Enter debit amount"
+                  type="number"
+                  min="0"
+                />
+                <Select
+                  label="Debit Mode"
+                  value={entry.debit_mode}
+                  onChange={val => setEntry(prev => ({ ...prev, debit_mode: val }))}
+                  options={[
+                    { value: 'Online', label: 'Online' },
+                    { value: 'Offline', label: 'Offline' },
+                  ]}
+                  className="mt-1"
+                />
+              </div>
+            </div>
 
-              <Input
-                label="Sale Quantity"
-                type="number"
-                value={entry.saleQ}
-                onChange={(value) => handleInputChange('saleQ', value)}
-                placeholder="0"
-                min="0"
-                step="0.01"
-              />
-
-              <Input
-                label="Purchase Quantity"
-                type="number"
-                value={entry.purchaseQ}
-                onChange={(value) => handleInputChange('purchaseQ', value)}
-                placeholder="0"
-                min="0"
-                step="0.01"
-              />
+            {/* Quantity Checkboxes and Inputs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={entry.saleQChecked}
+                  onChange={e => setEntry(prev => ({ ...prev, saleQChecked: e.target.checked, saleQ: e.target.checked ? prev.saleQ : '' }))}
+                  id="saleQChecked"
+                />
+                <label htmlFor="saleQChecked" className="text-sm">Sale Quantity</label>
+                <Input
+                  value={entry.saleQ}
+                  onChange={val => setEntry(prev => ({ ...prev, saleQ: val }))}
+                  placeholder="0"
+                  type="number"
+                  min="0"
+                  disabled={!entry.saleQChecked}
+                  className="w-24 ml-2"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={entry.purchaseQChecked}
+                  onChange={e => setEntry(prev => ({ ...prev, purchaseQChecked: e.target.checked, purchaseQ: e.target.checked ? prev.purchaseQ : '' }))}
+                  id="purchaseQChecked"
+                />
+                <label htmlFor="purchaseQChecked" className="text-sm">Purchase Quantity</label>
+                <Input
+                  value={entry.purchaseQ}
+                  onChange={val => setEntry(prev => ({ ...prev, purchaseQ: val }))}
+                  placeholder="0"
+                  type="number"
+                  min="0"
+                  disabled={!entry.purchaseQChecked}
+                  className="w-24 ml-2"
+                />
+              </div>
             </div>
 
             {/* Action Buttons */}
@@ -544,6 +614,10 @@ const NewEntry: React.FC = () => {
                     credit: '',
                     debit: '',
                     staff: user?.username || '',
+                    credit_mode: 'Offline',
+                    debit_mode: 'Offline',
+                    saleQChecked: false,
+                    purchaseQChecked: false,
                   });
                   setAccounts([]);
                   setSubAccounts([]);
@@ -556,6 +630,40 @@ const NewEntry: React.FC = () => {
           </form>
         </Card>
       </div>
+
+      {/* Recent Entries Card */}
+      <Card title="Recent Entries" className="mt-8 w-full max-w-4xl mx-auto">
+        {recentEntries.length === 0 ? (
+          <div className="text-center text-gray-500 py-4">No recent entries found.</div>
+        ) : (
+          <table className="w-full text-xs border border-gray-200">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-2 py-1">S.No</th>
+                <th className="px-2 py-1">Date</th>
+                <th className="px-2 py-1">Company</th>
+                <th className="px-2 py-1">Account</th>
+                <th className="px-2 py-1">Particulars</th>
+                <th className="px-2 py-1">Credit</th>
+                <th className="px-2 py-1">Debit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentEntries.map((entry, idx) => (
+                <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-2 py-1 text-center">{entry.sno}</td>
+                  <td className="px-2 py-1">{entry.c_date}</td>
+                  <td className="px-2 py-1">{entry.company_name}</td>
+                  <td className="px-2 py-1">{entry.acc_name}</td>
+                  <td className="px-2 py-1">{entry.particulars}</td>
+                  <td className="px-2 py-1 text-green-700">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                  <td className="px-2 py-1 text-red-700">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
 
       {/* Create Company Modal */}
       {showNewCompany && (

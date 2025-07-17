@@ -15,6 +15,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
+import { supabase } from '../lib/supabase';
 
 interface ApprovalFilters {
   date: string;
@@ -133,12 +134,8 @@ const ApproveRecords: React.FC = () => {
       filtered = filtered.filter(entry => entry.staff === filters.staff);
     }
 
-    // Show only unfiltered (pending approval) records by default
-    if (!filters.showUnfiltered) {
-      filtered = filtered.filter(entry => entry.approved === false || entry.approved === null);
-    }
-
-    console.log('[ApproveRecords] Filtered entries:', filtered);
+    // Only show pending records
+    filtered = filtered.filter(entry => !entry.approved || entry.approved === '');
     setFilteredEntries(filtered);
     setCurrentPage(1);
     if (filtered.length === 0) {
@@ -150,7 +147,7 @@ const ApproveRecords: React.FC = () => {
 
   const updateSummary = () => {
     const totalRecords = filteredEntries.length;
-    const approvedRecords = filteredEntries.filter(entry => entry.approved).length;
+    const approvedRecords = filteredEntries.filter(entry => entry.approved === 'true').length;
     const pendingRecords = totalRecords - approvedRecords;
     const selectedCount = selectedEntries.size;
 
@@ -244,7 +241,7 @@ const ApproveRecords: React.FC = () => {
     }
 
     const companyEntries = filteredEntries.filter(entry => 
-      entry.company_name === filters.company && !entry.approved
+      entry.company_name === filters.company && entry.approved !== 'true'
     );
 
     if (companyEntries.length === 0) {
@@ -284,7 +281,7 @@ const ApproveRecords: React.FC = () => {
     }
 
     const staffEntries = filteredEntries.filter(entry => 
-      entry.staff === filters.staff && !entry.approved
+      entry.staff === filters.staff && entry.approved !== 'true'
     );
 
     if (staffEntries.length === 0) {
@@ -318,7 +315,7 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithoutConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(entry => !entry.approved);
+    const pendingEntries = filteredEntries.filter(entry => entry.approved !== 'true');
 
     if (pendingEntries.length === 0) {
       toast.error('No pending entries to approve');
@@ -349,7 +346,7 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(entry => !entry.approved);
+    const pendingEntries = filteredEntries.filter(entry => entry.approved !== 'true');
 
     if (pendingEntries.length === 0) {
       toast.error('No pending entries to approve');
@@ -381,9 +378,38 @@ const ApproveRecords: React.FC = () => {
     }
   };
 
-  const cancelApprove = () => {
-    setSelectedEntries(new Set());
-    toast.success('Approval cancelled');
+  const cancelApprove = async () => {
+    if (selectedEntries.size === 0) {
+      toast.error('Please select entries to reject');
+      return;
+    }
+    setLoading(true);
+    try {
+      let rejectedCount = 0;
+      for (const entryId of selectedEntries) {
+        const { data, error } = await supabase
+          .from('cash_book')
+          .update({ approved: 'false', updated_at: new Date().toISOString() })
+          .eq('id', entryId)
+          .select()
+          .single();
+        console.log('Reject update result:', { data, error });
+        if (!error && data) {
+          rejectedCount++;
+        }
+      }
+      if (rejectedCount > 0) {
+        await loadEntries();
+        setSelectedEntries(new Set());
+        toast.success(`${rejectedCount} entries rejected successfully!`);
+      } else {
+        toast.error('Failed to reject entries');
+      }
+    } catch (error) {
+      toast.error('Failed to reject entries');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const printReport = () => {
@@ -410,7 +436,7 @@ const ApproveRecords: React.FC = () => {
   const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
 
   const getRowColor = (entry: any) => {
-    if (entry.approved) return 'bg-green-50 border-green-200';
+    if (entry.approved === 'true') return 'bg-green-50 border-green-200';
     if (entry.edited) return 'bg-yellow-50 border-yellow-200';
     if (entry.locked) return 'bg-gray-50 border-gray-300';
     return 'bg-white border-gray-200';
@@ -476,11 +502,11 @@ const ApproveRecords: React.FC = () => {
 
       {/* Controls */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 gap-y-4">
           {/* Date Navigation */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full">
               <Button
                 size="sm"
                 variant="secondary"
@@ -494,7 +520,7 @@ const ApproveRecords: React.FC = () => {
                 type="date"
                 value={filters.date}
                 onChange={(value) => handleFilterChange('date', value)}
-                className="flex-1"
+                className="flex-1 w-full"
               />
               <Button
                 size="sm"
@@ -507,38 +533,28 @@ const ApproveRecords: React.FC = () => {
               </Button>
             </div>
           </div>
-
           {/* Company Filter */}
-          <Select
-            label="Company"
-            value={filters.company}
-            onChange={(value) => handleFilterChange('company', value)}
-            options={companies}
-          />
-
-          {/* Staff Filter */}
-          <Select
-            label="Staff"
-            value={filters.staff}
-            onChange={(value) => handleFilterChange('staff', value)}
-            options={staffList}
-          />
-
-          {/* Show Unfiltered Toggle */}
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.showUnfiltered}
-                onChange={(e) => handleFilterChange('showUnfiltered', e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Show All</span>
-            </label>
+          <div className="w-full">
+            <Select
+              label="Company"
+              value={filters.company}
+              onChange={(value) => handleFilterChange('company', value)}
+              options={companies}
+              className="w-full"
+            />
           </div>
-
+          {/* Staff Filter */}
+          <div className="w-full">
+            <Select
+              label="Staff"
+              value={filters.staff}
+              onChange={(value) => handleFilterChange('staff', value)}
+              options={staffList}
+              className="w-full"
+            />
+          </div>
           {/* Record Count */}
-          <div className="flex items-end">
+          <div className="flex items-end w-full">
             <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center">
               <strong>{summary.totalRecords}</strong> records
             </div>
@@ -611,13 +627,13 @@ const ApproveRecords: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+        <Card className="bg-white text-gray-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-100 text-sm font-medium">Approved</p>
+              <p className="text-green-700 text-sm font-medium">Approved</p>
               <p className="text-2xl font-bold">{summary.approvedRecords}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-200" />
+            <CheckCircle className="w-8 h-8 text-green-500" />
           </div>
         </Card>
 
@@ -645,109 +661,143 @@ const ApproveRecords: React.FC = () => {
       {/* Records Table */}
       {!loading && !fetchError && (
         <Card title="Records for Approval" subtitle={`Showing ${getCurrentPageEntries().length} of ${filteredEntries.length} records`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-2 text-left">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedEntries.size === filteredEntries.length && filteredEntries.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {getCurrentPageEntries().map((entry) => (
+                  <tr key={entry.id} className={getRowColor(entry)}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <input
                         type="checkbox"
-                        checked={getCurrentPageEntries().length > 0 && getCurrentPageEntries().every(entry => selectedEntries.has(entry.id))}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        checked={selectedEntries.has(entry.id)}
+                        onChange={() => handleSelectEntry(entry.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">S.No</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Date</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Company</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Main A/c</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">SubAccount</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Particulars</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-700">Credit</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-700">Debit</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Staff</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">User</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Entry Time</th>
-                    <th className="px-3 py-2 text-center font-medium text-gray-700">Approved</th>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.c_date}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.company_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.staff}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.amount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.type}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {entry.approved === 'true' ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Approved
+                        </span>
+                      ) : entry.approved === 'false' ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Rejected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <Button
+                        icon={CheckCircle}
+                        variant="secondary"
+                        onClick={() => handleSelectEntry(entry.id)}
+                        className="mr-2"
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        icon={X}
+                        variant="secondary"
+                        onClick={() => handleSelectEntry(entry.id)}
+                        className="mr-2"
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        icon={Eye}
+                        variant="secondary"
+                        onClick={() => handleSelectEntry(entry.id)}
+                        className="mr-2"
+                      >
+                        View
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {getCurrentPageEntries().map((entry, index) => (
-                    <tr key={entry.id} className={`border-b ${getRowColor(entry)} hover:bg-opacity-75 transition-colors`}>
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedEntries.has(entry.id)}
-                          onChange={() => handleSelectEntry(entry.id)}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="px-3 py-2 font-medium">{entry.sno}</td>
-                      <td className="px-3 py-2">{entry.c_date && !isNaN(new Date(entry.c_date).getTime()) ? format(new Date(entry.c_date), 'dd/MM/yyyy') : ''}</td>
-                      <td className="px-3 py-2 font-medium text-blue-600">{entry.companyName}</td>
-                      <td className="px-3 py-2">{entry.accountName}</td>
-                      <td className="px-3 py-2">{entry.subAccount || '-'}</td>
-                      <td className="px-3 py-2 max-w-xs truncate" title={entry.particulars}>
-                        {entry.particulars}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium text-green-600">
-                        {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium text-red-600">
-                        {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}
-                      </td>
-                      <td className="px-3 py-2">{entry.staff}</td>
-                      <td className="px-3 py-2">{entry.user}</td>
-                      <td className="px-3 py-2">{entry.entry_time && !isNaN(new Date(entry.entry_time).getTime()) ? format(new Date(entry.entry_time), 'HH:mm:ss') : ''}</td>
-                      <td className="px-3 py-2 text-center">
-                        {entry.approved ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Yes
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                            <Clock className="w-3 h-3 mr-1" />
-                            No
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, filteredEntries.length)} of {filteredEntries.length} records
-                </div>
-                <div className="flex items-center gap-2">
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-4 px-2 py-3 sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <Button
+                icon={ChevronLeft}
+                variant="secondary"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <Button
+                icon={ChevronRight}
+                variant="secondary"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div className="flex-1 text-sm text-center">
+                <p className="text-sm text-gray-700">
+                  Showing <span className="font-semibold">{currentPage * recordsPerPage - recordsPerPage + 1}</span> to{' '}
+                  <span className="font-semibold">{Math.min(currentPage * recordsPerPage, filteredEntries.length)}</span> of{' '}
+                  <span className="font-semibold">{filteredEntries.length}</span> results
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                   <Button
-                    size="sm"
+                    icon={ChevronLeft}
                     variant="secondary"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
+                    className="rounded-l-md"
                   >
                     Previous
                   </Button>
-                  <span className="text-sm text-gray-700">
-                    Page {currentPage} of {totalPages}
-                  </span>
                   <Button
-                    size="sm"
+                    icon={ChevronRight}
                     variant="secondary"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
+                    className="rounded-r-md"
                   >
                     Next
                   </Button>
-                </div>
+                </nav>
               </div>
-            )}
-          </Card>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );

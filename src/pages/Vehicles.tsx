@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { Vehicle } from '../lib/supabaseDatabase';
+import { supabase } from '../lib/supabase';
 
 const Vehicles: React.FC = () => {
   const { user } = useAuth();
@@ -25,6 +26,8 @@ const Vehicles: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [rcFrontFile, setRcFrontFile] = useState<File | null>(null);
+  const [rcBackFile, setRcBackFile] = useState<File | null>(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -186,7 +189,25 @@ const Vehicles: React.FC = () => {
         }
       } else {
         // Add new vehicle
-        const newVehicleData = await supabaseDB.addVehicle({
+        let rcFrontUrl = '';
+        let rcBackUrl = '';
+        // Upload RC Front Photo
+        if (rcFrontFile) {
+          const { data, error } = await supabase.storage.from('vehicle-rc').upload(`rc-front-${Date.now()}-${rcFrontFile.name}`, rcFrontFile);
+          console.log('RC Front Upload:', data, error); // Debug log
+          if (error) throw error;
+          rcFrontUrl = supabase.storage.from('vehicle-rc').getPublicUrl(data.path).data.publicUrl;
+          console.log('RC Front URL:', rcFrontUrl); // Debug log
+        }
+        // Upload RC Back Photo
+        if (rcBackFile) {
+          const { data, error } = await supabase.storage.from('vehicle-rc').upload(`rc-back-${Date.now()}-${rcBackFile.name}`, rcBackFile);
+          console.log('RC Back Upload:', data, error); // Debug log
+          if (error) throw error;
+          rcBackUrl = supabase.storage.from('vehicle-rc').getPublicUrl(data.path).data.publicUrl;
+          console.log('RC Back URL:', rcBackUrl); // Debug log
+        }
+        const vehicleInsertObj = {
           sno: vehicles.length + 1,
           v_no: newVehicle.v_no,
           v_type: newVehicle.v_type || '',
@@ -195,8 +216,12 @@ const Vehicles: React.FC = () => {
           insurance_exp_date: newVehicle.insurance_exp_date || '',
           fitness_exp_date: newVehicle.fitness_exp_date || '',
           permit_exp_date: newVehicle.permit_exp_date || '',
+          rc_front_url: rcFrontUrl,
+          rc_back_url: rcBackUrl,
           date_added: new Date().toISOString(),
-        });
+        };
+        console.log('Vehicle Insert Object:', vehicleInsertObj); // Debug log
+        const newVehicleData = await supabaseDB.addVehicle(vehicleInsertObj);
         if (newVehicleData) {
           await loadVehicles();
           setNewVehicle({
@@ -284,6 +309,8 @@ const Vehicles: React.FC = () => {
     { value: 'expiring', label: 'Expiring Soon' },
     { value: 'valid', label: 'Valid' },
   ];
+
+  const [imageModal, setImageModal] = useState<{ url: string; label: string } | null>(null);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -456,6 +483,24 @@ const Vehicles: React.FC = () => {
                 onChange={(value) => handleInputChange('permit_exp_date', value)}
               />
             </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">RC Front Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => setRcFrontFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">RC Back Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => setRcBackFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
             <div className="flex gap-4">
               <Button type="submit" disabled={loading}>
                 {loading ? 'Saving...' : (editingVehicle ? 'Update' : 'Add')}
@@ -612,6 +657,54 @@ const Vehicles: React.FC = () => {
                   </div>
                 </div>
               </div>
+              {/* RC Images Section - Improved UI */}
+              {selectedVehicle && (
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                  {selectedVehicle.rc_front_url && (
+                    <div className="flex flex-col items-center">
+                      <div className="mb-2 text-sm text-gray-700 font-medium">RC Front Photo</div>
+                      <img
+                        src={selectedVehicle.rc_front_url}
+                        alt="RC Front"
+                        className="w-full max-w-md h-auto aspect-[4/3] object-cover rounded-xl shadow-lg border-2 border-blue-200 cursor-pointer hover:scale-105 transition-transform"
+                        onClick={() => setImageModal({ url: selectedVehicle.rc_front_url, label: 'RC Front Photo' })}
+                      />
+                    </div>
+                  )}
+                  {selectedVehicle.rc_back_url && (
+                    <div className="flex flex-col items-center">
+                      <div className="mb-2 text-sm text-gray-700 font-medium">RC Back Photo</div>
+                      <img
+                        src={selectedVehicle.rc_back_url}
+                        alt="RC Back"
+                        className="w-full max-w-md h-auto aspect-[4/3] object-cover rounded-xl shadow-lg border-2 border-blue-200 cursor-pointer hover:scale-105 transition-transform"
+                        onClick={() => setImageModal({ url: selectedVehicle.rc_back_url, label: 'RC Back Photo' })}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Image Modal for separate viewing */}
+      {imageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80" onClick={() => setImageModal(null)}>
+          <div className="relative max-w-2xl w-full p-4" onClick={e => e.stopPropagation()}>
+            <button
+              className="absolute top-2 right-2 bg-white rounded-full p-2 shadow hover:bg-gray-100"
+              onClick={() => setImageModal(null)}
+            >
+              <X className="w-6 h-6 text-gray-700" />
+            </button>
+            <div className="flex flex-col items-center">
+              <img
+                src={imageModal.url}
+                alt={imageModal.label}
+                className="w-full max-w-2xl h-auto aspect-[4/3] object-contain rounded-xl shadow-lg border-2 border-blue-300"
+              />
+              <div className="mt-2 text-white text-lg font-semibold text-center">{imageModal.label}</div>
             </div>
           </div>
         </div>

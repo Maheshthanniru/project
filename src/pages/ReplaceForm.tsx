@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 
 interface ReplaceFormData {
+  companyName: string;
   oldAccountName: string;
   oldSubAccount: string;
   newAccountName: string;
@@ -26,6 +27,7 @@ const ReplaceForm: React.FC = () => {
   const { user, isAdmin } = useAuth();
   
   const [replaceData, setReplaceData] = useState<ReplaceFormData>({
+    companyName: '',
     oldAccountName: '',
     oldSubAccount: '',
     newAccountName: '',
@@ -42,6 +44,7 @@ const ReplaceForm: React.FC = () => {
   const [subAccounts, setSubAccounts] = useState<{ value: string; label: string }[]>([]);
   const [newAccounts, setNewAccounts] = useState<{ value: string; label: string }[]>([]);
   const [newSubAccounts, setNewSubAccounts] = useState<{ value: string; label: string }[]>([]);
+  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
 
   // Summary data
   const [summary, setSummary] = useState({
@@ -66,6 +69,11 @@ const ReplaceForm: React.FC = () => {
 
   const loadDropdownData = async () => {
     try {
+      // Load companies
+      const companiesList = await supabaseDB.getCompanies();
+      const companiesData = companiesList.map(company => ({ value: company.company_name, label: company.company_name }));
+      setCompanies(companiesData);
+
       // Load all unique account names
       const accounts = await supabaseDB.getAccounts();
       const allAccounts = Array.from(new Set(accounts.map(acc => acc.acc_name)))
@@ -103,6 +111,11 @@ const ReplaceForm: React.FC = () => {
   const applyFilters = () => {
     let filtered = [...entries];
 
+    // Filter by company name
+    if (replaceData.companyName) {
+      filtered = filtered.filter(entry => entry.company_name === replaceData.companyName);
+    }
+
     // Filter by old account name
     if (replaceData.oldAccountName) {
       filtered = filtered.filter(entry => entry.acc_name === replaceData.oldAccountName);
@@ -121,7 +134,8 @@ const ReplaceForm: React.FC = () => {
     const totalRecords = entries.length;
     const affectedRecords = entries.filter(entry => 
       (replaceData.oldAccountName && entry.acc_name === replaceData.oldAccountName) ||
-      (replaceData.oldSubAccount && entry.sub_acc_name === replaceData.oldSubAccount)
+      (replaceData.oldSubAccount && entry.sub_acc_name === replaceData.oldSubAccount) ||
+      (replaceData.companyName && entry.company_name === replaceData.companyName)
     ).length;
     const totalCredit = entries.reduce((sum, entry) => sum + entry.credit, 0);
     const totalDebit = entries.reduce((sum, entry) => sum + entry.debit, 0);
@@ -231,6 +245,7 @@ const ReplaceForm: React.FC = () => {
 
   const resetForm = () => {
     setReplaceData({
+      companyName: '',
       oldAccountName: '',
       oldSubAccount: '',
       newAccountName: '',
@@ -282,6 +297,15 @@ const ReplaceForm: React.FC = () => {
       {/* Replace Form */}
       <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
         <div className="space-y-6">
+          {/* Company Name */}
+          <Select
+            label="Company Name"
+            value={replaceData.companyName}
+            onChange={value => handleInputChange('companyName', value)}
+            options={companies}
+            className="mb-4"
+          />
+
           {/* Account Name Replacement */}
           <div className="bg-white p-6 rounded-lg border border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Replace Account Name</h3>

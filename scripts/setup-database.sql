@@ -88,3 +88,31 @@ CREATE POLICY "Allow all operations" ON company_main_sub_acc FOR ALL USING (true
 CREATE POLICY "Allow all operations" ON bank_guarantees FOR ALL USING (true);
 CREATE POLICY "Allow all operations" ON vehicles FOR ALL USING (true);
 CREATE POLICY "Allow all operations" ON drivers FOR ALL USING (true); 
+
+-- Deleted Cash Book Table
+CREATE TABLE IF NOT EXISTS deleted_cash_book (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sno serial,
+  acc_name text NOT NULL,
+  sub_acc_name text,
+  particulars text,
+  c_date date DEFAULT CURRENT_DATE,
+  credit decimal(15,2) DEFAULT 0,
+  debit decimal(15,2) DEFAULT 0,
+  lock_record boolean DEFAULT false,
+  company_name text,
+  address text,
+  staff text,
+  users text,
+  entry_time timestamptz DEFAULT now(),
+  sale_qty decimal(10,2) DEFAULT 0,
+  purchase_qty decimal(10,2) DEFAULT 0,
+  approved boolean DEFAULT false,
+  edited boolean DEFAULT false,
+  e_count integer DEFAULT 0,
+  cb text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  deleted_by text,
+  deleted_at timestamptz DEFAULT now()
+); 

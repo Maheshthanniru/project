@@ -9,23 +9,23 @@ const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
 
   const menuItems = [
-    { icon: Home, label: 'Dashboard', path: '/' },
-    { icon: Plus, label: 'New Entry', path: '/new-entry' },
-    { icon: Edit, label: 'Edit Entry', path: '/edit-entry' },
-    { icon: FileText, label: 'Daily Report', path: '/daily-report' },
-    { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger' },
-    { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary' },
-    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records', adminOnly: true },
-    { icon: FileEdit, label: 'Edited Records', path: '/edited-records' },
-    { icon: Replace, label: 'Replace Form', path: '/replace-form' },
-    { icon: Download, label: 'Export', path: '/export-excel' },
-    { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet', adminOnly: true },
-    { icon: Truck, label: 'Vehicles', path: '/vehicles' },
-    { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees' },
-    { icon: Users, label: 'Drivers', path: '/drivers' },
+    { icon: Home, label: 'Dashboard', path: '/', key: 'dashboard' },
+    { icon: Plus, label: 'New Entry', path: '/new-entry', key: 'new_entry' },
+    { icon: Edit, label: 'Edit Entry', path: '/edit-entry', key: 'edit_entry' },
+    { icon: FileText, label: 'Daily Report', path: '/daily-report', key: 'daily_report' },
+    { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger', key: 'detailed_ledger' },
+    { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary', key: 'ledger_summary' },
+    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records', key: 'approve_records' },
+    { icon: FileEdit, label: 'Edited Records', path: '/edited-records', key: 'edited_records' },
+    { icon: Replace, label: 'Replace Form', path: '/replace-form', key: 'replace_form' },
+    { icon: Download, label: 'Export', path: '/export-excel', key: 'export' },
+    { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
+    { icon: Truck, label: 'Vehicles', path: '/vehicles', key: 'vehicles' },
+    { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees', key: 'bank_guarantees' },
+    { icon: Users, label: 'Drivers', path: '/drivers', key: 'drivers' },
+    // Admin only
+    { icon: Users, label: 'User Management', path: '/user-management', key: 'users', adminOnly: true },
   ];
-
-  const isOperator = user?.user_type?.toLowerCase() === 'operator';
 
   return (
     <aside className="w-64 h-screen sticky top-0 left-0 z-30 bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-xl rounded-r-2xl flex flex-col border-r border-blue-100">
@@ -63,7 +63,10 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 overflow-y-auto custom-scrollbar px-2 py-4">
         <ul className="space-y-1">
           {menuItems
-            .filter(item => !(isOperator && item.adminOnly))
+            .filter(item => {
+              if (item.adminOnly) return user?.is_admin;
+              return user?.features?.includes(item.key);
+            })
             .map((item) => (
               <li key={item.path}>
                 <NavLink

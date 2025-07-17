@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, AlertTriangle, Phone, MapPin } from 'lucide-react';
+import { Users, Plus, Edit, AlertTriangle, Phone, MapPin, Eye } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -8,6 +8,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, differenceInDays } from 'date-fns';
+import { supabase } from '../lib/supabase';
 
 const Drivers: React.FC = () => {
   const { user } = useAuth();
@@ -25,6 +26,14 @@ const Drivers: React.FC = () => {
     phone: '',
     address: '',
   });
+
+  const [licenseFrontFile, setLicenseFrontFile] = useState<File | null>(null);
+  const [licenseBackFile, setLicenseBackFile] = useState<File | null>(null);
+  // Update imageModal state to support both front and back
+  const [imageModal, setImageModal] = useState<
+    | null
+    | { url: string; label: string; front?: string; back?: string; driverName?: string }
+  >(null);
 
   useEffect(() => {
     loadDrivers();
@@ -70,9 +79,27 @@ const Drivers: React.FC = () => {
     setLoading(true);
 
     try {
+      let licenseFrontUrl = '';
+      let licenseBackUrl = '';
+      // Upload License Front Photo
+      if (licenseFrontFile) {
+        const { data, error } = await supabase.storage.from('driver-license').upload(`license-front-${Date.now()}-${licenseFrontFile.name}`, licenseFrontFile);
+        if (error) throw error;
+        licenseFrontUrl = supabase.storage.from('driver-license').getPublicUrl(data.path).data.publicUrl;
+      }
+      // Upload License Back Photo
+      if (licenseBackFile) {
+        const { data, error } = await supabase.storage.from('driver-license').upload(`license-back-${Date.now()}-${licenseBackFile.name}`, licenseBackFile);
+        if (error) throw error;
+        licenseBackUrl = supabase.storage.from('driver-license').getPublicUrl(data.path).data.publicUrl;
+      }
       if (editingDriver) {
         // Update existing driver
-        const updatedDriver = await supabaseDB.updateDriver(editingDriver.id, editingDriver);
+        const updatedDriver = await supabaseDB.updateDriver(editingDriver.id, {
+          ...editingDriver,
+          license_front_url: licenseFrontUrl || editingDriver.license_front_url,
+          license_back_url: licenseBackUrl || editingDriver.license_back_url,
+        });
         if (updatedDriver) {
           await loadDrivers();
           setEditingDriver(null);
@@ -82,7 +109,11 @@ const Drivers: React.FC = () => {
         }
       } else {
         // Add new driver
-        const newDriverData = await supabaseDB.addDriver(newDriver);
+        const newDriverData = await supabaseDB.addDriver({
+          ...newDriver,
+          license_front_url: licenseFrontUrl,
+          license_back_url: licenseBackUrl,
+        });
         if (newDriverData) {
           await loadDrivers();
           setNewDriver({
@@ -93,6 +124,8 @@ const Drivers: React.FC = () => {
             phone: '',
             address: '',
           });
+          setLicenseFrontFile(null);
+          setLicenseBackFile(null);
           setShowAddForm(false);
           toast.success('Driver added successfully!');
         } else {
@@ -184,6 +217,26 @@ const Drivers: React.FC = () => {
                   placeholder="Description..."
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">License Front Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setLicenseFrontFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">License Back Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setLicenseBackFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+              </div>
               <div className="flex gap-4">
                 <Button type="submit" disabled={loading}>
                   {loading ? 'Saving...' : (editingDriver ? 'Update Driver' : 'Add Driver')}
@@ -209,6 +262,8 @@ const Drivers: React.FC = () => {
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Phone</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Address</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Particulars</th>
+                  {/* Remove license photo thumbnails from table, add Eye icon button for viewing */}
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">License Photos</th>
                   <th className="px-3 py-2 text-center font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
@@ -222,6 +277,23 @@ const Drivers: React.FC = () => {
                     <td className="px-3 py-2">{driver.phone}</td>
                     <td className="px-3 py-2">{driver.address}</td>
                     <td className="px-3 py-2">{driver.particulars}</td>
+                    <td className="px-3 py-2 text-center">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={Eye}
+                        onClick={() => setImageModal({
+                          url: '',
+                          label: 'License Photos',
+                          front: driver.license_front_url || '',
+                          back: driver.license_back_url || '',
+                          driverName: driver.driver_name
+                        })}
+                        disabled={!driver.license_front_url && !driver.license_back_url}
+                      >
+                        View
+                      </Button>
+                    </td>
                     <td className="px-3 py-2 text-center">
                       <div className="flex items-center gap-2">
                         <Button
@@ -240,6 +312,45 @@ const Drivers: React.FC = () => {
             </table>
           </div>
         </Card>
+        {/* Image Modal for separate viewing of both photos */}
+        {imageModal && (imageModal.front || imageModal.back) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80" onClick={() => setImageModal(null)}>
+            <div className="relative max-w-2xl w-full p-4" onClick={e => e.stopPropagation()}>
+              <button
+                className="absolute top-2 right-2 bg-white rounded-full p-2 shadow hover:bg-gray-100"
+                onClick={() => setImageModal(null)}
+              >
+                <span className="sr-only">Close</span>
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <div className="flex flex-col items-center">
+                <div className="mb-4 text-white text-lg font-semibold text-center">{imageModal.driverName} - License Photos</div>
+                <div className="flex flex-col md:flex-row gap-6 items-center">
+                  {imageModal.front && (
+                    <div className="flex flex-col items-center">
+                      <div className="mb-2 text-sm text-gray-200 font-medium">Front</div>
+                      <img
+                        src={imageModal.front}
+                        alt="License Front"
+                        className="w-full max-w-xs h-auto aspect-[4/3] object-contain rounded-xl shadow-lg border-2 border-blue-300"
+                      />
+                    </div>
+                  )}
+                  {imageModal.back && (
+                    <div className="flex flex-col items-center">
+                      <div className="mb-2 text-sm text-gray-200 font-medium">Back</div>
+                      <img
+                        src={imageModal.back}
+                        alt="License Back"
+                        className="w-full max-w-xs h-auto aspect-[4/3] object-contain rounded-xl shadow-lg border-2 border-blue-300"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

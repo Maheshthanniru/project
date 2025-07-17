@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, MouseEvent } from 'react';
 import { 
   Edit, Search, Check, X, Eye, Lock, Unlock, Trash2, 
   History, Clock, User, Calendar, FileText, AlertTriangle,
-  ChevronDown, ChevronUp, Filter, Download, RefreshCw
+  ChevronDown, ChevronUp, Filter, Download, RefreshCw, Building, Calculator
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -51,6 +51,22 @@ const EditEntry: React.FC = () => {
   const [accounts, setAccounts] = useState<{ value: string; label: string }[]>([]);
   const [subAccounts, setSubAccounts] = useState<{ value: string; label: string }[]>([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
+
+  // Add filter state variables
+  const [filterCompanyName, setFilterCompanyName] = useState('');
+  const [filterAccountName, setFilterAccountName] = useState('');
+  const [filterSubAccount, setFilterSubAccount] = useState('');
+  const [filterParticulars, setFilterParticulars] = useState('');
+  const [filterSaleQ, setFilterSaleQ] = useState('');
+  const [filterPurchaseQ, setFilterPurchaseQ] = useState('');
+  const [filterCredit, setFilterCredit] = useState('');
+  const [filterDebit, setFilterDebit] = useState('');
+  const [filterStaff, setFilterStaff] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+
+  // Add state for expanded entry
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [pinnedEntryId, setPinnedEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -148,6 +164,37 @@ const EditEntry: React.FC = () => {
         }
       }
       
+      // Apply new filters
+      if (filterCompanyName) {
+        allEntries = allEntries.filter(entry => entry.company_name && entry.company_name.toLowerCase().includes(filterCompanyName.toLowerCase()));
+      }
+      if (filterAccountName) {
+        allEntries = allEntries.filter(entry => entry.acc_name && entry.acc_name.toLowerCase().includes(filterAccountName.toLowerCase()));
+      }
+      if (filterSubAccount) {
+        allEntries = allEntries.filter(entry => entry.sub_acc_name && entry.sub_acc_name.toLowerCase().includes(filterSubAccount.toLowerCase()));
+      }
+      if (filterParticulars) {
+        allEntries = allEntries.filter(entry => entry.particulars && entry.particulars.toLowerCase().includes(filterParticulars.toLowerCase()));
+      }
+      if (filterSaleQ) {
+        allEntries = allEntries.filter(entry => String(entry.sale_qty || '').includes(filterSaleQ));
+      }
+      if (filterPurchaseQ) {
+        allEntries = allEntries.filter(entry => String(entry.purchase_qty || '').includes(filterPurchaseQ));
+      }
+      if (filterCredit) {
+        allEntries = allEntries.filter(entry => String(entry.credit || '').includes(filterCredit));
+      }
+      if (filterDebit) {
+        allEntries = allEntries.filter(entry => String(entry.debit || '').includes(filterDebit));
+      }
+      if (filterStaff) {
+        allEntries = allEntries.filter(entry => entry.staff && entry.staff.toLowerCase().includes(filterStaff.toLowerCase()));
+      }
+      if (filterDate) {
+        allEntries = allEntries.filter(entry => entry.c_date === filterDate);
+      }
       setEntries(allEntries);
     } catch (error) {
       console.error('Error loading entries:', error);
@@ -188,12 +235,16 @@ const EditEntry: React.FC = () => {
 
     setLoading(true);
     try {
+      // If the entry was approved or rejected, set it to pending on edit
+      const updates = { ...selectedEntry };
+      if (selectedEntry.approved === 'true' || selectedEntry.approved === 'false') {
+        updates.approved = '';
+      }
       const updatedEntry = await supabaseDB.updateCashBookEntry(
-        selectedEntry.id, 
-        selectedEntry, 
+        selectedEntry.id,
+        updates,
         user?.username || 'admin'
       );
-      
       if (updatedEntry) {
         await loadEntries();
         await loadAllHistory();
@@ -221,7 +272,7 @@ const EditEntry: React.FC = () => {
 
     if (window.confirm(`Are you sure you want to delete entry #${entry.sno}?`)) {
       try {
-        const success = await supabaseDB.deleteCashBookEntry(entry.id);
+        const success = await supabaseDB.deleteCashBookEntry(entry.id, user?.id || user?.username || 'admin');
         if (success) {
           await loadEntries();
           await loadAllHistory();
@@ -265,9 +316,23 @@ const EditEntry: React.FC = () => {
       toast.error('Only admins can lock/unlock records');
       return;
     }
-
-    // TODO: Implement lock/unlock functionality in Supabase
-    toast.success('Lock/unlock functionality not yet implemented in Supabase');
+    try {
+      let result;
+      if (entry.locked || entry.lock_record) {
+        result = await supabaseDB.unlockEntry(entry.id, user?.username || 'admin');
+      } else {
+        result = await supabaseDB.lockEntry(entry.id, user?.username || 'admin');
+      }
+      if (result) {
+        await loadEntries();
+        await loadAllHistory && loadAllHistory();
+        toast.success(`Entry ${entry.locked || entry.lock_record ? 'unlocked' : 'locked'} successfully!`);
+      } else {
+        toast.error('Failed to update lock status');
+      }
+    } catch (error) {
+      toast.error('Error updating lock status');
+    }
   };
 
   const toggleApproval = async (entry: any) => {
@@ -575,26 +640,100 @@ const EditEntry: React.FC = () => {
 
       {/* Search and Filter */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6">
-        <div className="flex flex-col md:flex-row md:items-end md:gap-6 gap-3 w-full">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search entries..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          <div className="col-span-1">
             <Input
-              label="Date Filter"
-              type="date"
-              value={dateFilter}
-              onChange={setDateFilter}
+              label="Company Name"
+              value={filterCompanyName}
+              onChange={setFilterCompanyName}
+              placeholder="Company Name"
             />
           </div>
-          <div className="flex-1">
+          <div className="col-span-1">
+            <Input
+              label="Account Name"
+              value={filterAccountName}
+              onChange={setFilterAccountName}
+              placeholder="Account Name"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Sub Account"
+              value={filterSubAccount}
+              onChange={setFilterSubAccount}
+              placeholder="Sub Account"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Particulars"
+              value={filterParticulars}
+              onChange={setFilterParticulars}
+              placeholder="Particulars"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Sale Qty"
+              value={filterSaleQ}
+              onChange={setFilterSaleQ}
+              placeholder="Sale Qty"
+              type="number"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Purchase Qty"
+              value={filterPurchaseQ}
+              onChange={setFilterPurchaseQ}
+              placeholder="Purchase Qty"
+              type="number"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Credit"
+              value={filterCredit}
+              onChange={setFilterCredit}
+              placeholder="Credit"
+              type="number"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Debit"
+              value={filterDebit}
+              onChange={setFilterDebit}
+              placeholder="Debit"
+              type="number"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Staff"
+              value={filterStaff}
+              onChange={setFilterStaff}
+              placeholder="Staff"
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Date"
+              type="date"
+              value={filterDate}
+              onChange={setFilterDate}
+            />
+          </div>
+          <div className="col-span-1">
+            <Input
+              label="Search"
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search entries..."
+            />
+          </div>
+          <div className="col-span-1">
             <Select
               label="Status Filter"
               value={statusFilter}
@@ -602,12 +741,22 @@ const EditEntry: React.FC = () => {
               options={statusOptions}
             />
           </div>
-          <div className="flex-1 flex items-end">
+          <div className="col-span-1 flex items-end">
             <Button
               onClick={() => {
                 setSearchTerm('');
                 setDateFilter('');
                 setStatusFilter('');
+                setFilterCompanyName('');
+                setFilterAccountName('');
+                setFilterSubAccount('');
+                setFilterParticulars('');
+                setFilterSaleQ('');
+                setFilterPurchaseQ('');
+                setFilterCredit('');
+                setFilterDebit('');
+                setFilterStaff('');
+                setFilterDate('');
               }}
               variant="secondary"
               className="w-full"
@@ -616,7 +765,7 @@ const EditEntry: React.FC = () => {
               Clear Filters
             </Button>
           </div>
-          <div className="flex-1 flex items-end">
+          <div className="col-span-1 flex items-end">
             <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center">
               <strong>{entries.length}</strong> entries found
             </div>
@@ -673,166 +822,122 @@ const EditEntry: React.FC = () => {
         </Card>
       )}
 
-      {/* Entries List - Redesigned as Responsive Grid */}
+      {/* Entries List - Flex Row Card Layout */}
       <Card title="Cash Book Entries" subtitle={`Manage and edit your transaction records`} className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-4">
           {entries.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-gray-500">
-              No entries found matching your criteria.
-            </div>
+            <div className="text-center py-8 text-gray-500">No entries found matching your criteria.</div>
           ) : (
             entries.map((entry) => (
               <div
                 key={entry.id}
-                className={`flex flex-col justify-between border rounded-lg shadow-sm h-full transition-shadow hover:shadow-lg ${
-                  entry.locked ? 'bg-gray-50 border-gray-300' : 'bg-white border-gray-200'
-                }`}
+                className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
+                onMouseEnter={() => setExpandedEntryId(entry.id)}
+                onMouseLeave={() => { if (!pinnedEntryId || pinnedEntryId !== entry.id) setExpandedEntryId(null); }}
+                onClick={() => setPinnedEntryId(pinnedEntryId === entry.id ? null : entry.id)}
+                style={{ cursor: 'pointer' }}
               >
-                {/* Summary Row */}
-                <div className="p-6 pb-2 border-b border-gray-100 flex flex-col gap-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl font-bold text-blue-700">#{entry.sno}</span>
-                      <span className="text-sm font-medium text-gray-700">{entry.company_name}</span>
-                      <span className="text-sm text-gray-500">{entry.acc_name}</span>
-                      {entry.sub_acc_name && (
-                        <span className="text-sm text-gray-400">/ {entry.sub_acc_name}</span>
-                      )}
+                {/* Main Row (always visible) */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="flex items-center gap-1 text-xl font-bold text-blue-700 shrink-0 mb-2">
+                      <span className="bg-blue-100 px-2 py-1 rounded-lg">#{entry.sno}</span>
+                      <span className="flex items-center gap-1 text-sm text-gray-600">
+                        <Calendar className="w-4 h-4" />{format(new Date(entry.c_date), 'MMM dd, yyyy')}
+                      </span>
+                    </span>
+                    {/* Company, Main Account, Sub Account - always vertical, spacious, and prominent */}
+                    <div className="flex flex-col w-full">
+                      <span className="flex items-center text-base font-bold text-blue-900 bg-blue-50 rounded px-3 py-1 break-words w-full mb-1" title={entry.company_name}>
+                        <Building className="w-4 h-4 mr-1" />{entry.company_name}
+                      </span>
+                      <span className="flex items-center text-base font-semibold text-indigo-900 bg-indigo-50 rounded px-3 py-1 break-words w-full mb-1" title={entry.acc_name}>
+                        <FileText className="w-4 h-4 mr-1" />{entry.acc_name}
+                      </span>
+                      <span className="flex items-center text-base font-semibold text-purple-900 bg-purple-50 rounded px-3 py-1 break-words w-full" title={entry.sub_acc_name}>
+                        <User className="w-4 h-4 mr-1" />{entry.sub_acc_name}
+                      </span>
                     </div>
-                    <div className="flex gap-2">
-                      {entry.locked && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          <Lock className="w-3 h-3 mr-1" />Locked
-                        </span>
+                  </div>
+                  {/* The rest of the fields, spaced out */}
+                  <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center flex-shrink-0">
+                    <span className="flex items-center gap-1 text-green-700 font-semibold">
+                      <Calculator className="w-4 h-4" />₹{entry.credit.toLocaleString()}
+                    </span>
+                    <span className="flex items-center gap-1 text-red-700 font-semibold">
+                      <Calculator className="w-4 h-4" />₹{entry.debit.toLocaleString()}
+                    </span>
+                    <div className="flex flex-col gap-1 min-w-[80px]">
+                      {entry.lock_record && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"><Lock className="w-3 h-3 mr-1" />Locked</span>
                       )}
                       {entry.edited && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Edited ({entry.editCount}x)
-                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Edited ({entry.editCount}x)</span>
                       )}
                       {entry.approved ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Approved
-                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                          Pending
-                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Pending</span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-base text-gray-600 truncate max-w-[60%]">{entry.particulars}</span>
-                    <span className="text-sm text-gray-500">{format(new Date(entry.c_date), 'MMM dd, yyyy')}</span>
-                  </div>
-                  <div className="flex gap-6 mt-2">
-                    <div className="flex flex-col items-start">
-                      <span className="text-xs text-gray-500">Credit</span>
-                      <span className="text-lg font-semibold text-green-600">₹{entry.credit.toLocaleString()}</span>
-                    </div>
-                    <div className="flex flex-col items-start">
-                      <span className="text-xs text-gray-500">Debit</span>
-                      <span className="text-lg font-semibold text-red-600">₹{entry.debit.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-                {/* Expanded Details */}
-                {expandedEntry === entry.id && (
-                  <div className="px-6 pt-4 pb-2 border-b border-gray-100 bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
-                      {/* Left: Transaction Details */}
-                      <div className="space-y-2">
-                        <div><span className="font-medium text-gray-700">Staff:</span> {entry.staff}</div>
-                        <div><span className="font-medium text-gray-700">Entry Time:</span> {format(new Date(entry.entry_time), 'MMM dd, yyyy HH:mm:ss')}</div>
-                        <div><span className="font-medium text-gray-700">User:</span> {entry.user}</div>
-                        <div><span className="font-medium text-gray-700">Sale Qty:</span> {entry.sale_qty}</div>
-                        <div><span className="font-medium text-gray-700">Purchase Qty:</span> {entry.purchase_qty || 0}</div>
-                      </div>
-                      {/* Right: Financials */}
-                      <div className="space-y-2">
-                        <div><span className="font-medium text-gray-700">Credit:</span> <span className="text-green-600">₹{entry.credit.toLocaleString()}</span></div>
-                        <div><span className="font-medium text-gray-700">Debit:</span> <span className="text-red-600">₹{entry.debit.toLocaleString()}</span></div>
-                        <div><span className="font-medium text-gray-700">Balance:</span> <span className="text-blue-700">₹{(entry.credit - entry.debit).toLocaleString()}</span></div>
-                        <div><span className="font-medium text-gray-700">Approved:</span> {entry.approved ? 'Yes' : 'No'}</div>
-                        <div><span className="font-medium text-gray-700">Locked:</span> {entry.locked ? 'Yes' : 'No'}</div>
-                        <div><span className="font-medium text-gray-700">Edit Count:</span> {entry.editCount}</div>
-                      </div>
-                    </div>
-                    {entry.lastEditedBy && (
-                      <div className="mt-2 text-xs text-gray-500">
-                        Last edited by {entry.lastEditedBy} on {format(new Date(entry.lastEditedAt), 'MMM dd, yyyy HH:mm')}
-                      </div>
+                  {/* Actions Section */}
+                  <div className="flex flex-wrap gap-2 shrink-0 md:ml-4 border-t md:border-t-0 md:border-l border-gray-200 pt-2 md:pt-0 md:pl-4">
+                    <Button size="sm" variant="secondary" icon={History} onClick={() => { loadEntryHistory(entry.id); setShowHistory(true); }}><span className="sr-only">History</span></Button>
+                    {isAdmin && (
+                      <Button size="sm" variant="secondary" icon={entry.lock_record ? Unlock : Lock} onClick={() => { toggleLock(entry); }}>{entry.lock_record ? 'Unlock' : 'Lock'}</Button>
+                    )}
+                    {isAdmin && !entry.approved && (
+                      <Button size="sm" variant="success" icon={Check} onClick={() => { toggleApproval(entry); }}>Approve</Button>
+                    )}
+                    {/* <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setSelectedEntry(entry); }}><span className="sr-only">View</span></Button> */}
+                    <Button size="sm" icon={Edit} onClick={() => { handleEdit(entry); }} disabled={entry.lock_record && !isAdmin}><span className="sr-only">Edit</span></Button>
+                    {isAdmin && (
+                      <Button size="sm" variant="danger" icon={Trash2} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
                     )}
                   </div>
-                )}
-                {/* Action Buttons Row */}
-                <div className="flex flex-wrap items-center gap-2 p-4 border-t border-gray-100 bg-white mt-auto">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={expandedEntry === entry.id ? ChevronUp : ChevronDown}
-                    onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
-                  >
-                    Details
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={History}
-                    onClick={() => {
-                      loadEntryHistory(entry.id);
-                      setShowHistory(true);
-                    }}
-                  >
-                    History
-                  </Button>
-                  {isAdmin && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={entry.locked ? Unlock : Lock}
-                      onClick={() => toggleLock(entry)}
-                    >
-                      {entry.locked ? 'Unlock' : 'Lock'}
-                    </Button>
-                  )}
-                  {isAdmin && !entry.approved && (
-                    <Button
-                      size="sm"
-                      variant="success"
-                      icon={Check}
-                      onClick={() => toggleApproval(entry)}
-                    >
-                      Approve
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={Eye}
-                    onClick={() => setSelectedEntry(entry)}
-                  >
-                    View
-                  </Button>
-                  <Button
-                    size="sm"
-                    icon={Edit}
-                    onClick={() => handleEdit(entry)}
-                    disabled={entry.locked && !isAdmin}
-                  >
-                    Edit
-                  </Button>
-                  {isAdmin && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      icon={Trash2}
-                      onClick={() => handleDelete(entry)}
-                      disabled={entry.locked}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                </div>
+                {/* Expanded Details (on hover or click) */}
+                <div
+                  className={`transition-all duration-200 overflow-hidden ${expandedEntryId === entry.id || pinnedEntryId === entry.id ? 'max-h-96 opacity-100 py-3' : 'max-h-0 opacity-0 py-0'} w-full`}
+                  style={{ pointerEvents: expandedEntryId === entry.id || pinnedEntryId === entry.id ? 'auto' : 'none' }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4 mt-2 border border-gray-100">
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500">Particulars</div>
+                      <div className="text-gray-800 font-medium">{entry.particulars}</div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500">Staff</div>
+                      <div className="text-gray-800 font-medium">{entry.staff}</div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500">Sale Qty</div>
+                      <div className="text-gray-800 font-medium">{entry.sale_qty}</div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500">Purchase Qty</div>
+                      <div className="text-gray-800 font-medium">{entry.purchase_qty}</div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-gray-500">Entry Time</div>
+                      <div className="text-gray-800 font-medium">{entry.entry_time ? format(new Date(entry.entry_time), 'MMM dd, yyyy HH:mm:ss') : '-'}</div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {parseFloat(entry.credit) > 0 && (
+                        <div>
+                          <div className="mb-1 text-xs text-gray-500">Credit Mode</div>
+                          <div className="text-gray-800 font-medium">{entry.credit_mode || '-'}</div>
+                        </div>
+                      )}
+                      {parseFloat(entry.debit) > 0 && (
+                        <div>
+                          <div className="mb-1 text-xs text-gray-500">Debit Mode</div>
+                          <div className="text-gray-800 font-medium">{entry.debit_mode || '-'}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))
@@ -916,7 +1021,7 @@ const EditEntry: React.FC = () => {
                   {editMode ? 'Edit Entry' : 'View Entry'} #{selectedEntry.sno}
                 </h3>
                 <div className="flex items-center gap-2">
-                  {!editMode && !selectedEntry.locked && (
+                  {!editMode && !selectedEntry.lock_record && (
                     <Button
                       size="sm"
                       icon={Edit}
@@ -943,35 +1048,35 @@ const EditEntry: React.FC = () => {
                     type="date"
                     value={selectedEntry.c_date}
                     onChange={(value) => handleInputChange('c_date', value)}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                   <Select
                     label="Company Name"
                     value={selectedEntry.company_name}
                     onChange={(value) => handleInputChange('company_name', value)}
                     options={companies}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                   <Select
                     label="Staff"
                     value={selectedEntry.staff}
                     onChange={(value) => handleInputChange('staff', value)}
                     options={users}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                   <Select
                     label="Main Account"
                     value={selectedEntry.acc_name}
                     onChange={(value) => handleInputChange('acc_name', value)}
                     options={accounts}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                   <Select
                     label="Sub Account"
                     value={selectedEntry.sub_acc_name || ''}
                     onChange={(value) => handleInputChange('sub_acc_name', value)}
                     options={subAccounts}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                 </div>
                 {/* Financials and Particulars */}
@@ -983,7 +1088,7 @@ const EditEntry: React.FC = () => {
                     <textarea
                       value={selectedEntry.particulars || ''}
                       onChange={(e) => handleInputChange('particulars', e.target.value)}
-                      disabled={!editMode}
+                      disabled={!editMode || selectedEntry.lock_record}
                       rows={3}
                       className="w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 text-base min-h-12"
                     />
@@ -993,7 +1098,7 @@ const EditEntry: React.FC = () => {
                     type="number"
                     value={selectedEntry.sale_qty}
                     onChange={(value) => handleInputChange('sale_qty', parseFloat(value) || 0)}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                     className="min-h-12 text-base"
                   />
                   <Input
@@ -1001,14 +1106,14 @@ const EditEntry: React.FC = () => {
                     type="number"
                     value={selectedEntry.purchase_qty || 0}
                     onChange={(value) => handleInputChange('purchase_qty', parseFloat(value) || 0)}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                   />
                   <Input
                     label="Credit Amount"
                     type="number"
                     value={selectedEntry.credit}
                     onChange={(value) => handleInputChange('credit', parseFloat(value) || 0)}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                     className={selectedEntry.credit > 0 ? 'border-green-300 bg-green-50' : ''}
                   />
                   <Input
@@ -1016,7 +1121,7 @@ const EditEntry: React.FC = () => {
                     type="number"
                     value={selectedEntry.debit}
                     onChange={(value) => handleInputChange('debit', parseFloat(value) || 0)}
-                    disabled={!editMode}
+                    disabled={!editMode || selectedEntry.lock_record}
                     className={selectedEntry.debit > 0 ? 'border-red-300 bg-red-50' : ''}
                   />
                 </div>
@@ -1051,7 +1156,7 @@ const EditEntry: React.FC = () => {
                   <Button
                     icon={Check}
                     onClick={handleSave}
-                    disabled={loading}
+                    disabled={!editMode || selectedEntry.lock_record || loading}
                   >
                     {loading ? 'Saving...' : 'Save Changes'}
                   </Button>
