@@ -93,25 +93,13 @@ const Login: React.FC = () => {
             </Button>
           </form>
 
-          {/* Demo Credentials */}
+          {/* Login Credentials */}
           <div className="mt-6 p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Login Credentials:</h3>
             <div className="text-xs text-gray-700 space-y-2">
               <div className="flex justify-between">
                 <span className="font-medium">Main Admin:</span>
                 <code className="bg-white px-2 py-1 rounded border">Bukka Ramesh / ramesh@1976</code>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium">Admin:</span>
-                <code className="bg-white px-2 py-1 rounded border">admin / admin123</code>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium">Operator:</span>
-                <code className="bg-white px-2 py-1 rounded border">operator / op123</code>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium">Staff:</span>
-                <code className="bg-white px-2 py-1 rounded border">rajesh.kumar / rajesh123</code>
               </div>
             </div>
           </div>
