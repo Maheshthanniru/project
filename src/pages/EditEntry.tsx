@@ -1,4 +1,4 @@
-import React, { useState, useEffect, MouseEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Edit, Search, Check, X, Eye, Lock, Unlock, Trash2, 
   History, Clock, User, Calendar, FileText, AlertTriangle,
@@ -52,6 +52,13 @@ const EditEntry: React.FC = () => {
   const [subAccounts, setSubAccounts] = useState<{ value: string; label: string }[]>([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
 
+  // Add dropdown data for edit form
+  const [particularsOptions, setParticularsOptions] = useState<{ value: string; label: string }[]>([]);
+  const [saleQuantityOptions, setSaleQuantityOptions] = useState<{ value: string; label: string }[]>([]);
+  const [purchaseQuantityOptions, setPurchaseQuantityOptions] = useState<{ value: string; label: string }[]>([]);
+  const [creditAmountOptions, setCreditAmountOptions] = useState<{ value: string; label: string }[]>([]);
+  const [debitAmountOptions, setDebitAmountOptions] = useState<{ value: string; label: string }[]>([]);
+
   // Add filter state variables
   const [filterCompanyName, setFilterCompanyName] = useState('');
   const [filterAccountName, setFilterAccountName] = useState('');
@@ -78,6 +85,24 @@ const EditEntry: React.FC = () => {
     initializeData();
   }, [searchTerm, dateFilter, statusFilter]);
 
+  // Load accounts when company filter changes
+  useEffect(() => {
+    if (filterCompanyName) {
+      loadAccountsByCompany(filterCompanyName);
+    } else {
+      setAccounts([]);
+    }
+  }, [filterCompanyName]);
+
+  // Load sub accounts when account filter changes
+  useEffect(() => {
+    if (filterCompanyName && filterAccountName) {
+      loadSubAccountsByAccount(filterCompanyName, filterAccountName);
+    } else {
+      setSubAccounts([]);
+    }
+  }, [filterCompanyName, filterAccountName]);
+
   const loadDropdownData = async () => {
     try {
       const companies = await supabaseDB.getCompanies();
@@ -93,6 +118,42 @@ const EditEntry: React.FC = () => {
         label: user.username
       }));
       setUsers(usersData);
+
+      // Load unique values for dropdowns
+      const uniqueParticulars = await supabaseDB.getUniqueParticulars();
+      const particularsData = uniqueParticulars.map(particular => ({
+        value: particular,
+        label: particular
+      }));
+      setParticularsOptions(particularsData);
+
+      const uniqueSaleQuantities = await supabaseDB.getUniqueSaleQuantities();
+      const saleQuantityData = uniqueSaleQuantities.map(qty => ({
+        value: qty.toString(),
+        label: qty.toString()
+      }));
+      setSaleQuantityOptions(saleQuantityData);
+
+      const uniquePurchaseQuantities = await supabaseDB.getUniquePurchaseQuantities();
+      const purchaseQuantityData = uniquePurchaseQuantities.map(qty => ({
+        value: qty.toString(),
+        label: qty.toString()
+      }));
+      setPurchaseQuantityOptions(purchaseQuantityData);
+
+      const uniqueCreditAmounts = await supabaseDB.getUniqueCreditAmounts();
+      const creditAmountData = uniqueCreditAmounts.map(amount => ({
+        value: amount.toString(),
+        label: `₹${amount.toLocaleString()}`
+      }));
+      setCreditAmountOptions(creditAmountData);
+
+      const uniqueDebitAmounts = await supabaseDB.getUniqueDebitAmounts();
+      const debitAmountData = uniqueDebitAmounts.map(amount => ({
+        value: amount.toString(),
+        label: `₹${amount.toLocaleString()}`
+      }));
+      setDebitAmountOptions(debitAmountData);
     } catch (error) {
       console.error('Error loading dropdown data:', error);
       toast.error('Failed to load dropdown data');
@@ -272,17 +333,19 @@ const EditEntry: React.FC = () => {
 
     if (window.confirm(`Are you sure you want to delete entry #${entry.sno}?`)) {
       try {
-        const success = await supabaseDB.deleteCashBookEntry(entry.id, user?.id || user?.username || 'admin');
+        console.log('Attempting to delete entry:', entry.id, 'by user:', user?.username);
+        const success = await supabaseDB.deleteCashBookEntry(entry.id, user?.username || 'admin');
+        console.log('Delete result:', success);
         if (success) {
           await loadEntries();
           await loadAllHistory();
           toast.success('Entry deleted successfully!');
         } else {
-          toast.error('Failed to delete entry');
+          toast.error('Failed to delete entry - check console for details');
         }
       } catch (error) {
         console.error('Error deleting entry:', error);
-        toast.error('Failed to delete entry');
+        toast.error(`Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   };
@@ -642,79 +705,84 @@ const EditEntry: React.FC = () => {
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           <div className="col-span-1">
-            <Input
+            <Select
               label="Company Name"
               value={filterCompanyName}
               onChange={setFilterCompanyName}
-              placeholder="Company Name"
+              options={companies}
+              placeholder="Select company..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Account Name"
               value={filterAccountName}
               onChange={setFilterAccountName}
-              placeholder="Account Name"
+              options={accounts}
+              placeholder="Select account..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Sub Account"
               value={filterSubAccount}
               onChange={setFilterSubAccount}
-              placeholder="Sub Account"
+              options={subAccounts}
+              placeholder="Select sub account..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Particulars"
               value={filterParticulars}
               onChange={setFilterParticulars}
-              placeholder="Particulars"
+              options={particularsOptions}
+              placeholder="Select particulars..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Sale Qty"
               value={filterSaleQ}
               onChange={setFilterSaleQ}
-              placeholder="Sale Qty"
-              type="number"
+              options={saleQuantityOptions}
+              placeholder="Select quantity..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Purchase Qty"
               value={filterPurchaseQ}
               onChange={setFilterPurchaseQ}
-              placeholder="Purchase Qty"
-              type="number"
+              options={purchaseQuantityOptions}
+              placeholder="Select quantity..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Credit"
               value={filterCredit}
               onChange={setFilterCredit}
-              placeholder="Credit"
-              type="number"
+              options={creditAmountOptions}
+              placeholder="Select amount..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Debit"
               value={filterDebit}
               onChange={setFilterDebit}
-              placeholder="Debit"
-              type="number"
+              options={debitAmountOptions}
+              placeholder="Select amount..."
             />
           </div>
           <div className="col-span-1">
-            <Input
+            <Select
               label="Staff"
               value={filterStaff}
               onChange={setFilterStaff}
-              placeholder="Staff"
+              options={users}
+              placeholder="Select staff..."
             />
           </div>
           <div className="col-span-1">

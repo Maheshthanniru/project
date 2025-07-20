@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Calculator, Building, FileText, User, Calendar, Trash2 } from 'lucide-react';
+import { Save, Plus, Calculator, Building, FileText, User, Calendar, Trash2, TrendingUp, TrendingDown, Wifi, WifiOff } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -19,9 +19,11 @@ interface NewEntryForm {
   purchaseQ: string;
   credit: string;
   debit: string;
+  creditOnline: string;
+  creditOffline: string;
+  debitOnline: string;
+  debitOffline: string;
   staff: string;
-  credit_mode: string;
-  debit_mode: string;
   saleQChecked: boolean;
   purchaseQChecked: boolean;
 }
@@ -39,9 +41,11 @@ const NewEntry: React.FC = () => {
     purchaseQ: '',
     credit: '',
     debit: '',
+    creditOnline: '',
+    creditOffline: '',
+    debitOnline: '',
+    debitOffline: '',
     staff: user?.username || '',
-    credit_mode: 'Offline',
-    debit_mode: 'Offline',
     saleQChecked: false,
     purchaseQChecked: false,
   });
@@ -52,7 +56,18 @@ const NewEntry: React.FC = () => {
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentDailyEntryNo, setCurrentDailyEntryNo] = useState(0);
+  const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
+  const [todayStats, setTodayStats] = useState({
+    totalCredit: 0,
+    totalDebit: 0,
+    onlineCredit: 0,
+    offlineCredit: 0,
+    onlineDebit: 0,
+    offlineDebit: 0,
+    totalOnline: 0,
+    totalOffline: 0,
+  });
 
   // Modal states for creating new items
   const [showNewCompany, setShowNewCompany] = useState(false);
@@ -69,6 +84,7 @@ const NewEntry: React.FC = () => {
   useEffect(() => {
     loadDropdownData();
     updateDailyEntryNumber();
+    updateTotalEntryCount();
   }, []);
 
   useEffect(() => {
@@ -103,6 +119,52 @@ const NewEntry: React.FC = () => {
     fetchRecentEntries();
   }, []);
 
+  const calculateTodayStats = async () => {
+    try {
+      const entries = await supabaseDB.getCashBookEntries();
+      const todayEntries = entries.filter(dbEntry => dbEntry.c_date === entry.date);
+      
+      let totalCredit = 0;
+      let totalDebit = 0;
+      let onlineCredit = 0;
+      let offlineCredit = 0;
+      let onlineDebit = 0;
+      let offlineDebit = 0;
+
+      todayEntries.forEach(entry => {
+        // Credit amounts
+        totalCredit += entry.credit || 0;
+        onlineCredit += entry.credit_online || 0;
+        offlineCredit += entry.credit_offline || 0;
+        
+        // Debit amounts
+        totalDebit += entry.debit || 0;
+        onlineDebit += entry.debit_online || 0;
+        offlineDebit += entry.debit_offline || 0;
+      });
+
+      const totalOnline = onlineCredit + onlineDebit;
+      const totalOffline = offlineCredit + offlineDebit;
+
+      setTodayStats({
+        totalCredit,
+        totalDebit,
+        onlineCredit,
+        offlineCredit,
+        onlineDebit,
+        offlineDebit,
+        totalOnline,
+        totalOffline,
+      });
+    } catch (error) {
+      console.error('Error calculating today stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    calculateTodayStats();
+  }, [entry.date]);
+
   const updateDailyEntryNumber = async () => {
     try {
       // Get today's entries count for daily entry number
@@ -112,6 +174,16 @@ const NewEntry: React.FC = () => {
     } catch (error) {
       console.error('Error updating daily entry number:', error);
       setCurrentDailyEntryNo(1);
+    }
+  };
+
+  const updateTotalEntryCount = async () => {
+    try {
+      const allEntries = await supabaseDB.getCashBookEntries();
+      setTotalEntryCount(allEntries.length);
+    } catch (error) {
+      console.error('Error updating total entry count:', error);
+      setTotalEntryCount(0);
     }
   };
 
@@ -183,10 +255,15 @@ const NewEntry: React.FC = () => {
       return;
     }
 
-    const creditAmount = parseFloat(entry.credit) || 0;
-    const debitAmount = parseFloat(entry.debit) || 0;
+    const creditOnlineAmount = parseFloat(entry.creditOnline) || 0;
+    const creditOfflineAmount = parseFloat(entry.creditOffline) || 0;
+    const debitOnlineAmount = parseFloat(entry.debitOnline) || 0;
+    const debitOfflineAmount = parseFloat(entry.debitOffline) || 0;
 
-    if (creditAmount === 0 && debitAmount === 0) {
+    const totalCredit = creditOnlineAmount + creditOfflineAmount;
+    const totalDebit = debitOnlineAmount + debitOfflineAmount;
+
+    if (totalCredit === 0 && totalDebit === 0) {
       toast.error('Please enter either credit or debit amount');
       return;
     }
@@ -200,8 +277,12 @@ const NewEntry: React.FC = () => {
         sub_acc_name: entry.subAccount,
         particulars: entry.particulars,
         c_date: entry.date,
-        credit: creditAmount,
-        debit: debitAmount,
+        credit: totalCredit,
+        debit: totalDebit,
+        credit_online: creditOnlineAmount,
+        credit_offline: creditOfflineAmount,
+        debit_online: debitOnlineAmount,
+        debit_offline: debitOfflineAmount,
         company_name: entry.companyName,
         address: '', // Will be filled from company data
         staff: entry.staff,
@@ -209,8 +290,6 @@ const NewEntry: React.FC = () => {
         sale_qty: entry.saleQChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.purchaseQChecked ? parseFloat(entry.purchaseQ) || 0 : 0,
         cb: 'CB', // Cash Book identifier
-        credit_mode: entry.credit_mode,
-        debit_mode: entry.debit_mode,
       });
 
       toast.success(`Entry saved successfully! Entry #${newEntry.sno}`);
@@ -227,9 +306,11 @@ const NewEntry: React.FC = () => {
           purchaseQ: '',
           credit: '',
           debit: '',
+          creditOnline: '',
+          creditOffline: '',
+          debitOnline: '',
+          debitOffline: '',
           staff: user?.username || '',
-          credit_mode: 'Offline',
-          debit_mode: 'Offline',
           saleQChecked: false,
           purchaseQChecked: false,
         });
@@ -240,6 +321,8 @@ const NewEntry: React.FC = () => {
         
         // Update daily entry number for next entry
         updateDailyEntryNumber();
+        calculateTodayStats(); // Recalculate stats after saving
+        updateTotalEntryCount(); // Update total entry count
     } catch (error) {
       console.error('Error saving entry:', error);
       toast.error(`Failed to save entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -356,6 +439,7 @@ const NewEntry: React.FC = () => {
     }
     
     setShowDeleteModal(false);
+    updateTotalEntryCount(); // Update total entry count after deletion
   };
 
   return (
@@ -368,8 +452,19 @@ const NewEntry: React.FC = () => {
             <p className="text-gray-600">Create new cash book entries with automatic daily entry numbering</p>
           </div>
           <div className="text-right">
-            <div className="text-sm text-gray-600">Daily Entry #</div>
-            <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-4">
+                <div>
+                  <div className="text-sm text-gray-600">Total Entries</div>
+                  <div className="text-2xl font-bold text-purple-600">{totalEntryCount.toLocaleString()}</div>
+                </div>
+                <div className="w-px h-8 bg-gray-300"></div>
+                <div>
+                  <div className="text-sm text-gray-600">Daily Entry #</div>
+                  <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -386,7 +481,7 @@ const NewEntry: React.FC = () => {
                 required
               />
               
-              <div className="relative">
+              <div className="space-y-2">
                 <Select
                   label="Company Name"
                   value={entry.companyName}
@@ -395,15 +490,16 @@ const NewEntry: React.FC = () => {
                   placeholder="Select company..."
                   required
                 />
-                <div className="absolute right-2 top-8 flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
                     onClick={() => setShowNewCompany(true)}
-                    className="px-2"
+                    className="flex-1"
                   >
-                    <Plus className="w-3 h-3" />
+                    <Building className="w-4 h-4 mr-1" />
+                    Add Company
                   </Button>
                   {entry.companyName && (
                     <Button
@@ -411,9 +507,10 @@ const NewEntry: React.FC = () => {
                       size="sm"
                       variant="danger"
                       onClick={() => handleDelete('company')}
-                      className="px-2"
+                      className="flex-1"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
                     </Button>
                   )}
                 </div>
@@ -431,7 +528,7 @@ const NewEntry: React.FC = () => {
 
             {/* Account Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
+              <div className="space-y-2">
                 <Select
                   label="Main Account"
                   value={entry.accountName}
@@ -441,16 +538,17 @@ const NewEntry: React.FC = () => {
                   required
                   disabled={!entry.companyName}
                 />
-                <div className="absolute right-2 top-8 flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
                     onClick={() => setShowNewAccount(true)}
-                    className="px-2"
+                    className="flex-1"
                     disabled={!entry.companyName}
                   >
-                    <Plus className="w-3 h-3" />
+                    <FileText className="w-4 h-4 mr-1" />
+                    Add Account
                   </Button>
                   {entry.accountName && (
                     <Button
@@ -458,15 +556,16 @@ const NewEntry: React.FC = () => {
                       size="sm"
                       variant="danger"
                       onClick={() => handleDelete('account')}
-                      className="px-2"
+                      className="flex-1"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
                     </Button>
                   )}
                 </div>
               </div>
 
-              <div className="relative">
+              <div className="space-y-2">
                 <Select
                   label="Sub Account"
                   value={entry.subAccount}
@@ -475,16 +574,17 @@ const NewEntry: React.FC = () => {
                   placeholder="Select sub account..."
                   disabled={!entry.accountName}
                 />
-                <div className="absolute right-2 top-8 flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
                     onClick={() => setShowNewSubAccount(true)}
-                    className="px-2"
+                    className="flex-1"
                     disabled={!entry.accountName}
                   >
-                    <Plus className="w-3 h-3" />
+                    <FileText className="w-4 h-4 mr-1" />
+                    Add Sub Account
                   </Button>
                   {entry.subAccount && (
                     <Button
@@ -492,9 +592,10 @@ const NewEntry: React.FC = () => {
                       size="sm"
                       variant="danger"
                       onClick={() => handleDelete('subAccount')}
-                      className="px-2"
+                      className="flex-1"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
                     </Button>
                   )}
                 </div>
@@ -514,42 +615,38 @@ const NewEntry: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Input
-                  label="Credit"
-                  value={entry.credit}
-                  onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
-                  placeholder="Enter credit amount"
+                  label="Credit Online"
+                  value={entry.creditOnline}
+                  onChange={val => setEntry(prev => ({ ...prev, creditOnline: val }))}
+                  placeholder="Enter online credit amount"
                   type="number"
                   min="0"
                 />
-                <Select
-                  label="Credit Mode"
-                  value={entry.credit_mode}
-                  onChange={val => setEntry(prev => ({ ...prev, credit_mode: val }))}
-                  options={[
-                    { value: 'Online', label: 'Online' },
-                    { value: 'Offline', label: 'Offline' },
-                  ]}
-                  className="mt-1"
+                <Input
+                  label="Credit Offline"
+                  value={entry.creditOffline}
+                  onChange={val => setEntry(prev => ({ ...prev, creditOffline: val }))}
+                  placeholder="Enter offline credit amount"
+                  type="number"
+                  min="0"
                 />
               </div>
               <div>
                 <Input
-                  label="Debit"
-                  value={entry.debit}
-                  onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
-                  placeholder="Enter debit amount"
+                  label="Debit Online"
+                  value={entry.debitOnline}
+                  onChange={val => setEntry(prev => ({ ...prev, debitOnline: val }))}
+                  placeholder="Enter online debit amount"
                   type="number"
                   min="0"
                 />
-                <Select
-                  label="Debit Mode"
-                  value={entry.debit_mode}
-                  onChange={val => setEntry(prev => ({ ...prev, debit_mode: val }))}
-                  options={[
-                    { value: 'Online', label: 'Online' },
-                    { value: 'Offline', label: 'Offline' },
-                  ]}
-                  className="mt-1"
+                <Input
+                  label="Debit Offline"
+                  value={entry.debitOffline}
+                  onChange={val => setEntry(prev => ({ ...prev, debitOffline: val }))}
+                  placeholder="Enter offline debit amount"
+                  type="number"
+                  min="0"
                 />
               </div>
             </div>
@@ -613,9 +710,11 @@ const NewEntry: React.FC = () => {
                     purchaseQ: '',
                     credit: '',
                     debit: '',
+                    creditOnline: '',
+                    creditOffline: '',
+                    debitOnline: '',
+                    debitOffline: '',
                     staff: user?.username || '',
-                    credit_mode: 'Offline',
-                    debit_mode: 'Offline',
                     saleQChecked: false,
                     purchaseQChecked: false,
                   });
@@ -630,6 +729,100 @@ const NewEntry: React.FC = () => {
           </form>
         </Card>
       </div>
+
+      {/* Today's Online vs Offline Transaction Summary */}
+      <Card title={`Today's Transaction Summary (${entry.date})`} className="mt-6 w-full max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100 text-sm font-medium">Total Credit</p>
+                <p className="text-2xl font-bold">₹{todayStats.totalCredit.toLocaleString()}</p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-200" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-red-100 text-sm font-medium">Total Debit</p>
+                <p className="text-2xl font-bold">₹{todayStats.totalDebit.toLocaleString()}</p>
+              </div>
+              <TrendingDown className="w-8 h-8 text-red-200" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-cyan-100 text-sm font-medium">Online Transactions</p>
+                <p className="text-2xl font-bold">₹{todayStats.totalOnline.toLocaleString()}</p>
+                <p className="text-cyan-200 text-xs mt-1">
+                  Credit: ₹{todayStats.onlineCredit.toLocaleString()} | Debit: ₹{todayStats.onlineDebit.toLocaleString()}
+                </p>
+              </div>
+              <Wifi className="w-8 h-8 text-cyan-200" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-100 text-sm font-medium">Offline Transactions</p>
+                <p className="text-2xl font-bold">₹{todayStats.totalOffline.toLocaleString()}</p>
+                <p className="text-gray-200 text-xs mt-1">
+                  Credit: ₹{todayStats.offlineCredit.toLocaleString()} | Debit: ₹{todayStats.offlineDebit.toLocaleString()}
+                </p>
+              </div>
+              <WifiOff className="w-8 h-8 text-gray-200" />
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Breakdown */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4">
+            <h4 className="font-semibold text-indigo-800 mb-3">Online Transaction Breakdown</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-indigo-700">Online Credit:</span>
+                <span className="font-semibold text-indigo-900">₹{todayStats.onlineCredit.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-indigo-700">Online Debit:</span>
+                <span className="font-semibold text-indigo-900">₹{todayStats.onlineDebit.toLocaleString()}</span>
+              </div>
+              <div className="border-t border-indigo-200 pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-indigo-800 font-medium">Total Online:</span>
+                  <span className="font-bold text-indigo-900">₹{todayStats.totalOnline.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="font-semibold text-gray-800 mb-3">Offline Transaction Breakdown</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-700">Offline Credit:</span>
+                <span className="font-semibold text-gray-900">₹{todayStats.offlineCredit.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-700">Offline Debit:</span>
+                <span className="font-semibold text-gray-900">₹{todayStats.offlineDebit.toLocaleString()}</span>
+              </div>
+              <div className="border-t border-gray-200 pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-800 font-medium">Total Offline:</span>
+                  <span className="font-bold text-gray-900">₹{todayStats.totalOffline.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Recent Entries Card */}
       <Card title="Recent Entries" className="mt-8 w-full max-w-4xl mx-auto">

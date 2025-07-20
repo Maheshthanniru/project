@@ -85,6 +85,10 @@ CREATE TABLE IF NOT EXISTS cash_book (
   c_date date DEFAULT CURRENT_DATE,
   credit decimal(15,2) DEFAULT 0,
   debit decimal(15,2) DEFAULT 0,
+  credit_online decimal(15,2) DEFAULT 0,
+  credit_offline decimal(15,2) DEFAULT 0,
+  debit_online decimal(15,2) DEFAULT 0,
+   decimal(15,2) DEFAULT 0,
   lock_record boolean DEFAULT false,
   company_name text REFERENCES companies(company_name),
   address text,
@@ -226,6 +230,38 @@ CREATE TABLE IF NOT EXISTS drivers (
   updated_at timestamptz DEFAULT now()
 );
 
+-- Deleted Cash Book Table (for audit trail)
+CREATE TABLE IF NOT EXISTS deleted_cash_book (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sno serial,
+  acc_name text NOT NULL,
+  sub_acc_name text,
+  particulars text,
+  c_date date DEFAULT CURRENT_DATE,
+  credit decimal(15,2) DEFAULT 0,
+  debit decimal(15,2) DEFAULT 0,
+  credit_online decimal(15,2) DEFAULT 0,
+  credit_offline decimal(15,2) DEFAULT 0,
+  debit_online decimal(15,2) DEFAULT 0,
+  debit_offline decimal(15,2) DEFAULT 0,
+  lock_record boolean DEFAULT false,
+  company_name text,
+  address text,
+  staff text,
+  users text,
+  entry_time timestamptz DEFAULT now(),
+  sale_qty decimal(10,2) DEFAULT 0,
+  purchase_qty decimal(10,2) DEFAULT 0,
+  approved boolean DEFAULT false,
+  edited boolean DEFAULT false,
+  e_count integer DEFAULT 0,
+  cb text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  deleted_by text,
+  deleted_at timestamptz DEFAULT now()
+);
+
 -- Login Attempts (for rate limiting)
 CREATE TABLE IF NOT EXISTS login_attempts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -261,6 +297,7 @@ ALTER TABLE ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_guarantees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE deleted_cash_book ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_activities ENABLE ROW LEVEL SECURITY;
 

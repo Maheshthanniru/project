@@ -16,7 +16,8 @@ import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 
 interface ReplaceFormData {
-  companyName: string;
+  oldCompanyName: string;
+  newCompanyName: string;
   oldAccountName: string;
   oldSubAccount: string;
   newAccountName: string;
@@ -27,7 +28,8 @@ const ReplaceForm: React.FC = () => {
   const { user, isAdmin } = useAuth();
   
   const [replaceData, setReplaceData] = useState<ReplaceFormData>({
-    companyName: '',
+    oldCompanyName: '',
+    newCompanyName: '',
     oldAccountName: '',
     oldSubAccount: '',
     newAccountName: '',
@@ -112,8 +114,8 @@ const ReplaceForm: React.FC = () => {
     let filtered = [...entries];
 
     // Filter by company name
-    if (replaceData.companyName) {
-      filtered = filtered.filter(entry => entry.company_name === replaceData.companyName);
+    if (replaceData.oldCompanyName) {
+      filtered = filtered.filter(entry => entry.company_name === replaceData.oldCompanyName);
     }
 
     // Filter by old account name
@@ -135,7 +137,7 @@ const ReplaceForm: React.FC = () => {
     const affectedRecords = entries.filter(entry => 
       (replaceData.oldAccountName && entry.acc_name === replaceData.oldAccountName) ||
       (replaceData.oldSubAccount && entry.sub_acc_name === replaceData.oldSubAccount) ||
-      (replaceData.companyName && entry.company_name === replaceData.companyName)
+      (replaceData.oldCompanyName && entry.company_name === replaceData.oldCompanyName)
     ).length;
     const totalCredit = entries.reduce((sum, entry) => sum + entry.credit, 0);
     const totalDebit = entries.reduce((sum, entry) => sum + entry.debit, 0);
@@ -156,12 +158,12 @@ const ReplaceForm: React.FC = () => {
   };
 
   const handlePreview = () => {
-    if (!replaceData.oldAccountName && !replaceData.oldSubAccount) {
+    if (!replaceData.oldAccountName && !replaceData.oldSubAccount && !replaceData.oldCompanyName) {
       toast.error('Please select at least one field to replace');
       return;
     }
 
-    if (!replaceData.newAccountName && !replaceData.newSubAccount) {
+    if (!replaceData.newAccountName && !replaceData.newSubAccount && !replaceData.newCompanyName) {
       toast.error('Please select at least one new value');
       return;
     }
@@ -169,6 +171,24 @@ const ReplaceForm: React.FC = () => {
     setPreviewMode(true);
     applyFilters();
     toast.success(`Preview: ${summary.affectedRecords} records will be affected`);
+  };
+
+  const handlePreviewCompanyName = () => {
+    if (!replaceData.oldCompanyName) {
+      toast.error('Please select an old company name');
+      return;
+    }
+
+    const matchingEntries = entries.filter(entry => entry.company_name === replaceData.oldCompanyName);
+    
+    if (matchingEntries.length === 0) {
+      toast.error(`No records found with company name "${replaceData.oldCompanyName}"`);
+      return;
+    }
+
+    setFilteredEntries(matchingEntries);
+    setPreviewMode(true);
+    toast.success(`Preview: ${matchingEntries.length} records will be affected`);
   };
 
   const handleReplaceAccountName = async () => {
@@ -209,7 +229,7 @@ const ReplaceForm: React.FC = () => {
 
   const handleReplaceSubAccount = async () => {
     if (!replaceData.oldSubAccount || !replaceData.newSubAccount) {
-      toast.error('Please select both old and new sub accounts');
+      toast.error('Please select both old and new sub account names');
       return;
     }
 
@@ -231,12 +251,113 @@ const ReplaceForm: React.FC = () => {
 
         if (updatedCount > 0) {
           await loadEntries();
-          toast.success(`${updatedCount} sub accounts replaced successfully!`);
+          toast.success(`${updatedCount} sub account names replaced successfully!`);
           setReplaceData(prev => ({ ...prev, oldSubAccount: '', newSubAccount: '' }));
           setPreviewMode(false);
+        } else {
+          toast.error('No records were updated');
         }
       } catch (error) {
-        toast.error('Failed to replace sub accounts');
+        console.error('Error replacing sub account names:', error);
+        toast.error('Failed to replace sub account names');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleReplaceCompanyName = async () => {
+    if (!replaceData.oldCompanyName || !replaceData.newCompanyName) {
+      toast.error('Please select both old and new company names');
+      return;
+    }
+
+    console.log('Starting company name replacement...');
+    console.log('Old company name:', replaceData.oldCompanyName);
+    console.log('New company name:', replaceData.newCompanyName);
+    console.log('Total entries in database:', entries.length);
+
+    // Debug: Show all unique company names in the database
+    const uniqueCompanies = [...new Set(entries.map(entry => entry.company_name).filter(Boolean))];
+    console.log('All unique company names in database:', uniqueCompanies);
+    
+    // Get all entries that match the old company name from the full database
+    const matchingEntries = entries.filter(entry => {
+      const entryCompany = entry.company_name?.trim();
+      const oldCompany = replaceData.oldCompanyName?.trim();
+      return entryCompany === oldCompany;
+    });
+    
+    console.log('Matching entries found:', matchingEntries.length);
+    console.log('Sample matching entries:', matchingEntries.slice(0, 3));
+    
+    if (matchingEntries.length === 0) {
+      toast.error(`No records found with company name "${replaceData.oldCompanyName}"`);
+      return;
+    }
+
+    if (window.confirm(`Replace "${replaceData.oldCompanyName}" with "${replaceData.newCompanyName}" in ${matchingEntries.length} records?`)) {
+      setLoading(true);
+      try {
+        // First, check if the new company name exists in the companies table
+        const allCompanies = await supabaseDB.getCompanies();
+        const newCompanyExists = allCompanies.some(company => 
+          company.company_name.trim() === replaceData.newCompanyName.trim()
+        );
+
+        // If the new company doesn't exist, add it to the companies table
+        if (!newCompanyExists) {
+          console.log(`Adding new company "${replaceData.newCompanyName}" to companies table...`);
+          try {
+            await supabaseDB.addCompany(replaceData.newCompanyName, '');
+            console.log(`Successfully added company "${replaceData.newCompanyName}"`);
+          } catch (error) {
+            console.error('Error adding new company:', error);
+            toast.error(`Failed to add new company "${replaceData.newCompanyName}". Please try again.`);
+            setLoading(false);
+            return;
+          }
+        } else {
+          console.log(`Company "${replaceData.newCompanyName}" already exists in companies table`);
+        }
+
+        let updatedCount = 0;
+        
+        console.log('Starting to update records...');
+        
+        for (const entry of matchingEntries) {
+          console.log(`Updating entry ${entry.id} with company name: ${entry.company_name}`);
+          
+          const result = await supabaseDB.updateCashBookEntry(
+            entry.id, 
+            { company_name: replaceData.newCompanyName }, 
+            user?.username
+          );
+          
+          console.log(`Update result for entry ${entry.id}:`, result);
+          
+          if (result) {
+            updatedCount++;
+            console.log(`Successfully updated entry ${entry.id}`);
+          } else {
+            console.log(`Failed to update entry ${entry.id}`);
+          }
+        }
+
+        console.log(`Total updated: ${updatedCount} out of ${matchingEntries.length}`);
+
+        if (updatedCount > 0) {
+          await loadEntries();
+          await loadDropdownData(); // Refresh dropdown data to include new company
+          toast.success(`${updatedCount} company names replaced successfully!`);
+          setReplaceData(prev => ({ ...prev, oldCompanyName: '', newCompanyName: '' }));
+          setPreviewMode(false);
+        } else {
+          toast.error('No records were updated. Please check the console for details.');
+        }
+      } catch (error) {
+        console.error('Error replacing company names:', error);
+        toast.error('Failed to replace company names');
       } finally {
         setLoading(false);
       }
@@ -245,7 +366,8 @@ const ReplaceForm: React.FC = () => {
 
   const resetForm = () => {
     setReplaceData({
-      companyName: '',
+      oldCompanyName: '',
+      newCompanyName: '',
       oldAccountName: '',
       oldSubAccount: '',
       newAccountName: '',
@@ -297,14 +419,46 @@ const ReplaceForm: React.FC = () => {
       {/* Replace Form */}
       <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
         <div className="space-y-6">
-          {/* Company Name */}
-          <Select
-            label="Company Name"
-            value={replaceData.companyName}
-            onChange={value => handleInputChange('companyName', value)}
-            options={companies}
-            className="mb-4"
-          />
+          {/* Company Name Replacement */}
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Replace Company Name</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Select
+                  label="Old Company Name"
+                  value={replaceData.oldCompanyName}
+                  onChange={(value) => handleInputChange('oldCompanyName', value)}
+                  options={[{ value: '', label: 'Select old company...' }, ...companies]}
+                />
+              </div>
+              <div>
+                <Input
+                  label="New Company Name"
+                  value={replaceData.newCompanyName}
+                  onChange={(value) => handleInputChange('newCompanyName', value)}
+                  placeholder="Enter new company name"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-center">
+              <Button
+                onClick={handleReplaceCompanyName}
+                disabled={!replaceData.oldCompanyName || !replaceData.newCompanyName || loading}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                Replace Company Name
+              </Button>
+              <Button
+                icon={Eye}
+                variant="secondary"
+                onClick={handlePreviewCompanyName}
+                disabled={!replaceData.oldCompanyName || loading}
+                className="ml-2 bg-blue-600 hover:bg-blue-700"
+              >
+                Preview
+              </Button>
+            </div>
+          </div>
 
           {/* Account Name Replacement */}
           <div className="bg-white p-6 rounded-lg border border-gray-200">
@@ -319,11 +473,11 @@ const ReplaceForm: React.FC = () => {
                 />
               </div>
               <div>
-                <Select
+                <Input
                   label="New AccountName"
                   value={replaceData.newAccountName}
                   onChange={(value) => handleInputChange('newAccountName', value)}
-                  options={[{ value: '', label: 'Select new account...' }, ...newAccounts]}
+                  placeholder="Enter new account name"
                 />
               </div>
             </div>
@@ -351,11 +505,11 @@ const ReplaceForm: React.FC = () => {
                 />
               </div>
               <div>
-                <Select
+                <Input
                   label="New SubAccount"
                   value={replaceData.newSubAccount}
                   onChange={(value) => handleInputChange('newSubAccount', value)}
-                  options={[{ value: '', label: 'Select new sub account...' }, ...newSubAccounts]}
+                  placeholder="Enter new sub account name"
                 />
               </div>
             </div>
@@ -439,7 +593,11 @@ const ReplaceForm: React.FC = () => {
                   }`}>
                     <td className="px-3 py-2 font-medium">{entry.sno}</td>
                     <td className="px-3 py-2">{format(new Date(entry.c_date), 'dd-MMM-yy')}</td>
-                    <td className="px-3 py-2 font-medium text-blue-600">{entry.company_name}</td>
+                    <td className="px-3 py-2 font-medium text-blue-600">
+                      <span className={replaceData.oldCompanyName === entry.company_name ? 'bg-yellow-200 px-2 py-1 rounded' : ''}>
+                        {entry.company_name}
+                      </span>
+                    </td>
                     <td className="px-3 py-2">
                       <span className={replaceData.oldAccountName === entry.acc_name ? 'bg-yellow-200 px-2 py-1 rounded' : ''}>
                         {entry.acc_name}

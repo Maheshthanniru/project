@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, TrendingDown, DollarSign, FileText, AlertTriangle, Users, Building } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, DollarSign, FileText, AlertTriangle, Users, Building, Wifi, WifiOff } from 'lucide-react';
 import { format } from 'date-fns';
 import Card from '../components/UI/Card';
 import Select from '../components/UI/Select';
@@ -17,6 +17,12 @@ const Dashboard: React.FC = () => {
     companiesCount: 0,
     accountsCount: 0,
     activeUsersCount: 0,
+    onlineCredit: 0,
+    offlineCredit: 0,
+    onlineDebit: 0,
+    offlineDebit: 0,
+    totalOnline: 0,
+    totalOffline: 0,
   });
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -48,6 +54,12 @@ const Dashboard: React.FC = () => {
         companiesCount: companies.length,
         accountsCount: accounts.length,
         activeUsersCount: users.filter(u => u.is_active).length,
+        onlineCredit: dashboardStats.onlineCredit,
+        offlineCredit: dashboardStats.offlineCredit,
+        onlineDebit: dashboardStats.onlineDebit,
+        offlineDebit: dashboardStats.offlineDebit,
+        totalOnline: dashboardStats.totalOnline,
+        totalOffline: dashboardStats.totalOffline,
       });
 
       // Get recent entries
@@ -153,6 +165,61 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
+      {/* Online vs Offline Transaction Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-cyan-100 text-sm font-medium">Online Transactions</p>
+              <p className="text-2xl font-bold">₹{stats.totalOnline.toLocaleString()}</p>
+              <p className="text-cyan-200 text-xs mt-1">
+                Credit: ₹{stats.onlineCredit.toLocaleString()} | Debit: ₹{stats.onlineDebit.toLocaleString()}
+              </p>
+            </div>
+            <Wifi className="w-8 h-8 text-cyan-200" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-gray-500 to-gray-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-100 text-sm font-medium">Offline Transactions</p>
+              <p className="text-2xl font-bold">₹{stats.totalOffline.toLocaleString()}</p>
+              <p className="text-gray-200 text-xs mt-1">
+                Credit: ₹{stats.offlineCredit.toLocaleString()} | Debit: ₹{stats.offlineDebit.toLocaleString()}
+              </p>
+            </div>
+            <WifiOff className="w-8 h-8 text-gray-200" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-indigo-100 text-sm font-medium">Online Credit</p>
+              <p className="text-2xl font-bold">₹{stats.onlineCredit.toLocaleString()}</p>
+              <p className="text-indigo-200 text-xs mt-1">
+                {stats.totalCredit > 0 ? `${((stats.onlineCredit / stats.totalCredit) * 100).toFixed(1)}%` : '0%'} of total credit
+              </p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-indigo-200" />
+          </div>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-pink-500 to-pink-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-pink-100 text-sm font-medium">Online Debit</p>
+              <p className="text-2xl font-bold">₹{stats.onlineDebit.toLocaleString()}</p>
+              <p className="text-pink-200 text-xs mt-1">
+                {stats.totalDebit > 0 ? `${((stats.onlineDebit / stats.totalDebit) * 100).toFixed(1)}%` : '0%'} of total debit
+              </p>
+            </div>
+            <TrendingDown className="w-8 h-8 text-pink-200" />
+          </div>
+        </Card>
+      </div>
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200">
@@ -219,6 +286,35 @@ const Dashboard: React.FC = () => {
                       <span>{format(new Date(entry.c_date), 'MMM dd, yyyy')}</span>
                       <span>{entry.staff}</span>
                       {entry.sale_qty > 0 && <span>Qty: {entry.sale_qty}</span>}
+                      {/* Show payment mode */}
+                      {entry.credit > 0 && (
+                        <div className="space-y-1">
+                          {entry.credit_online > 0 && (
+                            <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
+                              Online: ₹{entry.credit_online.toLocaleString()}
+                            </span>
+                          )}
+                          {entry.credit_offline > 0 && (
+                            <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Offline: ₹{entry.credit_offline.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {entry.debit > 0 && (
+                        <div className="space-y-1">
+                          {entry.debit_online > 0 && (
+                            <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
+                              Online: ₹{entry.debit_online.toLocaleString()}
+                            </span>
+                          )}
+                          {entry.debit_offline > 0 && (
+                            <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Offline: ₹{entry.debit_offline.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

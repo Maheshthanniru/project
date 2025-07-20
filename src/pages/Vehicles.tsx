@@ -140,7 +140,11 @@ const Vehicles: React.FC = () => {
     });
   };
 
-  const getExpiryStatus = (expiryDate: string) => {
+  const getExpiryStatus = (expiryDate: string | null | undefined) => {
+    if (!expiryDate) {
+      return { status: 'valid', color: 'bg-green-500 text-white', days: 999 };
+    }
+    
     const today = new Date();
     const expiry = new Date(expiryDate);
     const daysUntilExpiry = differenceInDays(expiry, today);
@@ -542,50 +546,125 @@ const Vehicles: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredVehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="border-b hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2 font-medium">{vehicle.sno}</td>
-                    <td className="px-3 py-2 font-bold text-blue-700">{vehicle.v_no}</td>
-                    <td className="px-3 py-2">{vehicle.v_type || ''}</td>
-                    <td className="px-3 py-2">{vehicle.particulars || ''}</td>
-                    <td className="px-3 py-2 text-center">{vehicle.tax_exp_date ? format(new Date(vehicle.tax_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
-                    <td className="px-3 py-2 text-center">{vehicle.insurance_exp_date ? format(new Date(vehicle.insurance_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
-                    <td className="px-3 py-2 text-center">{vehicle.fitness_exp_date ? format(new Date(vehicle.fitness_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
-                    <td className="px-3 py-2 text-center">{vehicle.permit_exp_date ? format(new Date(vehicle.permit_exp_date || ''), 'dd-MM-yyyy') : '-'}</td>
-                    <td className="px-3 py-2 text-center">{vehicle.date_added ? format(new Date(vehicle.date_added || ''), 'dd-MM-yyyy') : '-'}</td>
-                    <td className="px-3 py-2 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={Eye}
-                          onClick={() => handleViewDetails(vehicle)}
-                          className="px-2"
-                        >
-                          View
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={Edit}
-                          onClick={() => handleEdit(vehicle)}
-                          className="px-2"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon={Trash2}
-                          onClick={() => handleDelete(vehicle.id)}
-                          className="px-2"
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredVehicles.map((vehicle) => {
+                  const hasExpiringDoc = hasExpiringDocuments(vehicle);
+                  const hasExpiredDoc = hasExpiredDocuments(vehicle);
+                  const isExpiringSoon = hasExpiringDoc || hasExpiredDoc;
+                  
+                  return (
+                    <tr 
+                      key={vehicle.id} 
+                      className={`border-b transition-colors ${
+                        isExpiringSoon 
+                          ? 'bg-red-50 hover:bg-red-100 border-red-200' 
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="px-3 py-2 font-medium">{vehicle.sno}</td>
+                      <td className="px-3 py-2 font-bold text-blue-700">{vehicle.v_no}</td>
+                      <td className="px-3 py-2">{vehicle.v_type || ''}</td>
+                      <td className="px-3 py-2">{vehicle.particulars || ''}</td>
+                      <td className="px-3 py-2 text-center">
+                        {vehicle.tax_exp_date ? (
+                          <div className="flex flex-col items-center">
+                            <span className={getExpiryStatus(vehicle.tax_exp_date).status === 'expired' ? 'text-red-600 font-semibold' : 
+                                             getExpiryStatus(vehicle.tax_exp_date).status === 'expiring' ? 'text-orange-600 font-semibold' : ''}>
+                              {format(new Date(vehicle.tax_exp_date), 'dd-MM-yyyy')}
+                            </span>
+                            {getExpiryStatus(vehicle.tax_exp_date).status !== 'valid' && (
+                              <span className="text-xs text-red-500 font-medium">
+                                {getExpiryStatus(vehicle.tax_exp_date).status === 'expired' ? 'EXPIRED' : 'EXPIRING'}
+                              </span>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {vehicle.insurance_exp_date ? (
+                          <div className="flex flex-col items-center">
+                            <span className={getExpiryStatus(vehicle.insurance_exp_date).status === 'expired' ? 'text-red-600 font-semibold' : 
+                                             getExpiryStatus(vehicle.insurance_exp_date).status === 'expiring' ? 'text-orange-600 font-semibold' : ''}>
+                              {format(new Date(vehicle.insurance_exp_date), 'dd-MM-yyyy')}
+                            </span>
+                            {getExpiryStatus(vehicle.insurance_exp_date).status !== 'valid' && (
+                              <span className="text-xs text-red-500 font-medium">
+                                {getExpiryStatus(vehicle.insurance_exp_date).status === 'expired' ? 'EXPIRED' : 'EXPIRING'}
+                              </span>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {vehicle.fitness_exp_date ? (
+                          <div className="flex flex-col items-center">
+                            <span className={getExpiryStatus(vehicle.fitness_exp_date).status === 'expired' ? 'text-red-600 font-semibold' : 
+                                             getExpiryStatus(vehicle.fitness_exp_date).status === 'expiring' ? 'text-orange-600 font-semibold' : ''}>
+                              {format(new Date(vehicle.fitness_exp_date), 'dd-MM-yyyy')}
+                            </span>
+                            {getExpiryStatus(vehicle.fitness_exp_date).status !== 'valid' && (
+                              <span className="text-xs text-red-500 font-medium">
+                                {getExpiryStatus(vehicle.fitness_exp_date).status === 'expired' ? 'EXPIRED' : 'EXPIRING'}
+                              </span>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {vehicle.permit_exp_date ? (
+                          <div className="flex flex-col items-center">
+                            <span className={getExpiryStatus(vehicle.permit_exp_date).status === 'expired' ? 'text-red-600 font-semibold' : 
+                                             getExpiryStatus(vehicle.permit_exp_date).status === 'expiring' ? 'text-orange-600 font-semibold' : ''}>
+                              {format(new Date(vehicle.permit_exp_date), 'dd-MM-yyyy')}
+                            </span>
+                            {getExpiryStatus(vehicle.permit_exp_date).status !== 'valid' && (
+                              <span className="text-xs text-red-500 font-medium">
+                                {getExpiryStatus(vehicle.permit_exp_date).status === 'expired' ? 'EXPIRED' : 'EXPIRING'}
+                              </span>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center">{vehicle.date_added ? format(new Date(vehicle.date_added || ''), 'dd-MM-yyyy') : '-'}</td>
+                      <td className="px-3 py-2 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {isExpiringSoon && (
+                            <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                              <AlertTriangle className="w-3 h-3" />
+                              EXPIRING
+                            </div>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={Eye}
+                            onClick={() => handleViewDetails(vehicle)}
+                            className="px-2"
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={Edit}
+                            onClick={() => handleEdit(vehicle)}
+                            className="px-2"
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={Trash2}
+                            onClick={() => handleDelete(vehicle.id)}
+                            className="px-2"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -641,7 +720,7 @@ const Vehicles: React.FC = () => {
                             <span><strong>{label}:</strong></span>
                             <div className="text-right">
                               <div className={`px-2 py-1 rounded text-xs font-medium ${status.color}`}>
-                                {date ? format(new Date(date || ''), 'MMM dd, yyyy') : '-'}
+                                {date && date !== '' ? format(new Date(date), 'MMM dd, yyyy') : '-'}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {status.status === 'expired' 

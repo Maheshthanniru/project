@@ -42,6 +42,9 @@ const ApproveRecords: React.FC = () => {
   const [recordsPerPage] = useState(50);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
+
   // Dropdown data
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
   const [staffList, setStaffList] = useState<{ value: string; label: string }[]>([]);
@@ -201,6 +204,47 @@ const ApproveRecords: React.FC = () => {
     }
     
     setSelectedEntries(newSelected);
+  };
+
+  const handleDirectApprove = async (entryId: string) => {
+    try {
+      setLoading(true);
+      const success = await supabaseDB.toggleApproval(entryId);
+      if (success) {
+        toast.success('Record approved successfully!');
+        await loadEntries(); // Reload to get updated data
+      } else {
+        toast.error('Failed to approve record');
+      }
+    } catch (error) {
+      console.error('Error approving record:', error);
+      toast.error('Error approving record');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDirectReject = async (entryId: string) => {
+    try {
+      setLoading(true);
+      // For rejection, we'll set approved to false
+      const { error } = await supabase
+        .from('cash_book')
+        .update({ approved: false })
+        .eq('id', entryId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast.success('Record rejected successfully!');
+      await loadEntries(); // Reload to get updated data
+    } catch (error) {
+      console.error('Error rejecting record:', error);
+      toast.error('Error rejecting record');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const approveSelected = async () => {
@@ -432,8 +476,6 @@ const ApproveRecords: React.FC = () => {
     const endIndex = startIndex + recordsPerPage;
     return filteredEntries.slice(startIndex, endIndex);
   };
-
-  const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
 
   const getRowColor = (entry: any) => {
     if (entry.approved === 'true') return 'bg-green-50 border-green-200';
@@ -684,26 +726,44 @@ const ApproveRecords: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {getCurrentPageEntries().map((entry) => (
-                  <tr key={entry.id} className={getRowColor(entry)}>
+                  <tr 
+                    key={entry.id} 
+                    className={`${getRowColor(entry)} cursor-pointer hover:bg-gray-50 transition-colors`}
+                    onClick={(e) => {
+                      // Don't trigger row click if clicking on checkbox or buttons
+                      if ((e.target as HTMLElement).closest('input[type="checkbox"]') || 
+                          (e.target as HTMLElement).closest('button')) {
+                        return;
+                      }
+                      handleSelectEntry(entry.id);
+                    }}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <input
                         type="checkbox"
                         checked={selectedEntries.has(entry.id)}
-                        onChange={() => handleSelectEntry(entry.id)}
+                        onChange={(e) => {
+                          e.stopPropagation(); // Prevent row click
+                          handleSelectEntry(entry.id);
+                        }}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.c_date}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.company_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.staff}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.amount}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.type}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.approved === 'true' ? (
+                      {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : `₹${entry.debit.toLocaleString()}`}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {entry.credit > 0 ? 'Credit' : 'Debit'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {entry.approved === true ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           Approved
                         </span>
-                      ) : entry.approved === 'false' ? (
+                      ) : entry.approved === false ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                           Rejected
                         </span>
@@ -717,23 +777,32 @@ const ApproveRecords: React.FC = () => {
                       <Button
                         icon={CheckCircle}
                         variant="secondary"
-                        onClick={() => handleSelectEntry(entry.id)}
+                        onClick={() => {
+                          handleDirectApprove(entry.id);
+                        }}
                         className="mr-2"
+                        disabled={entry.approved === true}
                       >
                         Approve
                       </Button>
                       <Button
                         icon={X}
                         variant="secondary"
-                        onClick={() => handleSelectEntry(entry.id)}
+                        onClick={() => {
+                          handleDirectReject(entry.id);
+                        }}
                         className="mr-2"
+                        disabled={entry.approved === false}
                       >
                         Reject
                       </Button>
                       <Button
                         icon={Eye}
                         variant="secondary"
-                        onClick={() => handleSelectEntry(entry.id)}
+                        onClick={() => {
+                          // TODO: Implement view functionality
+                          toast.success('View functionality coming soon');
+                        }}
                         className="mr-2"
                       >
                         View

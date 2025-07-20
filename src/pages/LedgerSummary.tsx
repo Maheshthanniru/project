@@ -4,7 +4,7 @@ import {
   FileText, Building, User, DollarSign, Eye, 
   ChevronDown, ChevronUp, RefreshCw, X, Settings,
   ArrowUpDown, TrendingUp, TrendingDown, BarChart3,
-  Calculator, CheckCircle, AlertCircle
+  Calculator, CheckCircle
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -686,75 +686,35 @@ const LedgerSummary: React.FC = () => {
 
           {/* Filter Options */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="companyFilter"
-                name="filterType"
-                checked={!!filters.companyName}
-                onChange={() => {}}
-                className="w-4 h-4 text-blue-600"
-              />
-              <Select
-                label="Company Name"
-                value={filters.companyName}
-                onChange={(value) => handleFilterChange('companyName', value)}
-                options={companies}
-              />
-            </div>
+            <Select
+              label="Company Name"
+              value={filters.companyName}
+              onChange={(value) => handleFilterChange('companyName', value)}
+              options={companies}
+            />
             
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="mainAccountFilter"
-                name="filterType"
-                checked={!!filters.mainAccount}
-                onChange={() => {}}
-                className="w-4 h-4 text-blue-600"
-              />
-              <Select
-                label="Main Account"
-                value={filters.mainAccount}
-                onChange={(value) => handleFilterChange('mainAccount', value)}
-                options={accounts}
-                disabled={!filters.companyName}
-              />
-            </div>
+            <Select
+              label="Main Account"
+              value={filters.mainAccount}
+              onChange={(value) => handleFilterChange('mainAccount', value)}
+              options={accounts}
+              disabled={!filters.companyName}
+            />
             
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="subAccountFilter"
-                name="filterType"
-                checked={!!filters.subAccount}
-                onChange={() => {}}
-                className="w-4 h-4 text-blue-600"
-              />
-              <Select
-                label="Sub Account"
-                value={filters.subAccount}
-                onChange={(value) => handleFilterChange('subAccount', value)}
-                options={subAccounts}
-                disabled={!filters.mainAccount}
-              />
-            </div>
+            <Select
+              label="Sub Account"
+              value={filters.subAccount}
+              onChange={(value) => handleFilterChange('subAccount', value)}
+              options={subAccounts}
+              disabled={!filters.mainAccount}
+            />
             
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="staffFilter"
-                name="filterType"
-                checked={!!filters.staff}
-                onChange={() => {}}
-                className="w-4 h-4 text-blue-600"
-              />
-              <Select
-                label="Staff"
-                value={filters.staff}
-                onChange={(value) => handleFilterChange('staff', value)}
-                options={staffList}
-              />
-            </div>
+            <Select
+              label="Staff"
+              value={filters.staff}
+              onChange={(value) => handleFilterChange('staff', value)}
+              options={staffList}
+            />
           </div>
 
           {/* Action Buttons */}

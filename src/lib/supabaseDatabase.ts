@@ -33,6 +33,10 @@ export interface CashBookEntry {
   c_date: string;
   credit: number;
   debit: number;
+  credit_online: number;
+  credit_offline: number;
+  debit_online: number;
+  debit_offline: number;
   lock_record: boolean;
   company_name: string;
   address: string;
@@ -480,45 +484,69 @@ class SupabaseDatabase {
   }
 
   async deleteCashBookEntry(id: string, deletedBy: string): Promise<boolean> {
-    // Fetch the old entry for backup
-    const { data: oldEntry, error: fetchError } = await supabase
-      .from('cash_book')
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (fetchError) {
-      console.error('Error fetching old cash book entry for deletion:', fetchError);
-      return false;
-    }
-
-    // Insert into deleted_cash_book BEFORE deleting the record
-    if (oldEntry) {
-      const deletedRecord = {
-        ...oldEntry,
-        deleted_by: deletedBy || 'unknown',
-        deleted_at: new Date().toISOString(),
-      };
-      const { error: insertError } = await supabase
-        .from('deleted_cash_book')
-        .insert(deletedRecord);
-      if (insertError) {
-        console.error('Error inserting into deleted_cash_book:', insertError);
+    console.log('deleteCashBookEntry called with id:', id, 'deletedBy:', deletedBy);
+    
+    try {
+      // Fetch the old entry for backup
+      const { data: oldEntry, error: fetchError } = await supabase
+        .from('cash_book')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) {
+        console.error('Error fetching old cash book entry for deletion:', fetchError);
         return false;
       }
-    }
 
-    // Now delete the record
-    const { error } = await supabase
-      .from('cash_book')
-      .delete()
-      .eq('id', id);
+      console.log('Found entry to delete:', oldEntry);
 
-    if (error) {
-      console.error('Error deleting cash book entry:', error);
+      // Try to insert into deleted_cash_book BEFORE deleting the record
+      if (oldEntry) {
+        try {
+          const deletedRecord = {
+            ...oldEntry,
+            deleted_by: deletedBy || 'unknown',
+            deleted_at: new Date().toISOString(),
+          };
+          
+          console.log('Inserting into deleted_cash_book:', deletedRecord);
+          
+          const { error: insertError } = await supabase
+            .from('deleted_cash_book')
+            .insert(deletedRecord);
+            
+          if (insertError) {
+            console.error('Error inserting into deleted_cash_book:', insertError);
+            console.log('Continuing with delete without backup...');
+            // Continue with delete even if backup fails
+          } else {
+            console.log('Successfully inserted into deleted_cash_book');
+          }
+        } catch (backupError) {
+          console.error('Backup failed, continuing with delete:', backupError);
+          // Continue with delete even if backup fails
+        }
+      }
+
+      // Now delete the record
+      console.log('Deleting from cash_book with id:', id);
+      const { error } = await supabase
+        .from('cash_book')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting cash book entry:', error);
+        return false;
+      }
+
+      console.log('Successfully deleted from cash_book');
+      return true;
+    } catch (error) {
+      console.error('Unexpected error in deleteCashBookEntry:', error);
       return false;
     }
-
-    return true;
   }
 
   // User operations
@@ -828,7 +856,7 @@ class SupabaseDatabase {
   async getDashboardStats(date?: string) {
     const { data, error } = await supabase
       .from('cash_book')
-      .select('credit, debit, c_date');
+      .select('credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline');
 
     if (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -836,7 +864,13 @@ class SupabaseDatabase {
         totalCredit: 0,
         totalDebit: 0,
         balance: 0,
-        todayEntries: 0
+        todayEntries: 0,
+        onlineCredit: 0,
+        offlineCredit: 0,
+        onlineDebit: 0,
+        offlineDebit: 0,
+        totalOnline: 0,
+        totalOffline: 0
       };
     }
 
@@ -848,11 +882,26 @@ class SupabaseDatabase {
     const totalDebit = todayEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
     const balance = totalCredit - totalDebit;
 
+    // Calculate online vs offline amounts using new fields
+    const onlineCredit = todayEntries.reduce((sum, e) => sum + (e.credit_online || 0), 0);
+    const offlineCredit = todayEntries.reduce((sum, e) => sum + (e.credit_offline || 0), 0);
+    const onlineDebit = todayEntries.reduce((sum, e) => sum + (e.debit_online || 0), 0);
+    const offlineDebit = todayEntries.reduce((sum, e) => sum + (e.debit_offline || 0), 0);
+
+    const totalOnline = onlineCredit + onlineDebit;
+    const totalOffline = offlineCredit + offlineDebit;
+
     return {
       totalCredit,
       totalDebit,
       balance,
-      todayEntries: todayEntries.length
+      todayEntries: todayEntries.length,
+      onlineCredit,
+      offlineCredit,
+      onlineDebit,
+      offlineDebit,
+      totalOnline,
+      totalOffline
     };
   }
 
@@ -1003,11 +1052,94 @@ class SupabaseDatabase {
       .from('deleted_cash_book')
       .select('*')
       .order('deleted_at', { ascending: false });
+    
     if (error) {
-      console.error('Error fetching deleted cash book:', error);
+      console.error('Error fetching deleted cash book entries:', error);
       return [];
     }
+    
     return data || [];
+  }
+
+  // Get unique values for dropdowns in Edit Entry page
+  async getUniqueParticulars(): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('particulars')
+      .not('particulars', 'is', null)
+      .not('particulars', 'eq', '');
+    
+    if (error) {
+      console.error('Error fetching unique particulars:', error);
+      return [];
+    }
+    
+    const uniqueParticulars = [...new Set(data?.map(item => item.particulars).filter(Boolean))];
+    return uniqueParticulars.sort();
+  }
+
+  async getUniqueSaleQuantities(): Promise<number[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('sale_qty')
+      .not('sale_qty', 'is', null)
+      .gt('sale_qty', 0);
+    
+    if (error) {
+      console.error('Error fetching unique sale quantities:', error);
+      return [];
+    }
+    
+    const uniqueQuantities = [...new Set(data?.map(item => item.sale_qty).filter(Boolean))];
+    return uniqueQuantities.sort((a, b) => a - b);
+  }
+
+  async getUniquePurchaseQuantities(): Promise<number[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('purchase_qty')
+      .not('purchase_qty', 'is', null)
+      .gt('purchase_qty', 0);
+    
+    if (error) {
+      console.error('Error fetching unique purchase quantities:', error);
+      return [];
+    }
+    
+    const uniqueQuantities = [...new Set(data?.map(item => item.purchase_qty).filter(Boolean))];
+    return uniqueQuantities.sort((a, b) => a - b);
+  }
+
+  async getUniqueCreditAmounts(): Promise<number[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('credit')
+      .not('credit', 'is', null)
+      .gt('credit', 0);
+    
+    if (error) {
+      console.error('Error fetching unique credit amounts:', error);
+      return [];
+    }
+    
+    const uniqueAmounts = [...new Set(data?.map(item => item.credit).filter(Boolean))];
+    return uniqueAmounts.sort((a, b) => a - b);
+  }
+
+  async getUniqueDebitAmounts(): Promise<number[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('debit')
+      .not('debit', 'is', null)
+      .gt('debit', 0);
+    
+    if (error) {
+      console.error('Error fetching unique debit amounts:', error);
+      return [];
+    }
+    
+    const uniqueAmounts = [...new Set(data?.map(item => item.debit).filter(Boolean))];
+    return uniqueAmounts.sort((a, b) => a - b);
   }
 }
 
