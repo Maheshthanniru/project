@@ -50,6 +50,26 @@ const NewEntry: React.FC = () => {
     purchaseQChecked: false,
   });
 
+  const [dualEntryEnabled, setDualEntryEnabled] = useState(false);
+  const [dualEntry, setDualEntry] = useState<NewEntryForm>({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    companyName: '',
+    accountName: '',
+    subAccount: '',
+    particulars: '',
+    saleQ: '',
+    purchaseQ: '',
+    credit: '',
+    debit: '',
+    creditOnline: '',
+    creditOffline: '',
+    debitOnline: '',
+    debitOffline: '',
+    staff: user?.username || '',
+    saleQChecked: false,
+    purchaseQChecked: false,
+  });
+
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
   const [accounts, setAccounts] = useState<{ value: string; label: string }[]>([]);
   const [subAccounts, setSubAccounts] = useState<{ value: string; label: string }[]>([]);
@@ -250,79 +270,124 @@ const NewEntry: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate main entry
     if (!entry.companyName || !entry.accountName || !entry.particulars) {
       toast.error('Please fill in required fields');
       return;
     }
-
-    const creditOnlineAmount = parseFloat(entry.creditOnline) || 0;
-    const creditOfflineAmount = parseFloat(entry.creditOffline) || 0;
-    const debitOnlineAmount = parseFloat(entry.debitOnline) || 0;
-    const debitOfflineAmount = parseFloat(entry.debitOffline) || 0;
-
-    const totalCredit = creditOnlineAmount + creditOfflineAmount;
-    const totalDebit = debitOnlineAmount + debitOfflineAmount;
-
-    if (totalCredit === 0 && totalDebit === 0) {
-      toast.error('Please enter either credit or debit amount');
+    const mainCredit = parseFloat(entry.credit) || 0;
+    const mainDebit = parseFloat(entry.debit) || 0;
+    if (mainCredit === 0 && mainDebit === 0) {
+      toast.error('Please enter either credit or debit amount in main entry');
       return;
     }
-
+    // If dual entry enabled, validate dual entry
+    let dualCredit = 0, dualDebit = 0;
+    if (dualEntryEnabled) {
+      if (!dualEntry.companyName || !dualEntry.accountName || !dualEntry.particulars) {
+        toast.error('Please fill in all required fields in Dual Entry');
+        return;
+      }
+      dualCredit = parseFloat(dualEntry.credit) || 0;
+      dualDebit = parseFloat(dualEntry.debit) || 0;
+      if (dualCredit === 0 && dualDebit === 0) {
+        toast.error('Please enter either credit or debit amount in Dual Entry');
+        return;
+      }
+    }
     setLoading(true);
-    
     try {
-      // Save to Supabase database
+      // Save main entry
+      const mainCreditNum = parseFloat(entry.credit) || 0;
+      const mainDebitNum = parseFloat(entry.debit) || 0;
       const newEntry = await supabaseDB.addCashBookEntry({
         acc_name: entry.accountName,
         sub_acc_name: entry.subAccount,
         particulars: entry.particulars,
         c_date: entry.date,
-        credit: totalCredit,
-        debit: totalDebit,
-        credit_online: creditOnlineAmount,
-        credit_offline: creditOfflineAmount,
-        debit_online: debitOnlineAmount,
-        debit_offline: debitOfflineAmount,
+        credit: mainCreditNum,
+        debit: mainDebitNum,
+        credit_online: 0,
+        credit_offline: 0,
+        debit_online: 0,
+        debit_offline: 0,
         company_name: entry.companyName,
-        address: '', // Will be filled from company data
+        address: '',
         staff: entry.staff,
         users: user?.username || '',
         sale_qty: entry.saleQChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.purchaseQChecked ? parseFloat(entry.purchaseQ) || 0 : 0,
-        cb: 'CB', // Cash Book identifier
+        cb: 'CB',
       });
-
-      toast.success(`Entry saved successfully! Entry #${newEntry.sno}`);
-        
-        // Reset form but keep the date
-        const currentDate = entry.date;
-        setEntry({
-          date: currentDate,
-          companyName: '',
-          accountName: '',
-          subAccount: '',
-          particulars: '',
-          saleQ: '',
-          purchaseQ: '',
-          credit: '',
-          debit: '',
-          creditOnline: '',
-          creditOffline: '',
-          debitOnline: '',
-          debitOffline: '',
-          staff: user?.username || '',
-          saleQChecked: false,
-          purchaseQChecked: false,
+      // If dual entry, save dual entry as the opposite (e.g. if main is debit, dual is credit)
+      if (dualEntryEnabled) {
+        const dualCreditNum = parseFloat(dualEntry.credit) || 0;
+        const dualDebitNum = parseFloat(dualEntry.debit) || 0;
+        await supabaseDB.addCashBookEntry({
+          acc_name: dualEntry.accountName,
+          sub_acc_name: dualEntry.subAccount,
+          particulars: dualEntry.particulars,
+          c_date: dualEntry.date,
+          credit: dualCreditNum,
+          debit: dualDebitNum,
+          credit_online: 0,
+          credit_offline: 0,
+          debit_online: 0,
+          debit_offline: 0,
+          company_name: dualEntry.companyName,
+          address: '',
+          staff: dualEntry.staff,
+          users: user?.username || '',
+          sale_qty: dualEntry.saleQChecked ? parseFloat(dualEntry.saleQ) || 0 : 0,
+          purchase_qty: dualEntry.purchaseQChecked ? parseFloat(dualEntry.purchaseQ) || 0 : 0,
+          cb: 'CB',
         });
-        
-        // Reset dropdowns
-        setAccounts([]);
-        setSubAccounts([]);
-        
-        // Update daily entry number for next entry
-        updateDailyEntryNumber();
-        calculateTodayStats(); // Recalculate stats after saving
-        updateTotalEntryCount(); // Update total entry count
+      }
+      toast.success(`Entry${dualEntryEnabled ? ' (Dual)' : ''} saved successfully!`);
+      // Reset forms
+      const currentDate = entry.date;
+      setEntry({
+        date: currentDate,
+        companyName: '',
+        accountName: '',
+        subAccount: '',
+        particulars: '',
+        saleQ: '',
+        purchaseQ: '',
+        credit: '',
+        debit: '',
+        creditOnline: '',
+        creditOffline: '',
+        debitOnline: '',
+        debitOffline: '',
+        staff: user?.username || '',
+        saleQChecked: false,
+        purchaseQChecked: false,
+      });
+      setAccounts([]);
+      setSubAccounts([]);
+      setDualEntry({
+        date: currentDate,
+        companyName: '',
+        accountName: '',
+        subAccount: '',
+        particulars: '',
+        saleQ: '',
+        purchaseQ: '',
+        credit: '',
+        debit: '',
+        creditOnline: '',
+        creditOffline: '',
+        debitOnline: '',
+        debitOffline: '',
+        staff: user?.username || '',
+        saleQChecked: false,
+        purchaseQChecked: false,
+      });
+      setDualEntryEnabled(false);
+      updateDailyEntryNumber();
+      calculateTodayStats();
+      await updateTotalEntryCount();
     } catch (error) {
       console.error('Error saving entry:', error);
       toast.error(`Failed to save entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -338,7 +403,9 @@ const NewEntry: React.FC = () => {
     }
 
     try {
+      console.log('Creating company:', { name: newCompanyName.trim(), address: newCompanyAddress.trim() });
       const company = await supabaseDB.addCompany(newCompanyName.trim(), newCompanyAddress.trim());
+      console.log('Company created successfully:', company);
       setCompanies(prev => [...prev, { value: company.company_name, label: company.company_name }]);
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
@@ -346,7 +413,8 @@ const NewEntry: React.FC = () => {
       setShowNewCompany(false);
       toast.success('Company created successfully!');
     } catch (error) {
-      toast.error('Failed to create company');
+      console.error('Error creating company:', error);
+      toast.error(`Failed to create company: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -471,6 +539,17 @@ const NewEntry: React.FC = () => {
         {/* Main Form */}
         <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Dual Entry Toggle */}
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="dualEntryEnabled"
+                checked={dualEntryEnabled}
+                onChange={e => setDualEntryEnabled(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="dualEntryEnabled" className="text-sm font-medium">Enable Dual Entry</label>
+            </div>
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
@@ -613,42 +692,22 @@ const NewEntry: React.FC = () => {
 
             {/* Amounts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Input
-                  label="Credit Online"
-                  value={entry.creditOnline}
-                  onChange={val => setEntry(prev => ({ ...prev, creditOnline: val }))}
-                  placeholder="Enter online credit amount"
-                  type="number"
-                  min="0"
-                />
-                <Input
-                  label="Credit Offline"
-                  value={entry.creditOffline}
-                  onChange={val => setEntry(prev => ({ ...prev, creditOffline: val }))}
-                  placeholder="Enter offline credit amount"
-                  type="number"
-                  min="0"
-                />
-              </div>
-              <div>
-                <Input
-                  label="Debit Online"
-                  value={entry.debitOnline}
-                  onChange={val => setEntry(prev => ({ ...prev, debitOnline: val }))}
-                  placeholder="Enter online debit amount"
-                  type="number"
-                  min="0"
-                />
-                <Input
-                  label="Debit Offline"
-                  value={entry.debitOffline}
-                  onChange={val => setEntry(prev => ({ ...prev, debitOffline: val }))}
-                  placeholder="Enter offline debit amount"
-                  type="number"
-                  min="0"
-                />
-              </div>
+              <Input
+                label="Credit"
+                value={entry.credit}
+                onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
+                placeholder="Enter credit amount"
+                type="number"
+                min="0"
+              />
+              <Input
+                label="Debit"
+                value={entry.debit}
+                onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
+                placeholder="Enter debit amount"
+                type="number"
+                min="0"
+              />
             </div>
 
             {/* Quantity Checkboxes and Inputs */}
@@ -690,6 +749,126 @@ const NewEntry: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Dual Entry Section */}
+            {dualEntryEnabled && (
+              <div className="border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50">
+                <h3 className="text-lg font-bold mb-4 text-blue-700">Dual Entry</h3>
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input
+                    label="Date"
+                    type="date"
+                    value={dualEntry.date}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, date: value }))}
+                    required
+                  />
+                  <Select
+                    label="Company Name"
+                    value={dualEntry.companyName}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, companyName: value }))}
+                    options={companies}
+                    placeholder="Select company..."
+                    required
+                  />
+                  <Select
+                    label="Staff"
+                    value={dualEntry.staff}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, staff: value }))}
+                    options={users}
+                    placeholder="Select staff..."
+                    required
+                  />
+                </div>
+                {/* Account Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <Select
+                    label="Main Account"
+                    value={dualEntry.accountName}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, accountName: value }))}
+                    options={accounts}
+                    placeholder="Select account..."
+                    required
+                    disabled={!dualEntry.companyName}
+                  />
+                  <Select
+                    label="Sub Account"
+                    value={dualEntry.subAccount}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, subAccount: value }))}
+                    options={subAccounts}
+                    placeholder="Select sub account..."
+                    disabled={!dualEntry.accountName}
+                  />
+                </div>
+                {/* Particulars */}
+                <Input
+                  label="Particulars"
+                  value={dualEntry.particulars}
+                  onChange={(value) => setDualEntry(prev => ({ ...prev, particulars: value }))}
+                  placeholder="Enter transaction details..."
+                  required
+                  className="mt-2"
+                />
+                {/* Amounts */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <Input
+                    label="Credit"
+                    value={dualEntry.credit}
+                    onChange={val => setDualEntry(prev => ({ ...prev, credit: val }))}
+                    placeholder="Enter credit amount"
+                    type="number"
+                    min="0"
+                  />
+                  <Input
+                    label="Debit"
+                    value={dualEntry.debit}
+                    onChange={val => setDualEntry(prev => ({ ...prev, debit: val }))}
+                    placeholder="Enter debit amount"
+                    type="number"
+                    min="0"
+                  />
+                </div>
+                {/* Quantity Checkboxes and Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dualEntry.saleQChecked}
+                      onChange={e => setDualEntry(prev => ({ ...prev, saleQChecked: e.target.checked, saleQ: e.target.checked ? prev.saleQ : '' }))}
+                      id="dualSaleQChecked"
+                    />
+                    <label htmlFor="dualSaleQChecked" className="text-sm">Sale Quantity</label>
+                    <Input
+                      value={dualEntry.saleQ}
+                      onChange={val => setDualEntry(prev => ({ ...prev, saleQ: val }))}
+                      placeholder="0"
+                      type="number"
+                      min="0"
+                      disabled={!dualEntry.saleQChecked}
+                      className="w-24 ml-2"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dualEntry.purchaseQChecked}
+                      onChange={e => setDualEntry(prev => ({ ...prev, purchaseQChecked: e.target.checked, purchaseQ: e.target.checked ? prev.purchaseQ : '' }))}
+                      id="dualPurchaseQChecked"
+                    />
+                    <label htmlFor="dualPurchaseQChecked" className="text-sm">Purchase Quantity</label>
+                    <Input
+                      value={dualEntry.purchaseQ}
+                      onChange={val => setDualEntry(prev => ({ ...prev, purchaseQ: val }))}
+                      placeholder="0"
+                      type="number"
+                      min="0"
+                      disabled={!dualEntry.purchaseQChecked}
+                      className="w-24 ml-2"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex gap-4">

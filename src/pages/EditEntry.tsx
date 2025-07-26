@@ -656,6 +656,89 @@ const EditEntry: React.FC = () => {
     { value: 'locked', label: 'Locked' },
   ];
 
+  // Print voucher for an entry
+  function printVoucher(entry: any) {
+    const printWindow = window.open('', '', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Voucher - Thirumala Group</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .voucher-header { text-align: center; margin-bottom: 32px; }
+            .voucher-title { font-size: 2rem; font-weight: bold; color: #2d3748; }
+            .voucher-section { margin-bottom: 16px; }
+            .voucher-label { font-weight: bold; color: #374151; min-width: 120px; display: inline-block; }
+            .voucher-value { color: #1a202c; }
+            .voucher-table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+            .voucher-table th, .voucher-table td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+            .voucher-table th { background: #f1f5f9; }
+          </style>
+        </head>
+        <body>
+          <div class="voucher-header">
+            <div class="voucher-title">Thirumala Group</div>
+            <div style="font-size:1.2rem; color:#4b5563; margin-top:8px;">Voucher</div>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Voucher No:</span>
+            <span class="voucher-value">${entry.sno}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Date:</span>
+            <span class="voucher-value">${entry.c_date ? new Date(entry.c_date).toLocaleDateString() : ''}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Company:</span>
+            <span class="voucher-value">${entry.company_name}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Main Account:</span>
+            <span class="voucher-value">${entry.acc_name}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Sub Account:</span>
+            <span class="voucher-value">${entry.sub_acc_name || '-'}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Particulars:</span>
+            <span class="voucher-value">${entry.particulars}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Credit:</span>
+            <span class="voucher-value">₹${entry.credit?.toLocaleString?.() ?? entry.credit}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Debit:</span>
+            <span class="voucher-value">₹${entry.debit?.toLocaleString?.() ?? entry.debit}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Sale Quantity:</span>
+            <span class="voucher-value">${entry.sale_qty ?? '-'}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Purchase Quantity:</span>
+            <span class="voucher-value">${entry.purchase_qty ?? '-'}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Staff:</span>
+            <span class="voucher-value">${entry.staff}</span>
+          </div>
+          <div class="voucher-section">
+            <span class="voucher-label">Status:</span>
+            <span class="voucher-value">${entry.approved ? 'Approved' : 'Pending'}</span>
+          </div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex items-center justify-between">
@@ -899,114 +982,42 @@ const EditEntry: React.FC = () => {
             entries.map((entry) => (
               <div
                 key={entry.id}
-                className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
-                onMouseEnter={() => setExpandedEntryId(entry.id)}
-                onMouseLeave={() => { if (!pinnedEntryId || pinnedEntryId !== entry.id) setExpandedEntryId(null); }}
-                onClick={() => setPinnedEntryId(pinnedEntryId === entry.id ? null : entry.id)}
+                className={`group border rounded-xl shadow-md px-4 py-2 transition-shadow hover:shadow-lg bg-white relative flex flex-row items-center gap-3 ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Main Row (always visible) */}
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="flex items-center gap-1 text-xl font-bold text-blue-700 shrink-0 mb-2">
-                      <span className="bg-blue-100 px-2 py-1 rounded-lg">#{entry.sno}</span>
-                      <span className="flex items-center gap-1 text-sm text-gray-600">
-                        <Calendar className="w-4 h-4" />{format(new Date(entry.c_date), 'MMM dd, yyyy')}
-                      </span>
-                    </span>
-                    {/* Company, Main Account, Sub Account - always vertical, spacious, and prominent */}
-                    <div className="flex flex-col w-full">
-                      <span className="flex items-center text-base font-bold text-blue-900 bg-blue-50 rounded px-3 py-1 break-words w-full mb-1" title={entry.company_name}>
-                        <Building className="w-4 h-4 mr-1" />{entry.company_name}
-                      </span>
-                      <span className="flex items-center text-base font-semibold text-indigo-900 bg-indigo-50 rounded px-3 py-1 break-words w-full mb-1" title={entry.acc_name}>
-                        <FileText className="w-4 h-4 mr-1" />{entry.acc_name}
-                      </span>
-                      <span className="flex items-center text-base font-semibold text-purple-900 bg-purple-50 rounded px-3 py-1 break-words w-full" title={entry.sub_acc_name}>
-                        <User className="w-4 h-4 mr-1" />{entry.sub_acc_name}
-                      </span>
-                    </div>
-                  </div>
-                  {/* The rest of the fields, spaced out */}
-                  <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-start md:items-center flex-shrink-0">
-                    <span className="flex items-center gap-1 text-green-700 font-semibold">
-                      <Calculator className="w-4 h-4" />₹{entry.credit.toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1 text-red-700 font-semibold">
-                      <Calculator className="w-4 h-4" />₹{entry.debit.toLocaleString()}
-                    </span>
-                    <div className="flex flex-col gap-1 min-w-[80px]">
-                      {entry.lock_record && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"><Lock className="w-3 h-3 mr-1" />Locked</span>
-                      )}
-                      {entry.edited && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Edited ({entry.editCount}x)</span>
-                      )}
-                      {entry.approved ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Pending</span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Actions Section */}
-                  <div className="flex flex-wrap gap-2 shrink-0 md:ml-4 border-t md:border-t-0 md:border-l border-gray-200 pt-2 md:pt-0 md:pl-4">
-                    <Button size="sm" variant="secondary" icon={History} onClick={() => { loadEntryHistory(entry.id); setShowHistory(true); }}><span className="sr-only">History</span></Button>
-                    {isAdmin && (
-                      <Button size="sm" variant="secondary" icon={entry.lock_record ? Unlock : Lock} onClick={() => { toggleLock(entry); }}>{entry.lock_record ? 'Unlock' : 'Lock'}</Button>
-                    )}
-                    {isAdmin && !entry.approved && (
-                      <Button size="sm" variant="success" icon={Check} onClick={() => { toggleApproval(entry); }}>Approve</Button>
-                    )}
-                    {/* <Button size="sm" variant="secondary" icon={Eye} onClick={() => { setSelectedEntry(entry); }}><span className="sr-only">View</span></Button> */}
-                    <Button size="sm" icon={Edit} onClick={() => { handleEdit(entry); }} disabled={entry.lock_record && !isAdmin}><span className="sr-only">Edit</span></Button>
-                    {isAdmin && (
-                      <Button size="sm" variant="danger" icon={Trash2} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
-                    )}
-                  </div>
-                </div>
-                {/* Expanded Details (on hover or click) */}
-                <div
-                  className={`transition-all duration-200 overflow-hidden ${expandedEntryId === entry.id || pinnedEntryId === entry.id ? 'max-h-96 opacity-100 py-3' : 'max-h-0 opacity-0 py-0'} w-full`}
-                  style={{ pointerEvents: expandedEntryId === entry.id || pinnedEntryId === entry.id ? 'auto' : 'none' }}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4 mt-2 border border-gray-100">
-                    <div>
-                      <div className="mb-1 text-xs text-gray-500">Particulars</div>
-                      <div className="text-gray-800 font-medium">{entry.particulars}</div>
-                    </div>
-                    <div>
-                      <div className="mb-1 text-xs text-gray-500">Staff</div>
-                      <div className="text-gray-800 font-medium">{entry.staff}</div>
-                    </div>
-                    <div>
-                      <div className="mb-1 text-xs text-gray-500">Sale Qty</div>
-                      <div className="text-gray-800 font-medium">{entry.sale_qty}</div>
-                    </div>
-                    <div>
-                      <div className="mb-1 text-xs text-gray-500">Purchase Qty</div>
-                      <div className="text-gray-800 font-medium">{entry.purchase_qty}</div>
-                    </div>
-                    <div>
-                      <div className="mb-1 text-xs text-gray-500">Entry Time</div>
-                      <div className="text-gray-800 font-medium">{entry.entry_time ? format(new Date(entry.entry_time), 'MMM dd, yyyy HH:mm:ss') : '-'}</div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {parseFloat(entry.credit) > 0 && (
-                        <div>
-                          <div className="mb-1 text-xs text-gray-500">Credit Mode</div>
-                          <div className="text-gray-800 font-medium">{entry.credit_mode || '-'}</div>
-                        </div>
-                      )}
-                      {parseFloat(entry.debit) > 0 && (
-                        <div>
-                          <div className="mb-1 text-xs text-gray-500">Debit Mode</div>
-                          <div className="text-gray-800 font-medium">{entry.debit_mode || '-'}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <span className="font-bold text-blue-700 min-w-[40px]">#{entry.sno}</span>
+                <span className="text-sm text-gray-600 min-w-[140px]"><Calendar className="w-4 h-4 inline mr-1" /> {format(new Date(entry.c_date), 'MMM dd, yyyy')}</span>
+                <span className="font-bold text-blue-900 bg-blue-50 rounded px-2 py-1" title={entry.company_name}><Building className="w-4 h-4 mr-1 inline" />{entry.company_name}</span>
+                <span className="font-semibold text-indigo-900 bg-indigo-50 rounded px-2 py-1" title={entry.acc_name}><FileText className="w-4 h-4 mr-1 inline" />{entry.acc_name}</span>
+                <span className="font-semibold text-purple-900 bg-purple-50 rounded px-2 py-1" title={entry.sub_acc_name}><User className="w-4 h-4 mr-1 inline" />{entry.sub_acc_name}</span>
+                <span className="text-gray-800 font-medium max-w-[180px] truncate" title={entry.particulars}>{entry.particulars}</span>
+                <span className="text-green-700 font-semibold"><Calculator className="w-4 h-4 inline" /> ₹{entry.credit.toLocaleString()}</span>
+                <span className="text-red-700 font-semibold"><Calculator className="w-4 h-4 inline" /> ₹{entry.debit.toLocaleString()}</span>
+                <span className="text-sm text-gray-700">{entry.staff}</span>
+                {entry.lock_record && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"><Lock className="w-3 h-3 mr-1" />Locked</span>
+                )}
+                {entry.edited && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Edited ({entry.editCount}x)</span>
+                )}
+                {entry.approved ? (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Pending</span>
+                )}
+                {isAdmin && (
+                  <Button size="sm" variant="secondary" icon={entry.lock_record ? Unlock : Lock} onClick={() => { toggleLock(entry); }}>{entry.lock_record ? 'Unlock' : 'Lock'}</Button>
+                )}
+                {isAdmin && !entry.approved && (
+                  <Button size="sm" variant="success" icon={Check} onClick={() => { toggleApproval(entry); }}>Approve</Button>
+                )}
+                <Button size="sm" variant="secondary" onClick={() => printVoucher(entry)}>
+                  Voucher
+                </Button>
+                <Button size="sm" icon={Edit} onClick={() => { handleEdit(entry); }} disabled={entry.lock_record && !isAdmin}><span className="sr-only">Edit</span></Button>
+                {isAdmin && (
+                  <Button size="sm" variant="danger" icon={Trash2} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
+                )}
               </div>
             ))
           )}
@@ -1146,9 +1157,6 @@ const EditEntry: React.FC = () => {
                     options={subAccounts}
                     disabled={!editMode || selectedEntry.lock_record}
                   />
-                </div>
-                {/* Financials and Particulars */}
-                <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Particulars
