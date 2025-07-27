@@ -15,6 +15,15 @@ const CsvUpload: React.FC = () => {
   const [uploadPreview, setUploadPreview] = useState<any[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [importProgress, setImportProgress] = useState({
+    current: 0,
+    total: 0,
+    percentage: 0,
+    successCount: 0,
+    errorCount: 0,
+    currentBatch: 0,
+    totalBatches: 0
+  });
   const [importResults, setImportResults] = useState<{
     successCount: number;
     errorCount: number;
@@ -36,19 +45,11 @@ const CsvUpload: React.FC = () => {
       const result = await importFromFile(file);
       
       if (result.success && result.data) {
-        // Validate the imported data - all important fields are required
-        const requiredFields = ['Date', 'Company', 'Main Account', 'Sub Account', 'Particulars', 'Credit', 'Debit', 'Staff', 'Sale Qty', 'Purchase Qty', 'Address'];
-        const validation = validateImportedData(result.data, requiredFields);
+        // Log the actual columns in the CSV for debugging
+        console.log('CSV Columns:', Object.keys(result.data[0] || {}));
+        console.log('Total rows:', result.data.length);
         
-        if (!validation.isValid) {
-          toast.error(`Validation failed: ${validation.errors.join(', ')}`);
-          return;
-        }
-
-        if (validation.warnings.length > 0) {
-          toast.error(`Warnings: ${validation.warnings.join(', ')}`);
-        }
-
+        // Skip validation completely - accept any CSV format
         setUploadPreview(result.data.slice(0, 10)); // Show first 10 rows as preview
         toast.success(`Successfully loaded ${result.data.length} entries from CSV`);
       } else {
@@ -63,7 +64,7 @@ const CsvUpload: React.FC = () => {
     }
   };
 
-  const handleImportCSV = async () => {
+    const handleImportCSV = async () => {
     if (!uploadedFile || uploadPreview.length === 0) {
       toast.error('Please upload a valid CSV file first');
       return;
@@ -71,6 +72,7 @@ const CsvUpload: React.FC = () => {
 
     setUploadLoading(true);
     setUploadProgress(0);
+    setImportResults(null);
 
     try {
       const result = await importFromFile(uploadedFile);
@@ -80,56 +82,200 @@ const CsvUpload: React.FC = () => {
         let errorCount = 0;
         const errors: string[] = [];
 
-        // Process in batches of 1000 for better performance
-        const batchSize = 1000;
+        // Reduce batch size to prevent database overload
+        const batchSize = 100; // Reduced to prevent rate limiting
         const totalBatches = Math.ceil(result.data.length / batchSize);
+        
+        // Initialize progress
+        setImportProgress({
+          current: 0,
+          total: result.data.length,
+          percentage: 0,
+          successCount: 0,
+          errorCount: 0,
+          currentBatch: 0,
+          totalBatches
+        });
         
         for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
           const startIndex = batchIndex * batchSize;
           const endIndex = Math.min(startIndex + batchSize, result.data.length);
           const batch = result.data.slice(startIndex, endIndex);
           
-          // Process batch
+          // Process batch sequentially to prevent database overload
+          const batchResults = [];
           for (let i = 0; i < batch.length; i++) {
             const row = batch[i];
             const globalIndex = startIndex + i;
             
             try {
-                          // Map CSV columns to database fields with flexible column names
-            const entry = {
-              acc_name: row['Main Account'] || row['Account'] || row['Account Name'] || row['AccountName'] || '',
-              sub_acc_name: row['Sub Account'] || row['SubAccount'] || row['Sub Account Name'] || '',
-              particulars: row['Particulars'] || row['Description'] || row['Details'] || row['Transaction Details'] || '',
-              c_date: row['Date'] || row['Transaction Date'] || row['Entry Date'] || format(new Date(), 'yyyy-MM-dd'),
-              credit: parseFloat(row['Credit'] || row['Credit Amount'] || '0') || 0,
-              debit: parseFloat(row['Debit'] || row['Debit Amount'] || '0') || 0,
-              credit_online: parseFloat(row['Credit Online'] || row['Online Credit'] || '0') || 0,
-              credit_offline: parseFloat(row['Credit Offline'] || row['Offline Credit'] || '0') || 0,
-              debit_online: parseFloat(row['Debit Online'] || row['Online Debit'] || '0') || 0,
-              debit_offline: parseFloat(row['Debit Offline'] || row['Offline Debit'] || '0') || 0,
-              company_name: row['Company'] || row['Company Name'] || row['CompanyName'] || row['Firm'] || row['Organization'] || '',
-              address: row['Address'] || row['Company Address'] || '',
-              staff: row['Staff'] || row['Staff Name'] || row['Employee'] || row['User'] || user?.username || '',
-              users: user?.username || '',
-              sale_qty: parseFloat(row['Sale Qty'] || row['Sale Quantity'] || row['Sales Qty'] || row['Quantity Sold'] || '0') || 0,
-              purchase_qty: parseFloat(row['Purchase Qty'] || row['Purchase Quantity'] || row['Quantity Purchased'] || '0') || 0,
-              cb: 'CB',
-            };
+              // Ultra-flexible data mapping with extensive fallbacks
+              const sanitizeString = (value: any) => {
+                if (value === null || value === undefined || value === '') return '';
+                return String(value).trim();
+              };
 
-              await supabaseDB.addCashBookEntry(entry);
-              successCount++;
+              const sanitizeNumber = (value: any) => {
+                if (value === null || value === undefined || value === '') return 0;
+                const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+                return isNaN(num) ? 0 : num;
+              };
+
+              const sanitizeDate = (value: any) => {
+                if (!value || value === '') return format(new Date(), 'yyyy-MM-dd');
+                try {
+                  const date = new Date(value);
+                  if (isNaN(date.getTime())) return format(new Date(), 'yyyy-MM-dd');
+                  return format(date, 'yyyy-MM-dd');
+                } catch {
+                  return format(new Date(), 'yyyy-MM-dd');
+                }
+              };
+
+              // Try multiple column name variations for each field
+              const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => {
+                for (const name of possibleNames) {
+                  if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+                    return row[name];
+                  }
+                }
+                return defaultValue;
+              };
+
+              // Map CSV columns to database fields with ultra-flexible column names
+              const entry = {
+                acc_name: sanitizeString(getFieldValue(row, [
+                  'Main Account', 'Account', 'Account Name', 'AccountName', 'MainAccount',
+                  'Account Type', 'AccountType', 'Account Category', 'AccountCategory'
+                ], 'Default Account')),
+                sub_acc_name: sanitizeString(getFieldValue(row, [
+                  'Sub Account', 'SubAccount', 'Sub Account Name', 'SubAccountName',
+                  'Sub Account Type', 'SubAccountType', 'Branch', 'Location'
+                ], '')),
+                particulars: sanitizeString(getFieldValue(row, [
+                  'Particulars', 'Description', 'Details', 'Transaction Details', 'TransactionDetails',
+                  'Narration', 'Notes', 'Remarks', 'Comment', 'Memo'
+                ], `Transaction ${globalIndex + 1}`)),
+                c_date: sanitizeDate(getFieldValue(row, [
+                  'Date', 'Transaction Date', 'Entry Date', 'TransactionDate', 'EntryDate',
+                  'Posting Date', 'PostingDate', 'Value Date', 'ValueDate'
+                ], format(new Date(), 'yyyy-MM-dd'))),
+                credit: sanitizeNumber(getFieldValue(row, [
+                  'Credit', 'Credit Amount', 'CreditAmount', 'Credit Amt', 'CreditAmt',
+                  'Credit Value', 'CreditValue', 'Credit Total', 'CreditTotal'
+                ], 0)),
+                debit: sanitizeNumber(getFieldValue(row, [
+                  'Debit', 'Debit Amount', 'DebitAmount', 'Debit Amt', 'DebitAmt',
+                  'Debit Value', 'DebitValue', 'Debit Total', 'DebitTotal'
+                ], 0)),
+                credit_online: sanitizeNumber(getFieldValue(row, [
+                  'Credit Online', 'Online Credit', 'OnlineCredit', 'Credit Online Amount',
+                  'Online Credit Amount', 'Credit Digital', 'Digital Credit'
+                ], 0)),
+                credit_offline: sanitizeNumber(getFieldValue(row, [
+                  'Credit Offline', 'Offline Credit', 'OfflineCredit', 'Credit Offline Amount',
+                  'Offline Credit Amount', 'Credit Cash', 'Cash Credit'
+                ], 0)),
+                debit_online: sanitizeNumber(getFieldValue(row, [
+                  'Debit Online', 'Online Debit', 'OnlineDebit', 'Debit Online Amount',
+                  'Online Debit Amount', 'Debit Digital', 'Digital Debit'
+                ], 0)),
+                debit_offline: sanitizeNumber(getFieldValue(row, [
+                  'Debit Offline', 'Offline Debit', 'OfflineDebit', 'Debit Offline Amount',
+                  'Offline Debit Amount', 'Debit Cash', 'Cash Debit'
+                ], 0)),
+                company_name: sanitizeString(getFieldValue(row, [
+                  'Company', 'Company Name', 'CompanyName', 'Firm', 'Organization',
+                  'Business', 'Entity', 'Client', 'Customer', 'Party'
+                ], 'Default Company')),
+                address: sanitizeString(getFieldValue(row, [
+                  'Address', 'Company Address', 'CompanyAddress', 'Location',
+                  'Street', 'City', 'State', 'Country', 'Place'
+                ], '')),
+                staff: sanitizeString(getFieldValue(row, [
+                  'Staff', 'Staff Name', 'StaffName', 'Employee', 'User',
+                  'Created By', 'CreatedBy', 'Entered By', 'EnteredBy', 'Operator'
+                ], user?.username || 'admin')),
+                users: user?.username || 'admin',
+                sale_qty: sanitizeNumber(getFieldValue(row, [
+                  'Sale Qty', 'Sale Quantity', 'Sales Qty', 'Quantity Sold',
+                  'SaleQty', 'SaleQuantity', 'SalesQty', 'QuantitySold',
+                  'Sales Quantity', 'SalesQuantity', 'Qty Sold', 'QtySold'
+                ], 0)),
+                purchase_qty: sanitizeNumber(getFieldValue(row, [
+                  'Purchase Qty', 'Purchase Quantity', 'Quantity Purchased',
+                  'PurchaseQty', 'PurchaseQuantity', 'QuantityPurchased',
+                  'Buy Qty', 'BuyQty', 'Buy Quantity', 'BuyQuantity'
+                ], 0)),
+                cb: 'CB',
+              };
+
+              // Add retry logic for database operations
+              let retryCount = 0;
+              const maxRetries = 3;
+              let success = false;
+
+              while (retryCount < maxRetries && !success) {
+                try {
+                  await supabaseDB.addCashBookEntry(entry);
+                  success = true;
+                } catch (dbError) {
+                  retryCount++;
+                  if (retryCount < maxRetries) {
+                    // Wait before retry (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                  } else {
+                    throw dbError;
+                  }
+                }
+              }
+
+              batchResults.push({ success: true, index: globalIndex });
             } catch (error) {
-              console.error(`Error importing row ${globalIndex + 1}:`, error);
-              errorCount++;
-              errors.push(`Row ${globalIndex + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              console.error(`Database error importing row ${globalIndex + 1}:`, error);
+              batchResults.push({ 
+                success: false, 
+                index: globalIndex, 
+                error: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+              });
             }
+
+            // Small delay between each record to prevent rate limiting
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
+
+          // Batch processing completed
           
-          // Update progress after each batch
-          setUploadProgress(Math.round(((batchIndex + 1) / totalBatches) * 100));
+          // Count results
+          const batchSuccessCount = batchResults.filter(r => r.success).length;
+          const batchErrorCount = batchResults.filter(r => !r.success).length;
           
-          // Small delay to prevent browser freezing
-          await new Promise(resolve => setTimeout(resolve, 10));
+          successCount += batchSuccessCount;
+          errorCount += batchErrorCount;
+          
+          // Add errors to list (limit to first 20 for better debugging)
+          batchResults.filter(r => !r.success).forEach(r => {
+            if (errors.length < 20) {
+              errors.push(`Row ${r.index + 1}: ${r.error}`);
+            }
+          });
+          
+          // Update progress
+          const currentProgress = startIndex + batch.length;
+          const percentage = Math.round((currentProgress / result.data.length) * 100);
+          
+          setImportProgress({
+            current: currentProgress,
+            total: result.data.length,
+            percentage,
+            successCount,
+            errorCount,
+            currentBatch: batchIndex + 1,
+            totalBatches
+          });
+          
+          // Reduced delay for faster processing
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
 
         setImportResults({
@@ -260,7 +406,7 @@ const CsvUpload: React.FC = () => {
                 <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h4 className="text-xl font-medium text-gray-900 mb-2">Upload CSV File</h4>
                 <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-                  Upload a CSV file with <strong>required columns:</strong> Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty, Address. <strong>Optional:</strong> Credit Online/Offline, Debit Online/Offline
+                  Upload any CSV file. The system will import ALL your data with automatic column mapping and default values for any missing fields. <strong>Recommended columns:</strong> Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty, Address.
                 </p>
                 
                 <div className="flex gap-4 justify-center mb-4">
@@ -294,16 +440,44 @@ const CsvUpload: React.FC = () => {
 
               {/* Progress Bar */}
               {uploadLoading && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Processing...</span>
-                    <span>{uploadProgress}%</span>
+                <div className="space-y-4">
+                  {/* Overall Progress */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Importing Data...</span>
+                      <span>{importProgress.percentage}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${importProgress.percentage}%` }}
+                      ></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
+                  
+                  {/* Detailed Progress Info */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <div className="text-blue-800 font-medium">Progress</div>
+                      <div className="text-blue-600">{importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}</div>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <div className="text-green-800 font-medium">Success</div>
+                      <div className="text-green-600">{importProgress.successCount.toLocaleString()}</div>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <div className="text-red-800 font-medium">Errors</div>
+                      <div className="text-red-600">{importProgress.errorCount.toLocaleString()}</div>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <div className="text-purple-800 font-medium">Batch</div>
+                      <div className="text-purple-600">{importProgress.currentBatch} / {importProgress.totalBatches}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Speed Indicator */}
+                  <div className="text-xs text-gray-500 text-center">
+                    Processing {importProgress.current > 0 ? Math.round(importProgress.current / (importProgress.currentBatch || 1)) : 0} records per batch
                   </div>
                 </div>
               )}
@@ -405,7 +579,7 @@ const CsvUpload: React.FC = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h5 className="font-medium text-gray-900 mb-2">Required Columns:</h5>
+                  <h5 className="font-medium text-gray-900 mb-2">Recommended Columns:</h5>
                   <ul className="text-sm text-gray-600 space-y-1">
                     <li>• <strong>Date:</strong> Transaction date (YYYY-MM-DD format)</li>
                     <li>• <strong>Company:</strong> Company name</li>
@@ -425,6 +599,13 @@ const CsvUpload: React.FC = () => {
                   <ul className="text-sm text-gray-600 space-y-1">
                     <li>• <strong>Credit Online/Offline:</strong> Online/Offline credit amounts</li>
                     <li>• <strong>Debit Online/Offline:</strong> Online/Offline debit amounts</li>
+                  </ul>
+                  <h5 className="font-medium text-gray-900 mb-2 mt-4">Default Values:</h5>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• <strong>Missing Particulars:</strong> "Transaction [row number]"</li>
+                    <li>• <strong>Missing Company:</strong> "Default Company"</li>
+                    <li>• <strong>Missing Account:</strong> "Default Account"</li>
+                    <li>• <strong>Missing Staff:</strong> "admin"</li>
                   </ul>
                 </div>
               </div>
