@@ -471,8 +471,8 @@ const NewEntry: React.FC = () => {
       const result = await importFromFile(file);
       
       if (result.success && result.data) {
-        // Validate the imported data
-        const requiredFields = ['Date', 'Company', 'Main Account', 'Particulars', 'Credit', 'Debit'];
+        // Validate the imported data - all important fields are required
+        const requiredFields = ['Date', 'Company', 'Main Account', 'Sub Account', 'Particulars', 'Credit', 'Debit', 'Staff', 'Sale Qty', 'Purchase Qty', 'Address'];
         const validation = validateImportedData(result.data, requiredFields);
         
         if (!validation.isValid) {
@@ -529,26 +529,26 @@ const NewEntry: React.FC = () => {
             const globalIndex = startIndex + i;
             
             try {
-              // Map CSV columns to database fields
-              const entry = {
-                acc_name: row['Main Account'] || row['Account'] || '',
-                sub_acc_name: row['Sub Account'] || '',
-                particulars: row['Particulars'] || row['Description'] || '',
-                c_date: row['Date'] || format(new Date(), 'yyyy-MM-dd'),
-                credit: parseFloat(row['Credit'] || '0') || 0,
-                debit: parseFloat(row['Debit'] || '0') || 0,
-                credit_online: 0,
-                credit_offline: 0,
-                debit_online: 0,
-                debit_offline: 0,
-                company_name: row['Company'] || row['Company Name'] || '',
-                address: '',
-                staff: row['Staff'] || user?.username || '',
-                users: user?.username || '',
-                sale_qty: parseFloat(row['Sale Qty'] || row['Sale Quantity'] || '0') || 0,
-                purchase_qty: parseFloat(row['Purchase Qty'] || row['Purchase Quantity'] || '0') || 0,
-                cb: 'CB',
-              };
+                          // Map CSV columns to database fields with flexible column names
+            const entry = {
+              acc_name: row['Main Account'] || row['Account'] || row['Account Name'] || row['AccountName'] || '',
+              sub_acc_name: row['Sub Account'] || row['SubAccount'] || row['Sub Account Name'] || '',
+              particulars: row['Particulars'] || row['Description'] || row['Details'] || row['Transaction Details'] || '',
+              c_date: row['Date'] || row['Transaction Date'] || row['Entry Date'] || format(new Date(), 'yyyy-MM-dd'),
+              credit: parseFloat(row['Credit'] || row['Credit Amount'] || '0') || 0,
+              debit: parseFloat(row['Debit'] || row['Debit Amount'] || '0') || 0,
+              credit_online: parseFloat(row['Credit Online'] || row['Online Credit'] || '0') || 0,
+              credit_offline: parseFloat(row['Credit Offline'] || row['Offline Credit'] || '0') || 0,
+              debit_online: parseFloat(row['Debit Online'] || row['Online Debit'] || '0') || 0,
+              debit_offline: parseFloat(row['Debit Offline'] || row['Offline Debit'] || '0') || 0,
+              company_name: row['Company'] || row['Company Name'] || row['CompanyName'] || row['Firm'] || row['Organization'] || '',
+              address: row['Address'] || row['Company Address'] || '',
+              staff: row['Staff'] || row['Staff Name'] || row['Employee'] || row['User'] || user?.username || '',
+              users: user?.username || '',
+              sale_qty: parseFloat(row['Sale Qty'] || row['Sale Quantity'] || row['Sales Qty'] || row['Quantity Sold'] || '0') || 0,
+              purchase_qty: parseFloat(row['Purchase Qty'] || row['Purchase Quantity'] || row['Quantity Purchased'] || '0') || 0,
+              cb: 'CB',
+            };
 
               await supabaseDB.addCashBookEntry(entry);
               successCount++;
@@ -1155,7 +1155,7 @@ const NewEntry: React.FC = () => {
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h4 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h4>
                 <p className="text-gray-600 mb-4">
-                  Upload a CSV file with the following columns: Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty
+                  Upload a CSV file with <strong>required columns:</strong> Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty, Address. <strong>Optional:</strong> Credit Online/Offline, Debit Online/Offline
                 </p>
                 <div className="flex gap-2 justify-center">
                   <Button
