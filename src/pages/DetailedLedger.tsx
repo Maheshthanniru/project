@@ -87,17 +87,7 @@ const DetailedLedger: React.FC = () => {
     loadLedgerData();
   }, []);
 
-  useEffect(() => {
-    if (filters.companyName) {
-      loadAccountsByCompany();
-    }
-  }, [filters.companyName]);
 
-  useEffect(() => {
-    if (filters.companyName && filters.mainAccount) {
-      loadSubAccountsByAccount();
-    }
-  }, [filters.companyName, filters.mainAccount]);
 
   useEffect(() => {
     applyFilters();
@@ -113,6 +103,22 @@ const DetailedLedger: React.FC = () => {
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
 
+      // Load all accounts independently
+      const allAccounts = await supabaseDB.getAccounts();
+      const accountsData = allAccounts.map((account: any) => ({
+        value: account.acc_name,
+        label: account.acc_name
+      }));
+      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
+
+      // Load all sub accounts independently
+      const allSubAccounts = await supabaseDB.getSubAccounts();
+      const subAccountsData = allSubAccounts.map((subAcc: any) => ({
+        value: subAcc.sub_acc,
+        label: subAcc.sub_acc
+      }));
+      setSubAccounts([{ value: '', label: 'All Sub Accounts' }, ...subAccountsData]);
+
       // Load staff
       const users = await supabaseDB.getUsers();
       const usersData = users.filter(u => u.is_active).map(user => ({
@@ -126,43 +132,7 @@ const DetailedLedger: React.FC = () => {
     }
   };
 
-  const loadAccountsByCompany = async () => {
-    if (!filters.companyName) {
-      setAccounts([{ value: '', label: 'All Accounts' }]);
-      return;
-    }
-    
-    try {
-      const accounts = await supabaseDB.getAccountsByCompany(filters.companyName);
-      const accountsData = accounts.map(account => ({
-        value: account.acc_name,
-        label: account.acc_name
-      }));
-      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-      toast.error('Failed to load accounts');
-    }
-  };
 
-  const loadSubAccountsByAccount = async () => {
-    if (!filters.companyName || !filters.mainAccount) {
-      setSubAccounts([{ value: '', label: 'All Sub Accounts' }]);
-      return;
-    }
-    
-    try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(filters.companyName, filters.mainAccount);
-      const subAccountsData = subAccounts.map(subAcc => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc
-      }));
-      setSubAccounts([{ value: '', label: 'All Sub Accounts' }, ...subAccountsData]);
-    } catch (error) {
-      console.error('Error loading sub accounts:', error);
-      toast.error('Failed to load sub accounts');
-    }
-  };
 
   const loadLedgerData = async () => {
     setLoading(true);

@@ -24,8 +24,7 @@ interface NewEntryForm {
   debitOnline: string;
   debitOffline: string;
   staff: string;
-  saleQChecked: boolean;
-  purchaseQChecked: boolean;
+  quantityChecked: boolean;
 }
 
 const NewEntry: React.FC = () => {
@@ -46,8 +45,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
-    saleQChecked: false,
-    purchaseQChecked: false,
+    quantityChecked: false,
   });
 
   const [dualEntryEnabled, setDualEntryEnabled] = useState(false);
@@ -66,8 +64,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
-    saleQChecked: false,
-    purchaseQChecked: false,
+    quantityChecked: false,
   });
 
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
@@ -78,16 +75,6 @@ const NewEntry: React.FC = () => {
   const [currentDailyEntryNo, setCurrentDailyEntryNo] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
-  const [todayStats, setTodayStats] = useState({
-    totalCredit: 0,
-    totalDebit: 0,
-    onlineCredit: 0,
-    offlineCredit: 0,
-    onlineDebit: 0,
-    offlineDebit: 0,
-    totalOnline: 0,
-    totalOffline: 0,
-  });
 
   // Modal states for creating new items
   const [showNewCompany, setShowNewCompany] = useState(false);
@@ -138,52 +125,6 @@ const NewEntry: React.FC = () => {
     };
     fetchRecentEntries();
   }, []);
-
-  const calculateTodayStats = async () => {
-    try {
-      const entries = await supabaseDB.getCashBookEntries();
-      const todayEntries = entries.filter(dbEntry => dbEntry.c_date === entry.date);
-      
-      let totalCredit = 0;
-      let totalDebit = 0;
-      let onlineCredit = 0;
-      let offlineCredit = 0;
-      let onlineDebit = 0;
-      let offlineDebit = 0;
-
-      todayEntries.forEach(entry => {
-        // Credit amounts
-        totalCredit += entry.credit || 0;
-        onlineCredit += entry.credit_online || 0;
-        offlineCredit += entry.credit_offline || 0;
-        
-        // Debit amounts
-        totalDebit += entry.debit || 0;
-        onlineDebit += entry.debit_online || 0;
-        offlineDebit += entry.debit_offline || 0;
-      });
-
-      const totalOnline = onlineCredit + onlineDebit;
-      const totalOffline = offlineCredit + offlineDebit;
-
-      setTodayStats({
-        totalCredit,
-        totalDebit,
-        onlineCredit,
-        offlineCredit,
-        onlineDebit,
-        offlineDebit,
-        totalOnline,
-        totalOffline,
-      });
-    } catch (error) {
-      console.error('Error calculating today stats:', error);
-    }
-  };
-
-  useEffect(() => {
-    calculateTodayStats();
-  }, [entry.date]);
 
   const updateDailyEntryNumber = async () => {
     try {
@@ -315,8 +256,8 @@ const NewEntry: React.FC = () => {
         address: '',
         staff: entry.staff,
         users: user?.username || '',
-        sale_qty: entry.saleQChecked ? parseFloat(entry.saleQ) || 0 : 0,
-        purchase_qty: entry.purchaseQChecked ? parseFloat(entry.purchaseQ) || 0 : 0,
+        sale_qty: entry.quantityChecked ? parseFloat(entry.saleQ) || 0 : 0,
+        purchase_qty: entry.quantityChecked ? parseFloat(entry.purchaseQ) || 0 : 0,
         cb: 'CB',
       });
       // If dual entry, save dual entry as the opposite (e.g. if main is debit, dual is credit)
@@ -338,8 +279,8 @@ const NewEntry: React.FC = () => {
           address: '',
           staff: dualEntry.staff,
           users: user?.username || '',
-          sale_qty: dualEntry.saleQChecked ? parseFloat(dualEntry.saleQ) || 0 : 0,
-          purchase_qty: dualEntry.purchaseQChecked ? parseFloat(dualEntry.purchaseQ) || 0 : 0,
+          sale_qty: dualEntry.quantityChecked ? parseFloat(dualEntry.saleQ) || 0 : 0,
+          purchase_qty: dualEntry.quantityChecked ? parseFloat(dualEntry.purchaseQ) || 0 : 0,
           cb: 'CB',
         });
       }
@@ -361,8 +302,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: user?.username || '',
-        saleQChecked: false,
-        purchaseQChecked: false,
+        quantityChecked: false,
       });
       setAccounts([]);
       setSubAccounts([]);
@@ -381,12 +321,10 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: user?.username || '',
-        saleQChecked: false,
-        purchaseQChecked: false,
+        quantityChecked: false,
       });
       setDualEntryEnabled(false);
       updateDailyEntryNumber();
-      calculateTodayStats();
       await updateTotalEntryCount();
     } catch (error) {
       console.error('Error saving entry:', error);
@@ -511,531 +449,438 @@ const NewEntry: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="w-full max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">New Entry</h1>
-            <p className="text-gray-600">Create new cash book entries with automatic daily entry numbering</p>
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="w-full max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">New Entry</h1>
+              <p className="text-gray-600">Create new cash book entries with automatic daily entry numbering</p>
+            </div>
+            <div className="text-right">
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <div className="text-sm text-gray-600">Total Entries</div>
+                    <div className="text-2xl font-bold text-purple-600">{totalEntryCount.toLocaleString()}</div>
+                  </div>
+                  <div className="w-px h-8 bg-gray-300"></div>
+                  <div>
+                    <div className="text-sm text-gray-600">Daily Entry #</div>
+                    <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-4">
-                <div>
-                  <div className="text-sm text-gray-600">Total Entries</div>
-                  <div className="text-2xl font-bold text-purple-600">{totalEntryCount.toLocaleString()}</div>
-                </div>
-                <div className="w-px h-8 bg-gray-300"></div>
-                <div>
-                  <div className="text-sm text-gray-600">Daily Entry #</div>
-                  <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Main Form */}
-        <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Dual Entry Toggle */}
-            <div className="flex items-center mb-4">
-              <input
-                type="checkbox"
-                id="dualEntryEnabled"
-                checked={dualEntryEnabled}
-                onChange={e => setDualEntryEnabled(e.target.checked)}
-                className="mr-2"
-              />
-              <label htmlFor="dualEntryEnabled" className="text-sm font-medium">Enable Dual Entry</label>
-            </div>
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
-                label="Date"
-                type="date"
-                value={entry.date}
-                onChange={(value) => handleInputChange('date', value)}
-                required
-              />
-              
-              <div className="space-y-2">
-                <Select
-                  label="Company Name"
-                  value={entry.companyName}
-                  onChange={(value) => handleInputChange('companyName', value)}
-                  options={companies}
-                  placeholder="Select company..."
-                  required
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowNewCompany(true)}
-                    className="flex-1"
-                  >
-                    <Building className="w-4 h-4 mr-1" />
-                    Add Company
-                  </Button>
-                  {entry.companyName && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleDelete('company')}
-                      className="flex-1"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <Select
-                label="Staff"
-                value={entry.staff}
-                onChange={(value) => handleInputChange('staff', value)}
-                options={users}
-                placeholder="Select staff..."
-                required
-              />
-            </div>
-
-            {/* Account Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Select
-                  label="Main Account"
-                  value={entry.accountName}
-                  onChange={(value) => handleInputChange('accountName', value)}
-                  options={accounts}
-                  placeholder="Select account..."
-                  required
-                  disabled={!entry.companyName}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowNewAccount(true)}
-                    className="flex-1"
-                    disabled={!entry.companyName}
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    Add Account
-                  </Button>
-                  {entry.accountName && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleDelete('account')}
-                      className="flex-1"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Select
-                  label="Sub Account"
-                  value={entry.subAccount}
-                  onChange={(value) => handleInputChange('subAccount', value)}
-                  options={subAccounts}
-                  placeholder="Select sub account..."
-                  disabled={!entry.accountName}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowNewSubAccount(true)}
-                    className="flex-1"
-                    disabled={!entry.accountName}
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    Add Sub Account
-                  </Button>
-                  {entry.subAccount && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleDelete('subAccount')}
-                      className="flex-1"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Particulars */}
-            <Input
-              label="Particulars"
-              value={entry.particulars}
-              onChange={(value) => handleInputChange('particulars', value)}
-              placeholder="Enter transaction details..."
-              required
-            />
-
-            {/* Amounts */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Credit"
-                value={entry.credit}
-                onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
-                placeholder="Enter credit amount"
-                type="number"
-                min="0"
-              />
-              <Input
-                label="Debit"
-                value={entry.debit}
-                onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
-                placeholder="Enter debit amount"
-                type="number"
-                min="0"
-              />
-            </div>
-
-            {/* Quantity Checkboxes and Inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
+          {/* Main Form */}
+          <Card className="p-8 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Dual Entry Toggle */}
+              <div className="flex items-center mb-4">
                 <input
                   type="checkbox"
-                  checked={entry.saleQChecked}
-                  onChange={e => setEntry(prev => ({ ...prev, saleQChecked: e.target.checked, saleQ: e.target.checked ? prev.saleQ : '' }))}
-                  id="saleQChecked"
+                  id="dualEntryEnabled"
+                  checked={dualEntryEnabled}
+                  onChange={e => setDualEntryEnabled(e.target.checked)}
+                  className="mr-2"
                 />
-                <label htmlFor="saleQChecked" className="text-sm">Sale Quantity</label>
-                <Input
-                  value={entry.saleQ}
-                  onChange={val => setEntry(prev => ({ ...prev, saleQ: val }))}
-                  placeholder="0"
-                  type="number"
-                  min="0"
-                  disabled={!entry.saleQChecked}
-                  className="w-24 ml-2"
-                />
+                <label htmlFor="dualEntryEnabled" className="text-sm font-medium">Enable Dual Entry</label>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={entry.purchaseQChecked}
-                  onChange={e => setEntry(prev => ({ ...prev, purchaseQChecked: e.target.checked, purchaseQ: e.target.checked ? prev.purchaseQ : '' }))}
-                  id="purchaseQChecked"
-                />
-                <label htmlFor="purchaseQChecked" className="text-sm">Purchase Quantity</label>
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <Input
-                  value={entry.purchaseQ}
-                  onChange={val => setEntry(prev => ({ ...prev, purchaseQ: val }))}
-                  placeholder="0"
-                  type="number"
-                  min="0"
-                  disabled={!entry.purchaseQChecked}
-                  className="w-24 ml-2"
+                  label="Date"
+                  type="date"
+                  value={entry.date}
+                  onChange={(value) => handleInputChange('date', value)}
+                  required
                 />
-              </div>
-            </div>
-
-            {/* Dual Entry Section */}
-            {dualEntryEnabled && (
-              <div className="border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50">
-                <h3 className="text-lg font-bold mb-4 text-blue-700">Dual Entry</h3>
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Input
-                    label="Date"
-                    type="date"
-                    value={dualEntry.date}
-                    onChange={(value) => setDualEntry(prev => ({ ...prev, date: value }))}
-                    required
-                  />
+                
+                <div className="space-y-2">
                   <Select
                     label="Company Name"
-                    value={dualEntry.companyName}
-                    onChange={(value) => setDualEntry(prev => ({ ...prev, companyName: value }))}
+                    value={entry.companyName}
+                    onChange={(value) => handleInputChange('companyName', value)}
                     options={companies}
                     placeholder="Select company..."
                     required
                   />
-                  <Select
-                    label="Staff"
-                    value={dualEntry.staff}
-                    onChange={(value) => setDualEntry(prev => ({ ...prev, staff: value }))}
-                    options={users}
-                    placeholder="Select staff..."
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowNewCompany(true)}
+                      className="flex-1"
+                    >
+                      <Building className="w-4 h-4 mr-1" />
+                      Add Company
+                    </Button>
+                    {entry.companyName && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleDelete('company')}
+                        className="flex-1"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                {/* Account Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+
+                <Select
+                  label="Staff"
+                  value={entry.staff}
+                  onChange={(value) => handleInputChange('staff', value)}
+                  options={users}
+                  placeholder="Select staff..."
+                  required
+                />
+              </div>
+
+              {/* Account Information */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Select
                     label="Main Account"
-                    value={dualEntry.accountName}
-                    onChange={(value) => setDualEntry(prev => ({ ...prev, accountName: value }))}
+                    value={entry.accountName}
+                    onChange={(value) => handleInputChange('accountName', value)}
                     options={accounts}
                     placeholder="Select account..."
                     required
-                    disabled={!dualEntry.companyName}
+                    disabled={!entry.companyName}
                   />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowNewAccount(true)}
+                      className="flex-1"
+                      disabled={!entry.companyName}
+                    >
+                      <FileText className="w-4 h-4 mr-1" />
+                      Add Account
+                    </Button>
+                    {entry.accountName && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleDelete('account')}
+                        className="flex-1"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Select
                     label="Sub Account"
-                    value={dualEntry.subAccount}
-                    onChange={(value) => setDualEntry(prev => ({ ...prev, subAccount: value }))}
+                    value={entry.subAccount}
+                    onChange={(value) => handleInputChange('subAccount', value)}
                     options={subAccounts}
                     placeholder="Select sub account..."
-                    disabled={!dualEntry.accountName}
+                    disabled={!entry.accountName}
                   />
-                </div>
-                {/* Particulars */}
-                <Input
-                  label="Particulars"
-                  value={dualEntry.particulars}
-                  onChange={(value) => setDualEntry(prev => ({ ...prev, particulars: value }))}
-                  placeholder="Enter transaction details..."
-                  required
-                  className="mt-2"
-                />
-                {/* Amounts */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <Input
-                    label="Credit"
-                    value={dualEntry.credit}
-                    onChange={val => setDualEntry(prev => ({ ...prev, credit: val }))}
-                    placeholder="Enter credit amount"
-                    type="number"
-                    min="0"
-                  />
-                  <Input
-                    label="Debit"
-                    value={dualEntry.debit}
-                    onChange={val => setDualEntry(prev => ({ ...prev, debit: val }))}
-                    placeholder="Enter debit amount"
-                    type="number"
-                    min="0"
-                  />
-                </div>
-                {/* Quantity Checkboxes and Inputs */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={dualEntry.saleQChecked}
-                      onChange={e => setDualEntry(prev => ({ ...prev, saleQChecked: e.target.checked, saleQ: e.target.checked ? prev.saleQ : '' }))}
-                      id="dualSaleQChecked"
-                    />
-                    <label htmlFor="dualSaleQChecked" className="text-sm">Sale Quantity</label>
-                    <Input
-                      value={dualEntry.saleQ}
-                      onChange={val => setDualEntry(prev => ({ ...prev, saleQ: val }))}
-                      placeholder="0"
-                      type="number"
-                      min="0"
-                      disabled={!dualEntry.saleQChecked}
-                      className="w-24 ml-2"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={dualEntry.purchaseQChecked}
-                      onChange={e => setDualEntry(prev => ({ ...prev, purchaseQChecked: e.target.checked, purchaseQ: e.target.checked ? prev.purchaseQ : '' }))}
-                      id="dualPurchaseQChecked"
-                    />
-                    <label htmlFor="dualPurchaseQChecked" className="text-sm">Purchase Quantity</label>
-                    <Input
-                      value={dualEntry.purchaseQ}
-                      onChange={val => setDualEntry(prev => ({ ...prev, purchaseQ: val }))}
-                      placeholder="0"
-                      type="number"
-                      min="0"
-                      disabled={!dualEntry.purchaseQChecked}
-                      className="w-24 ml-2"
-                    />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowNewSubAccount(true)}
+                      className="flex-1"
+                      disabled={!entry.accountName}
+                    >
+                      <FileText className="w-4 h-4 mr-1" />
+                      Add Sub Account
+                    </Button>
+                    {entry.subAccount && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleDelete('subAccount')}
+                        className="flex-1"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-4">
-              <Button type="submit" disabled={loading} className="flex-1 md:flex-none">
-                {loading ? 'Saving...' : 'Save Entry'}
-              </Button>
-              <Button 
-                type="button" 
-                variant="secondary" 
-                onClick={() => {
-                  setEntry({
-                    date: entry.date,
-                    companyName: '',
-                    accountName: '',
-                    subAccount: '',
-                    particulars: '',
-                    saleQ: '',
-                    purchaseQ: '',
-                    credit: '',
-                    debit: '',
-                    creditOnline: '',
-                    creditOffline: '',
-                    debitOnline: '',
-                    debitOffline: '',
-                    staff: user?.username || '',
-                    saleQChecked: false,
-                    purchaseQChecked: false,
-                  });
-                  setAccounts([]);
-                  setSubAccounts([]);
-                }}
-                className="flex-1 md:flex-none"
-              >
-                Reset Form
-              </Button>
+              {/* Particulars */}
+              <Input
+                label="Particulars"
+                value={entry.particulars}
+                onChange={(value) => handleInputChange('particulars', value)}
+                placeholder="Enter transaction details..."
+                required
+              />
+
+              {/* Amounts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Input
+                  label="Credit"
+                  value={entry.credit}
+                  onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
+                  placeholder="Enter credit amount"
+                  type="number"
+                  min="0"
+                />
+                <Input
+                  label="Debit"
+                  value={entry.debit}
+                  onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
+                  placeholder="Enter debit amount"
+                  type="number"
+                  min="0"
+                />
+              </div>
+
+              {/* Combined Quantity Checkbox and Inputs */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={entry.quantityChecked}
+                    onChange={e => setEntry(prev => ({ 
+                      ...prev, 
+                      quantityChecked: e.target.checked,
+                      saleQ: e.target.checked ? prev.saleQ : '',
+                      purchaseQ: e.target.checked ? prev.purchaseQ : ''
+                    }))}
+                    id="quantityChecked"
+                  />
+                  <label htmlFor="quantityChecked" className="text-sm font-medium">Quantity Details</label>
+                </div>
+                
+                                 {entry.quantityChecked && (
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Input
+                      label="Sale Quantity"
+                      value={entry.saleQ}
+                      onChange={val => setEntry(prev => ({ ...prev, saleQ: val }))}
+                      placeholder="0"
+                      type="number"
+                      min="0"
+                    />
+                    <Input
+                      label="Purchase Quantity"
+                      value={entry.purchaseQ}
+                      onChange={val => setEntry(prev => ({ ...prev, purchaseQ: val }))}
+                      placeholder="0"
+                      type="number"
+                      min="0"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Dual Entry Section */}
+              {dualEntryEnabled && (
+                <div className="border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50">
+                  <h3 className="text-lg font-bold mb-4 text-blue-700">Dual Entry</h3>
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <Input
+                      label="Date"
+                      type="date"
+                      value={dualEntry.date}
+                      onChange={(value) => setDualEntry(prev => ({ ...prev, date: value }))}
+                      required
+                    />
+                    <Select
+                      label="Company Name"
+                      value={dualEntry.companyName}
+                      onChange={(value) => setDualEntry(prev => ({ ...prev, companyName: value }))}
+                      options={companies}
+                      placeholder="Select company..."
+                      required
+                    />
+                    <Select
+                      label="Staff"
+                      value={dualEntry.staff}
+                      onChange={(value) => setDualEntry(prev => ({ ...prev, staff: value }))}
+                      options={users}
+                      placeholder="Select staff..."
+                      required
+                    />
+                  </div>
+                  {/* Account Information */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+                    <Select
+                      label="Main Account"
+                      value={dualEntry.accountName}
+                      onChange={(value) => setDualEntry(prev => ({ ...prev, accountName: value }))}
+                      options={accounts}
+                      placeholder="Select account..."
+                      required
+                      disabled={!dualEntry.companyName}
+                    />
+                    <Select
+                      label="Sub Account"
+                      value={dualEntry.subAccount}
+                      onChange={(value) => setDualEntry(prev => ({ ...prev, subAccount: value }))}
+                      options={subAccounts}
+                      placeholder="Select sub account..."
+                      disabled={!dualEntry.accountName}
+                    />
+                  </div>
+                  {/* Particulars */}
+                  <Input
+                    label="Particulars"
+                    value={dualEntry.particulars}
+                    onChange={(value) => setDualEntry(prev => ({ ...prev, particulars: value }))}
+                    placeholder="Enter transaction details..."
+                    required
+                    className="mt-2"
+                  />
+                  {/* Amounts */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+                    <Input
+                      label="Credit"
+                      value={dualEntry.credit}
+                      onChange={val => setDualEntry(prev => ({ ...prev, credit: val }))}
+                      placeholder="Enter credit amount"
+                      type="number"
+                      min="0"
+                    />
+                    <Input
+                      label="Debit"
+                      value={dualEntry.debit}
+                      onChange={val => setDualEntry(prev => ({ ...prev, debit: val }))}
+                      placeholder="Enter debit amount"
+                      type="number"
+                      min="0"
+                    />
+                  </div>
+                  {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
+                  <div className="space-y-4 mt-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={dualEntry.quantityChecked}
+                        onChange={e => setDualEntry(prev => ({ 
+                          ...prev, 
+                          quantityChecked: e.target.checked,
+                          saleQ: e.target.checked ? prev.saleQ : '',
+                          purchaseQ: e.target.checked ? prev.purchaseQ : ''
+                        }))}
+                        id="dualQuantityChecked"
+                      />
+                      <label htmlFor="dualQuantityChecked" className="text-sm font-medium">Quantity Details</label>
+                    </div>
+                    
+                                         {dualEntry.quantityChecked && (
+                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <Input
+                          label="Sale Quantity"
+                          value={dualEntry.saleQ}
+                          onChange={val => setDualEntry(prev => ({ ...prev, saleQ: val }))}
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                        />
+                        <Input
+                          label="Purchase Quantity"
+                          value={dualEntry.purchaseQ}
+                          onChange={val => setDualEntry(prev => ({ ...prev, purchaseQ: val }))}
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-4">
+                <Button type="submit" disabled={loading} className="flex-1 lg:flex-none text-lg py-3">
+                  {loading ? 'Saving...' : 'Save Entry'}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => {
+                    setEntry({
+                      date: entry.date,
+                      companyName: '',
+                      accountName: '',
+                      subAccount: '',
+                      particulars: '',
+                      saleQ: '',
+                      purchaseQ: '',
+                      credit: '',
+                      debit: '',
+                      creditOnline: '',
+                      creditOffline: '',
+                      debitOnline: '',
+                      debitOffline: '',
+                      staff: user?.username || '',
+                      quantityChecked: false,
+                    });
+                    setAccounts([]);
+                    setSubAccounts([]);
+                  }}
+                  className="flex-1 lg:flex-none text-lg py-3"
+                >
+                  Reset Form
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+
+        {/* Recent Entries Card */}
+        <Card title="Recent Entries" className="mt-8 w-full max-w-6xl mx-auto">
+          {recentEntries.length === 0 ? (
+            <div className="text-center text-gray-500 py-4">No recent entries found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-200">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2 text-left">S.No</th>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Company</th>
+                    <th className="px-3 py-2 text-left">Account</th>
+                    <th className="px-3 py-2 text-left">Particulars</th>
+                    <th className="px-3 py-2 text-left">Credit</th>
+                    <th className="px-3 py-2 text-left">Debit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentEntries.map((entry, idx) => (
+                    <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2 text-center">{entry.sno}</td>
+                      <td className="px-3 py-2">{entry.c_date}</td>
+                      <td className="px-3 py-2">{entry.company_name}</td>
+                      <td className="px-3 py-2">{entry.acc_name}</td>
+                      <td className="px-3 py-2">{entry.particulars}</td>
+                      <td className="px-3 py-2 text-green-700 font-medium">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                      <td className="px-3 py-2 text-red-700 font-medium">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </form>
+          )}
         </Card>
       </div>
-
-      {/* Today's Online vs Offline Transaction Summary */}
-      <Card title={`Today's Transaction Summary (${entry.date})`} className="mt-6 w-full max-w-4xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-100 text-sm font-medium">Total Credit</p>
-                <p className="text-2xl font-bold">₹{todayStats.totalCredit.toLocaleString()}</p>
-              </div>
-              <TrendingUp className="w-8 h-8 text-green-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-red-100 text-sm font-medium">Total Debit</p>
-                <p className="text-2xl font-bold">₹{todayStats.totalDebit.toLocaleString()}</p>
-              </div>
-              <TrendingDown className="w-8 h-8 text-red-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-cyan-100 text-sm font-medium">Online Transactions</p>
-                <p className="text-2xl font-bold">₹{todayStats.totalOnline.toLocaleString()}</p>
-                <p className="text-cyan-200 text-xs mt-1">
-                  Credit: ₹{todayStats.onlineCredit.toLocaleString()} | Debit: ₹{todayStats.onlineDebit.toLocaleString()}
-                </p>
-              </div>
-              <Wifi className="w-8 h-8 text-cyan-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-100 text-sm font-medium">Offline Transactions</p>
-                <p className="text-2xl font-bold">₹{todayStats.totalOffline.toLocaleString()}</p>
-                <p className="text-gray-200 text-xs mt-1">
-                  Credit: ₹{todayStats.offlineCredit.toLocaleString()} | Debit: ₹{todayStats.offlineDebit.toLocaleString()}
-                </p>
-              </div>
-              <WifiOff className="w-8 h-8 text-gray-200" />
-            </div>
-          </div>
-        </div>
-
-        {/* Detailed Breakdown */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4">
-            <h4 className="font-semibold text-indigo-800 mb-3">Online Transaction Breakdown</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-indigo-700">Online Credit:</span>
-                <span className="font-semibold text-indigo-900">₹{todayStats.onlineCredit.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-indigo-700">Online Debit:</span>
-                <span className="font-semibold text-indigo-900">₹{todayStats.onlineDebit.toLocaleString()}</span>
-              </div>
-              <div className="border-t border-indigo-200 pt-2 mt-2">
-                <div className="flex justify-between">
-                  <span className="text-indigo-800 font-medium">Total Online:</span>
-                  <span className="font-bold text-indigo-900">₹{todayStats.totalOnline.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="font-semibold text-gray-800 mb-3">Offline Transaction Breakdown</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-700">Offline Credit:</span>
-                <span className="font-semibold text-gray-900">₹{todayStats.offlineCredit.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-700">Offline Debit:</span>
-                <span className="font-semibold text-gray-900">₹{todayStats.offlineDebit.toLocaleString()}</span>
-              </div>
-              <div className="border-t border-gray-200 pt-2 mt-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-800 font-medium">Total Offline:</span>
-                  <span className="font-bold text-gray-900">₹{todayStats.totalOffline.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Recent Entries Card */}
-      <Card title="Recent Entries" className="mt-8 w-full max-w-4xl mx-auto">
-        {recentEntries.length === 0 ? (
-          <div className="text-center text-gray-500 py-4">No recent entries found.</div>
-        ) : (
-          <table className="w-full text-xs border border-gray-200">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-2 py-1">S.No</th>
-                <th className="px-2 py-1">Date</th>
-                <th className="px-2 py-1">Company</th>
-                <th className="px-2 py-1">Account</th>
-                <th className="px-2 py-1">Particulars</th>
-                <th className="px-2 py-1">Credit</th>
-                <th className="px-2 py-1">Debit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentEntries.map((entry, idx) => (
-                <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-2 py-1 text-center">{entry.sno}</td>
-                  <td className="px-2 py-1">{entry.c_date}</td>
-                  <td className="px-2 py-1">{entry.company_name}</td>
-                  <td className="px-2 py-1">{entry.acc_name}</td>
-                  <td className="px-2 py-1">{entry.particulars}</td>
-                  <td className="px-2 py-1 text-green-700">{entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
-                  <td className="px-2 py-1 text-red-700">{entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
 
       {/* Create Company Modal */}
       {showNewCompany && (

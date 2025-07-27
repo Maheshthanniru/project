@@ -287,8 +287,13 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
     setSelectedEntry({ ...entry });
     setEditMode(true);
-    await loadAccountsByCompany(entry.company_name);
-    await loadSubAccountsByAccount(entry.company_name, entry.acc_name);
+    // Load accounts and sub accounts for the selected entry
+    if (entry.company_name) {
+      await loadAccountsByCompany(entry.company_name);
+    }
+    if (entry.company_name && entry.acc_name) {
+      await loadSubAccountsByAccount(entry.company_name, entry.acc_name);
+    }
   };
 
   const handleSave = async () => {
@@ -419,12 +424,12 @@ const EditEntry: React.FC = () => {
     }
   };
 
-  const exportData = async (exportFormat: 'json' | 'excel' | 'pdf' = 'json') => {
+  const exportData = async (exportFormat: 'json' | 'excel' | 'pdf' | 'csv' = 'json') => {
     try {
       const data = await supabaseDB.exportData();
       
-      if (exportFormat === 'excel') {
-        // Export to Excel - use the current filtered entries instead of all data
+      if (exportFormat === 'excel' || exportFormat === 'csv') {
+        // Export to Excel/CSV - use the current filtered entries instead of all data
         const currentEntries = entries.length > 0 ? entries : await supabaseDB.getCashBookEntries();
         
         // Debug: Log first entry to see date format
@@ -548,7 +553,7 @@ const EditEntry: React.FC = () => {
         a.download = `thirumala-entries-${format(new Date(), 'yyyy-MM-dd-HH-mm')}.csv`;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success('Excel export completed!');
+        toast.success(`${exportFormat.toUpperCase()} export completed!`);
       } else if (exportFormat === 'pdf') {
         // Export to PDF - use the current filtered entries
         const currentEntries = entries.length > 0 ? entries : await supabaseDB.getCashBookEntries();
@@ -748,28 +753,19 @@ const EditEntry: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={History}
+            icon={Download}
             variant="secondary"
-            onClick={() => setShowAllActivity(!showAllActivity)}
+            onClick={() => {
+              const format = window.prompt('Enter export format (csv or pdf):', 'csv');
+              if (format === 'csv' || format === 'pdf') {
+                exportData(format);
+              } else if (format !== null) {
+                toast.error('Invalid format. Please enter "csv" or "pdf"');
+              }
+            }}
           >
-            Activity Log
+            Export
           </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              icon={Download}
-              variant="secondary"
-              onClick={() => exportData('excel')}
-            >
-              Export Excel
-            </Button>
-            <Button
-              icon={Download}
-              variant="secondary"
-              onClick={() => exportData('pdf')}
-            >
-              Export PDF
-            </Button>
-          </div>
           <Button
             icon={RefreshCw}
             variant="secondary"
@@ -924,54 +920,7 @@ const EditEntry: React.FC = () => {
         </div>
       </Card>
 
-      {/* Activity Log Modal */}
-      {showAllActivity && (
-        <Card title="Complete Activity History" subtitle="All system activities and changes">
-          <div className="max-h-96 overflow-y-auto space-y-3">
-            {allHistory.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No activity history found.</div>
-            ) : (
-              allHistory.map((activity) => (
-                <div key={activity.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getActionColor(activity.action)}`}>
-                          {activity.action}
-                        </span>
-                        <span className="font-medium text-gray-900">Entry #{activity.sno}</span>
-                        <span className="text-sm text-gray-500">by {activity.editedBy}</span>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 mb-2">
-                        {activity.editedAt ? format(new Date(activity.editedAt), 'MMM dd, yyyy HH:mm:ss') : 'Unknown time'}
-                      </div>
 
-                      {activity.changes && activity.changes.length > 0 && (
-                        <div className="space-y-1">
-                          {activity.changes.map((change, index) => (
-                            <div key={index} className="text-xs bg-gray-100 p-2 rounded">
-                              <strong>{change.field}:</strong> 
-                              <span className="text-red-600 ml-1">{String(change.oldValue)}</span> 
-                              → 
-                              <span className="text-green-600 ml-1">{String(change.newValue)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button variant="secondary" onClick={() => setShowAllActivity(false)}>
-              Close
-            </Button>
-          </div>
-        </Card>
-      )}
 
       {/* Entries List - Flex Row Card Layout */}
       <Card title="Cash Book Entries" subtitle={`Manage and edit your transaction records`} className="p-6 mb-6">

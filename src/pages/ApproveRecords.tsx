@@ -479,7 +479,7 @@ const ApproveRecords: React.FC = () => {
 
   const getRowColor = (entry: any) => {
     if (entry.approved === true || entry.approved === 'true') return 'bg-white border-gray-200';
-    return 'bg-red-50 border-red-200';
+    return 'bg-red-100 border-red-300';
   };
 
   if (!isAdmin) {
