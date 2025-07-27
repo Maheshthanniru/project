@@ -219,14 +219,14 @@ const EditedRecords = () => {
         <div className="text-center py-8 text-gray-500">No edit history found.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border border-gray-200">
+          <table className="w-full text-base border border-gray-200">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-2 py-1">S.No</th>
-                <th className="px-2 py-1">Type</th>
-                {FIELDS.map(f => <th key={f.key} className="px-2 py-1">{f.label}</th>)}
-                <th className="px-2 py-1">Edited By</th>
-                <th className="px-2 py-1">Edited At</th>
+                <th className="px-4 py-2">S.No</th>
+                <th className="px-4 py-2">Type</th>
+                {FIELDS.map(f => <th key={f.key} className="px-4 py-2">{f.label}</th>)}
+                <th className="px-4 py-2">Edited By</th>
+                <th className="px-4 py-2">Edited At</th>
               </tr>
             </thead>
             <tbody>

@@ -820,39 +820,39 @@ const EditEntry: React.FC = () => {
             />
           </div>
           <div className="col-span-1">
-            <Select
+            <Input
               label="Sale Qty"
+              type="number"
               value={filterSaleQ}
               onChange={setFilterSaleQ}
-              options={saleQuantityOptions}
-              placeholder="Select quantity..."
+              placeholder="Enter sale quantity"
             />
           </div>
           <div className="col-span-1">
-            <Select
+            <Input
               label="Purchase Qty"
+              type="number"
               value={filterPurchaseQ}
               onChange={setFilterPurchaseQ}
-              options={purchaseQuantityOptions}
-              placeholder="Select quantity..."
+              placeholder="Enter purchase quantity"
             />
           </div>
           <div className="col-span-1">
-            <Select
+            <Input
               label="Credit"
+              type="number"
               value={filterCredit}
               onChange={setFilterCredit}
-              options={creditAmountOptions}
-              placeholder="Select amount..."
+              placeholder="Enter credit amount"
             />
           </div>
           <div className="col-span-1">
-            <Select
+            <Input
               label="Debit"
+              type="number"
               value={filterDebit}
               onChange={setFilterDebit}
-              options={debitAmountOptions}
-              placeholder="Select amount..."
+              placeholder="Enter debit amount"
             />
           </div>
           <div className="col-span-1">
@@ -956,9 +956,6 @@ const EditEntry: React.FC = () => {
                 )}
                 {isAdmin && (
                   <Button size="sm" variant="secondary" icon={entry.lock_record ? Unlock : Lock} onClick={() => { toggleLock(entry); }}>{entry.lock_record ? 'Unlock' : 'Lock'}</Button>
-                )}
-                {isAdmin && !entry.approved && (
-                  <Button size="sm" variant="success" icon={Check} onClick={() => { toggleApproval(entry); }}>Approve</Button>
                 )}
                 <Button size="sm" variant="secondary" onClick={() => printVoucher(entry)}>
                   Voucher
@@ -1125,6 +1122,7 @@ const EditEntry: React.FC = () => {
                     onChange={(value) => handleInputChange('sale_qty', parseFloat(value) || 0)}
                     disabled={!editMode || selectedEntry.lock_record}
                     className="min-h-12 text-base"
+                    placeholder="Enter sale quantity"
                   />
                   <Input
                     label="Purchase Quantity"
@@ -1132,6 +1130,7 @@ const EditEntry: React.FC = () => {
                     value={selectedEntry.purchase_qty || 0}
                     onChange={(value) => handleInputChange('purchase_qty', parseFloat(value) || 0)}
                     disabled={!editMode || selectedEntry.lock_record}
+                    placeholder="Enter purchase quantity"
                   />
                   <Input
                     label="Credit Amount"
@@ -1140,6 +1139,7 @@ const EditEntry: React.FC = () => {
                     onChange={(value) => handleInputChange('credit', parseFloat(value) || 0)}
                     disabled={!editMode || selectedEntry.lock_record}
                     className={selectedEntry.credit > 0 ? 'border-green-300 bg-green-50' : ''}
+                    placeholder="Enter credit amount"
                   />
                   <Input
                     label="Debit Amount"
@@ -1148,6 +1148,7 @@ const EditEntry: React.FC = () => {
                     onChange={(value) => handleInputChange('debit', parseFloat(value) || 0)}
                     disabled={!editMode || selectedEntry.lock_record}
                     className={selectedEntry.debit > 0 ? 'border-red-300 bg-red-50' : ''}
+                    placeholder="Enter debit amount"
                   />
                 </div>
               </div>

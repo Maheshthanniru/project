@@ -698,7 +698,6 @@ const LedgerSummary: React.FC = () => {
               value={filters.mainAccount}
               onChange={(value) => handleFilterChange('mainAccount', value)}
               options={accounts}
-              disabled={!filters.companyName}
             />
             
             <Select
@@ -706,7 +705,6 @@ const LedgerSummary: React.FC = () => {
               value={filters.subAccount}
               onChange={(value) => handleFilterChange('subAccount', value)}
               options={subAccounts}
-              disabled={!filters.mainAccount}
             />
             
             <Select
