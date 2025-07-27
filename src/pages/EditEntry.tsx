@@ -239,16 +239,16 @@ const EditEntry: React.FC = () => {
         allEntries = allEntries.filter(entry => entry.particulars && entry.particulars.toLowerCase().includes(filterParticulars.toLowerCase()));
       }
       if (filterSaleQ) {
-        allEntries = allEntries.filter(entry => String(entry.sale_qty || '').includes(filterSaleQ));
+        allEntries = allEntries.filter(entry => String(entry.sale_qty || '') === filterSaleQ);
       }
       if (filterPurchaseQ) {
-        allEntries = allEntries.filter(entry => String(entry.purchase_qty || '').includes(filterPurchaseQ));
+        allEntries = allEntries.filter(entry => String(entry.purchase_qty || '') === filterPurchaseQ);
       }
       if (filterCredit) {
-        allEntries = allEntries.filter(entry => String(entry.credit || '').includes(filterCredit));
+        allEntries = allEntries.filter(entry => String(entry.credit || '') === filterCredit);
       }
       if (filterDebit) {
-        allEntries = allEntries.filter(entry => String(entry.debit || '').includes(filterDebit));
+        allEntries = allEntries.filter(entry => String(entry.debit || '') === filterDebit);
       }
       if (filterStaff) {
         allEntries = allEntries.filter(entry => entry.staff && entry.staff.toLowerCase().includes(filterStaff.toLowerCase()));
