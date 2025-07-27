@@ -19,6 +19,7 @@ import Vehicles from './pages/Vehicles';
 import BankGuarantees from './pages/BankGuarantees';
 import Drivers from './pages/Drivers';
 import UserManagement from './pages/UserManagement';
+import CsvUpload from './pages/CsvUpload';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -92,6 +93,7 @@ const AppContent: React.FC = () => {
           <Route path="bank-guarantees" element={<BankGuarantees />} />
           <Route path="drivers" element={<Drivers />} />
           <Route path="user-management" element={<UserManagement />} />
+          <Route path="csv-upload" element={<CsvUpload />} />
         </Route>
       </Routes>
     </Router>

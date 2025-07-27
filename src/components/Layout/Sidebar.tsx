@@ -1,14 +1,23 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  Home, Plus, Edit, FileText, Book, BookOpen, CheckCircle, FileEdit, Download, FileDown, Calculator, Truck, CreditCard, Users, LogOut, Replace
+  Home, Plus, Edit, FileText, Book, BookOpen, CheckCircle, FileEdit, Download, FileDown, Calculator, Truck, CreditCard, Users, LogOut, Replace, Upload
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+
+interface MenuItem {
+  icon: React.ComponentType<any>;
+  label: string;
+  path: string;
+  key: string;
+  adminOnly?: boolean;
+  showForAll?: boolean;
+}
 
 const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { icon: Home, label: 'Dashboard', path: '/', key: 'dashboard' },
     { icon: Plus, label: 'New Entry', path: '/new-entry', key: 'new_entry' },
     { icon: Edit, label: 'Edit Entry', path: '/edit-entry', key: 'edit_entry' },
@@ -19,6 +28,7 @@ const Sidebar: React.FC = () => {
     { icon: FileEdit, label: 'Edited Records', path: '/edited-records', key: 'edited_records' },
     { icon: Replace, label: 'Replace Form', path: '/replace-form', key: 'replace_form' },
     { icon: Download, label: 'Export', path: '/export-excel', key: 'export' },
+    { icon: Upload, label: 'CSV Upload', path: '/csv-upload', key: 'csv_upload' },
     { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
     { icon: Truck, label: 'Vehicles', path: '/vehicles', key: 'vehicles' },
     { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees', key: 'bank_guarantees' },
@@ -55,7 +65,7 @@ const Sidebar: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.username}</p>
-            <p className="text-xs text-blue-600 font-medium capitalize">{user?.user_type}</p>
+            <p className="text-xs text-blue-600 font-medium capitalize">{user?.is_admin ? 'Admin' : 'User'}</p>
           </div>
         </div>
       </div>
@@ -65,6 +75,8 @@ const Sidebar: React.FC = () => {
           {menuItems
             .filter(item => {
               if (item.adminOnly) return user?.is_admin;
+              // Temporarily show CSV Upload for all users
+              if (item.key === 'csv_upload') return true;
               return user?.features?.includes(item.key);
             })
             .map((item) => (

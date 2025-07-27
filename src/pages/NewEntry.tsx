@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Calculator, Building, FileText, User, Calendar, Trash2, TrendingUp, TrendingDown, Wifi, WifiOff } from 'lucide-react';
+import { Save, Plus, Calculator, Building, FileText, User, Calendar, Trash2, TrendingUp, TrendingDown, Wifi, WifiOff, Upload, Download } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -8,6 +8,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { importFromFile, validateImportedData } from '../utils/excel';
 
 interface NewEntryForm {
   date: string;
@@ -87,6 +88,13 @@ const NewEntry: React.FC = () => {
   const [newCompanyAddress, setNewCompanyAddress] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
   const [newSubAccountName, setNewSubAccountName] = useState('');
+
+  // CSV Upload states
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<any[]>([]);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     loadDropdownData();
@@ -448,6 +456,143 @@ const NewEntry: React.FC = () => {
     updateTotalEntryCount(); // Update total entry count after deletion
   };
 
+  // CSV Upload Functions
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.endsWith('.csv')) {
+      toast.error('Please upload a CSV file');
+      return;
+    }
+
+    setUploadedFile(file);
+    setUploadLoading(true);
+    setUploadProgress(0);
+
+    try {
+      const result = await importFromFile(file);
+      
+      if (result.success && result.data) {
+        // Validate the imported data
+        const requiredFields = ['Date', 'Company', 'Main Account', 'Particulars', 'Credit', 'Debit'];
+        const validation = validateImportedData(result.data, requiredFields);
+        
+        if (!validation.isValid) {
+          toast.error(`Validation failed: ${validation.errors.join(', ')}`);
+          return;
+        }
+
+        if (validation.warnings.length > 0) {
+          toast.error(`Warnings: ${validation.warnings.join(', ')}`);
+        }
+
+        setUploadPreview(result.data.slice(0, 5)); // Show first 5 rows as preview
+        toast.success(`Successfully loaded ${result.data.length} entries from CSV`);
+      } else {
+        toast.error(result.error || 'Failed to read CSV file');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Failed to upload CSV file');
+    } finally {
+      setUploadLoading(false);
+      setUploadProgress(100);
+    }
+  };
+
+  const handleImportCSV = async () => {
+    if (!uploadedFile || uploadPreview.length === 0) {
+      toast.error('Please upload a valid CSV file first');
+      return;
+    }
+
+    setUploadLoading(true);
+    setUploadProgress(0);
+
+    try {
+      const result = await importFromFile(uploadedFile);
+      
+      if (result.success && result.data) {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Process in batches of 1000 for better performance
+        const batchSize = 1000;
+        const totalBatches = Math.ceil(result.data.length / batchSize);
+        
+        for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+          const startIndex = batchIndex * batchSize;
+          const endIndex = Math.min(startIndex + batchSize, result.data.length);
+          const batch = result.data.slice(startIndex, endIndex);
+          
+          // Process batch
+          for (let i = 0; i < batch.length; i++) {
+            const row = batch[i];
+            const globalIndex = startIndex + i;
+            
+            try {
+              // Map CSV columns to database fields
+              const entry = {
+                acc_name: row['Main Account'] || row['Account'] || '',
+                sub_acc_name: row['Sub Account'] || '',
+                particulars: row['Particulars'] || row['Description'] || '',
+                c_date: row['Date'] || format(new Date(), 'yyyy-MM-dd'),
+                credit: parseFloat(row['Credit'] || '0') || 0,
+                debit: parseFloat(row['Debit'] || '0') || 0,
+                credit_online: 0,
+                credit_offline: 0,
+                debit_online: 0,
+                debit_offline: 0,
+                company_name: row['Company'] || row['Company Name'] || '',
+                address: '',
+                staff: row['Staff'] || user?.username || '',
+                users: user?.username || '',
+                sale_qty: parseFloat(row['Sale Qty'] || row['Sale Quantity'] || '0') || 0,
+                purchase_qty: parseFloat(row['Purchase Qty'] || row['Purchase Quantity'] || '0') || 0,
+                cb: 'CB',
+              };
+
+              await supabaseDB.addCashBookEntry(entry);
+              successCount++;
+            } catch (error) {
+              console.error(`Error importing row ${globalIndex + 1}:`, error);
+              errorCount++;
+            }
+          }
+          
+          // Update progress after each batch
+          setUploadProgress(Math.round(((batchIndex + 1) / totalBatches) * 100));
+          
+          // Small delay to prevent browser freezing
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+
+        toast.success(`Import completed! ${successCount} entries imported, ${errorCount} failed`);
+        setShowUploadModal(false);
+        setUploadedFile(null);
+        setUploadPreview([]);
+        
+        // Refresh data
+        updateTotalEntryCount();
+        const entries = await supabaseDB.getCashBookEntries();
+        setRecentEntries(
+          entries
+            .sort((a, b) => {
+              const aTime = a.created_at ? new Date(a.created_at).getTime() : a.sno;
+              const bTime = b.created_at ? new Date(b.created_at).getTime() : b.sno;
+              return bTime - aTime;
+            })
+            .slice(0, 5)
+        );
+      } else {
+        toast.error(result.error || 'Failed to import CSV data');
+      }
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      toast.error('Failed to import CSV data');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-y-auto p-6">
@@ -471,6 +616,14 @@ const NewEntry: React.FC = () => {
                     <div className="text-2xl font-bold text-blue-600">{currentDailyEntryNo}</div>
                   </div>
                 </div>
+                <Button
+                  icon={Upload}
+                  variant="secondary"
+                  onClick={() => setShowUploadModal(true)}
+                  className="mt-2"
+                >
+                  Upload CSV
+                </Button>
               </div>
             </div>
           </div>
@@ -968,6 +1121,196 @@ const NewEntry: React.FC = () => {
                 <Button 
                   variant="secondary" 
                   onClick={() => setShowNewSubAccount(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">Upload CSV Data</h3>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadedFile(null);
+                  setUploadPreview([]);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="space-y-6">
+              {/* File Upload Section */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h4 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h4>
+                <p className="text-gray-600 mb-4">
+                  Upload a CSV file with the following columns: Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={Download}
+                    onClick={() => {
+                      const sampleData = [
+                        {
+                          Date: '2024-01-15',
+                          Company: 'Sample Company',
+                          'Main Account': 'Cash',
+                          'Sub Account': 'Main Branch',
+                          Particulars: 'Sample transaction',
+                          Credit: '1000',
+                          Debit: '0',
+                          Staff: 'admin',
+                          'Sale Qty': '0',
+                          'Purchase Qty': '0'
+                        },
+                        {
+                          Date: '2024-01-15',
+                          Company: 'Sample Company',
+                          'Main Account': 'Bank',
+                          'Sub Account': 'Main Branch',
+                          Particulars: 'Sample transaction 2',
+                          Credit: '0',
+                          Debit: '500',
+                          Staff: 'admin',
+                          'Sale Qty': '0',
+                          'Purchase Qty': '0'
+                        }
+                      ];
+                      
+                      const headers = Object.keys(sampleData[0]);
+                      const csvContent = [
+                        headers.join(','),
+                        ...sampleData.map(row => 
+                          headers.map(header => {
+                            const value = row[header as keyof typeof row];
+                            const escapedValue = String(value).replace(/"/g, '""');
+                            return `"${escapedValue}"`;
+                          }).join(',')
+                        )
+                      ].join('\n');
+                      
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sample-csv-format.csv';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download Sample CSV
+                  </Button>
+                </div>
+                
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleFileUpload(file);
+                    }
+                  }}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label
+                  htmlFor="csv-upload"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                >
+                  Choose CSV File
+                </label>
+              </div>
+
+              {/* Progress Bar */}
+              {uploadLoading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Processing...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* File Info */}
+              {uploadedFile && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-green-600" />
+                    <span className="font-medium text-green-800">{uploadedFile.name}</span>
+                  </div>
+                  <p className="text-sm text-green-600 mt-1">
+                    File size: {(uploadedFile.size / 1024).toFixed(2)} KB
+                  </p>
+                </div>
+              )}
+
+              {/* Preview Section */}
+              {uploadPreview.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900">Preview (First 5 rows)</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border border-gray-200">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          {Object.keys(uploadPreview[0]).map((header) => (
+                            <th key={header} className="px-3 py-2 text-left">
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uploadPreview.map((row, index) => (
+                          <tr key={index} className="border-b border-gray-100">
+                            {Object.values(row).map((value: any, cellIndex) => (
+                              <td key={cellIndex} className="px-3 py-2">
+                                {String(value)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-4">
+                <Button
+                  onClick={handleImportCSV}
+                  disabled={!uploadedFile || uploadPreview.length === 0 || uploadLoading}
+                  className="flex-1"
+                >
+                  {uploadLoading ? 'Importing...' : 'Import CSV Data'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadedFile(null);
+                    setUploadPreview([]);
+                  }}
                   className="flex-1"
                 >
                   Cancel
