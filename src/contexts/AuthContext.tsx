@@ -120,8 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: dbUser.id,
         username: dbUser.username,
         is_admin: isAdmin,
-        features,
-      };
+        features};
       setUser(userData);
       localStorage.setItem('thirumala_user', JSON.stringify(userData));
       localStorage.setItem('thirumala_session_time', Date.now().toString());

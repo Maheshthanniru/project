@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, TrendingDown, DollarSign, FileText, AlertTriangle, Users, Building, Wifi, WifiOff } from 'lucide-react';
+import { , , , , , , , , ,  } from 'lucide-react';
 import { format } from 'date-fns';
 import Card from '../components/UI/Card';
 import Select from '../components/UI/Select';
@@ -22,8 +22,7 @@ const Dashboard: React.FC = () => {
     onlineDebit: 0,
     offlineDebit: 0,
     totalOnline: 0,
-    totalOffline: 0,
-  });
+    totalOffline: 0});
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(true);
@@ -59,8 +58,7 @@ const Dashboard: React.FC = () => {
         onlineDebit: dashboardStats.onlineDebit,
         offlineDebit: dashboardStats.offlineDebit,
         totalOnline: dashboardStats.totalOnline,
-        totalOffline: dashboardStats.totalOffline,
-      });
+        totalOffline: dashboardStats.totalOffline});
 
       // Get recent entries
       const entries = await supabaseDB.getCashBookEntries();

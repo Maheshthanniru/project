@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calculator, Search, Filter, Printer, Download, 
-  FileText, Building, User, DollarSign, Eye, 
-  ChevronDown, ChevronUp, RefreshCw, X, Settings,
-  ArrowUpDown, TrendingUp, TrendingDown, BarChart3,
-  CheckCircle, AlertCircle, Clock, Users, PieChart
+  , , , , , 
+  , , , , , 
+  , , , , ,
+  , , , ,
+  , , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -57,8 +57,7 @@ const BalanceSheet: React.FC = () => {
   const [totals, setTotals] = useState({
     totalCredit: 0,
     totalDebit: 0,
-    balanceRs: 0,
-  });
+    balanceRs: 0});
 
   const yesNoOptions = [
     { value: '', label: 'All' },
@@ -162,8 +161,7 @@ const BalanceSheet: React.FC = () => {
       setTotals({
         totalCredit,
         totalDebit,
-        balanceRs,
-      });
+        balanceRs});
 
     } catch (error) {
       console.error('Error generating balance sheet:', error);
@@ -228,8 +226,7 @@ const BalanceSheet: React.FC = () => {
       'Balance': account.balance,
       'P&L Yes/No': account.plYesNo,
       'Both Yes/No': account.bothYesNo,
-      'Result': account.result,
-    }));
+      'Result': account.result}));
 
     // Create CSV content
     const headers = Object.keys(exportData[0] || {});
@@ -290,10 +287,10 @@ const BalanceSheet: React.FC = () => {
             />
           </div>
           <div className="flex flex-row gap-2 mt-2 md:mt-0">
-            <Button icon={RefreshCw} variant="secondary" onClick={refreshData}>Refresh</Button>
-            <Button icon={Download} variant="secondary" onClick={exportToExcel}>Export</Button>
-            <Button icon={Printer} variant="secondary" onClick={printReport}>Print</Button>
-            <Button icon={X} variant="secondary" onClick={resetFilters}>Reset</Button>
+            <Button icon={} variant="secondary" onClick={refreshData}>Refresh</Button>
+            <Button icon={} variant="secondary" onClick={exportToExcel}>Export</Button>
+            <Button icon={} variant="secondary" onClick={printReport}>Print</Button>
+            <Button icon={} variant="secondary" onClick={resetFilters}>Reset</Button>
           </div>
         </div>
         {/* Responsive table/card layout */}

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Download, FileText, Calendar, Building, Filter, 
-  RefreshCw, CheckSquare, Square, AlertCircle, 
-  TrendingUp, TrendingDown, Users, Truck, CreditCard, Eye
-} from 'lucide-react';
+  , , , , , 
+  , , , , 
+  , , , Truck, CreditCard} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -263,8 +262,7 @@ const ExportExcel: React.FC = () => {
               fontSize: 8,
               cellPadding: 2,
               lineColor: [44, 62, 80],
-              lineWidth: 0.2,
-            },
+              lineWidth: 0.2},
             headStyles: {
               fillColor: [59, 130, 246],
               textColor: 255,
@@ -275,8 +273,7 @@ const ExportExcel: React.FC = () => {
             },
             margin: { top: 50 },
             tableLineColor: [44, 62, 80],
-            tableLineWidth: 0.2,
-          });
+            tableLineWidth: 0.2});
         } catch (tableError) {
           doc.text('Error rendering table: ' + String(tableError), 105, 60, { align: 'center' });
           toast.error('PDF table error: ' + String(tableError));
@@ -326,14 +323,14 @@ const ExportExcel: React.FC = () => {
   };
 
   const reportTypes = [
-    { value: 'cashbook', label: 'Cash Book Entries', icon: FileText },
-    { value: 'ledger', label: 'Ledger Report', icon: TrendingUp },
-    { value: 'balancesheet', label: 'Balance Sheet', icon: TrendingDown },
+    { value: 'cashbook', label: 'Cash Book Entries', icon:  },
+    { value: 'ledger', label: 'Ledger Report', icon:  },
+    { value: 'balancesheet', label: 'Balance Sheet', icon:  },
     { value: 'vehicles', label: 'Vehicles', icon: Truck },
     { value: 'bankguarantees', label: 'Bank Guarantees', icon: CreditCard },
-    { value: 'drivers', label: 'Drivers', icon: Users },
-    { value: 'dailyreport', label: 'Daily Report', icon: Calendar },
-    { value: 'ledgersummary', label: 'Ledger Summary', icon: Building }
+    { value: 'drivers', label: 'Drivers', icon:  },
+    { value: 'dailyreport', label: 'Daily Report', icon:  },
+    { value: 'ledgersummary', label: 'Ledger Summary', icon:  }
   ];
 
   const dateRangeOptions = [
@@ -470,7 +467,7 @@ const ExportExcel: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <Button
-            icon={Download}
+            icon={}
             onClick={handleExport}
             disabled={loading}
             className="flex-1"
@@ -478,7 +475,7 @@ const ExportExcel: React.FC = () => {
             {loading ? 'Exporting...' : `Export to ${exportOptions.format.toUpperCase()}`}
           </Button>
           <Button
-            icon={Eye}
+            icon={}
             variant="secondary"
             onClick={handlePreview}
             disabled={loading}

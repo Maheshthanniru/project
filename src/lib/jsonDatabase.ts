@@ -110,8 +110,7 @@ class JsonDatabase {
       subAccounts: this.subAccounts,
       cashBookEntries: this.cashBookEntries,
       editHistory: this.editHistory,
-      users: this.users,
-    };
+      users: this.users};
     localStorage.setItem('thirumala_database', JSON.stringify(data));
   }
 
@@ -204,8 +203,7 @@ class JsonDatabase {
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
       {
         id: '2',
         sno: 2,
@@ -225,8 +223,7 @@ class JsonDatabase {
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
       {
         id: '3',
         sno: 3,
@@ -246,8 +243,7 @@ class JsonDatabase {
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
       {
         id: '4',
         sno: 4,
@@ -267,8 +263,7 @@ class JsonDatabase {
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
       {
         id: '5',
         sno: 5,
@@ -288,8 +283,7 @@ class JsonDatabase {
         approved: false,
         edited: true,
         editCount: 1,
-        locked: false,
-      },
+        locked: false},
       {
         id: '6',
         sno: 6,
@@ -309,8 +303,7 @@ class JsonDatabase {
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
       {
         id: '7',
         sno: 7,
@@ -330,8 +323,7 @@ class JsonDatabase {
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false,
-      },
+        locked: false},
     ];
 
     this.editHistory = [];
@@ -376,8 +368,7 @@ class JsonDatabase {
       changes,
       originalData,
       newData,
-      reason,
-    };
+      reason};
     this.editHistory.unshift(historyEntry);
     this.saveToStorage();
   }
@@ -517,8 +508,7 @@ class JsonDatabase {
       approved: false,
       edited: false,
       editCount: 0,
-      locked: false,
-    };
+      locked: false};
     this.cashBookEntries.push(newEntry);
     
     // Add to history
@@ -568,8 +558,7 @@ class JsonDatabase {
           changes.push({
             field: key,
             oldValue,
-            newValue,
-          });
+            newValue});
         }
       });
 
@@ -712,8 +701,7 @@ class JsonDatabase {
       totalDebit,
       balance,
       totalTransactions: entries.length,
-      pendingApprovals,
-    };
+      pendingApprovals};
   }
 
   // Financial reconciliation

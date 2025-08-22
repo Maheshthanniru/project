@@ -61,8 +61,7 @@ export const useDropdownData = () => {
           })),
           departments,
           transactionTypes,
-          yesNoOptions,
-        });
+          yesNoOptions});
       } catch (error) {
         console.error('Error fetching dropdown data:', error);
       } finally {

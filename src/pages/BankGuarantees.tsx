@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  CreditCard, Plus, Edit, AlertTriangle, Calendar, Search,
-  RefreshCw, Download, Printer, X, Trash2, Eye, Clock,
-  CheckCircle, Filter, Settings, Building, DollarSign
+  CreditCard, , Edit, , , ,
+  , , , , , , ,
+  , , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -52,8 +52,7 @@ const BankGuarantees: React.FC = () => {
     expiredBGs: 0,
     expiringBGs: 0,
     totalCredit: 0,
-    totalDebit: 0,
-  });
+    totalDebit: 0});
 
   useEffect(() => {
     loadBankGuarantees();
@@ -145,8 +144,7 @@ const BankGuarantees: React.FC = () => {
       expiredBGs,
       expiringBGs,
       totalCredit,
-      totalDebit,
-    });
+      totalDebit});
   };
 
   const getExpiryStatus = (expiryDate: string) => {
@@ -293,21 +291,21 @@ const BankGuarantees: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={loadBankGuarantees}
           >
             Refresh
           </Button>
           <Button
-            icon={Download}
+            icon={}
             variant="secondary"
             onClick={exportToExcel}
           >
             Export
           </Button>
           <Button
-            icon={Plus}
+            icon={}
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingBG(null);
@@ -596,7 +594,7 @@ const BankGuarantees: React.FC = () => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            icon={Eye}
+                            icon={}
                             onClick={() => handleViewDetails(bg)}
                             className="px-2"
                           >
@@ -647,7 +645,7 @@ const BankGuarantees: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={X}
+                  icon={}
                   onClick={() => setShowDetails(false)}
                 >
                   Close

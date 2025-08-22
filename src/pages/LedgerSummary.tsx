@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, Search, Filter, Printer, Download, 
-  FileText, Building, User, DollarSign, Eye, 
-  ChevronDown, ChevronUp, RefreshCw, X, Settings,
-  ArrowUpDown, TrendingUp, TrendingDown, BarChart3,
-  Calculator, CheckCircle
+  , , , , , 
+  , , , , , 
+  , , , , ,
+  , , , ,
+  , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -79,8 +79,7 @@ const LedgerSummary: React.FC = () => {
     totalCredit: 0,
     totalDebit: 0,
     balance: 0,
-    recordCount: 0,
-  });
+    recordCount: 0});
 
   useEffect(() => {
     loadDropdownData();
@@ -283,8 +282,7 @@ const LedgerSummary: React.FC = () => {
         totalCredit,
         totalDebit,
         balance: totalCredit - totalDebit,
-        recordCount: entries.length,
-      });
+        recordCount: entries.length});
 
     } catch (error) {
       console.error('Error generating summary:', error);
@@ -342,8 +340,7 @@ const LedgerSummary: React.FC = () => {
           'Company Name': company.companyName,
           'Total Credit': company.totalCredit,
           'Total Debit': company.totalDebit,
-          'Balance': company.balance,
-        }));
+          'Balance': company.balance}));
         filename = 'company-wise-summary';
         break;
       case 'mainAccount':
@@ -352,8 +349,7 @@ const LedgerSummary: React.FC = () => {
           'Credit': account.credit,
           'Debit': account.debit,
           'Balance': account.balance,
-          'Transaction Count': account.transactionCount,
-        }));
+          'Transaction Count': account.transactionCount}));
         filename = 'main-account-summary';
         break;
       case 'subAccount':
@@ -363,8 +359,7 @@ const LedgerSummary: React.FC = () => {
           'Credit': subAccount.credit,
           'Debit': subAccount.debit,
           'Balance': subAccount.balance,
-          'Transaction Count': subAccount.transactionCount,
-        }));
+          'Transaction Count': subAccount.transactionCount}));
         filename = 'sub-account-summary';
         break;
     }
@@ -620,7 +615,7 @@ const LedgerSummary: React.FC = () => {
         <div className="flex items-center gap-3">
           {/*
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={refreshData}
           >
@@ -628,14 +623,14 @@ const LedgerSummary: React.FC = () => {
           </Button>
           */}
           <Button
-            icon={Printer}
+            icon={}
             variant="secondary"
             onClick={printSummary}
           >
             Print
           </Button>
           <Button
-            icon={Download}
+            icon={}
             variant="secondary"
             onClick={exportToExcel}
           >

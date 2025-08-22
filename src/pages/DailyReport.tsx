@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, ChevronLeft, ChevronRight, Printer, Download, 
-  Search, Filter, FileText, TrendingUp, TrendingDown, 
-  Building, DollarSign, Eye, X, RefreshCw, BarChart3
+  , , , , , 
+  , , , , , 
+  , , , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -47,8 +47,7 @@ const DailyReport: React.FC = () => {
     onlineDebit: 0,
     offlineDebit: 0,
     totalOnline: 0,
-    totalOffline: 0,
-  });
+    totalOffline: 0});
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCompanyBalances, setShowCompanyBalances] = useState(true);
@@ -152,8 +151,7 @@ const DailyReport: React.FC = () => {
         onlineDebit,
         offlineDebit,
         totalOnline,
-        totalOffline,
-      });
+        totalOffline});
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error('Failed to generate report');
@@ -281,9 +279,9 @@ const DailyReport: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-row gap-2 mt-2 md:mt-0">
-            <Button icon={RefreshCw} variant="secondary" onClick={generateReport}>Refresh</Button>
-            <Button icon={Printer} variant="secondary" onClick={printReport}>Print</Button>
-            <Button icon={Download} variant="secondary" onClick={exportToExcel}>Export</Button>
+            <Button icon={} variant="secondary" onClick={generateReport}>Refresh</Button>
+            <Button icon={} variant="secondary" onClick={printReport}>Print</Button>
+            <Button icon={} variant="secondary" onClick={exportToExcel}>Export</Button>
           </div>
         </div>
         {/* Responsive table/card layout */}

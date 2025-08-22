@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  RefreshCw, Search, Filter, Printer, Download, 
-  FileText, Building, User, DollarSign, Eye, 
-  ChevronDown, ChevronUp, X, Settings,
-  ArrowUpDown, TrendingUp, TrendingDown, BarChart3,
-  Replace, CheckCircle, AlertCircle, Clock, Users
+  , , , , , 
+  , , , , , 
+  , , , ,
+  , , , ,
+  Replace, , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -53,8 +53,7 @@ const ReplaceForm: React.FC = () => {
     totalRecords: 0,
     affectedRecords: 0,
     totalCredit: 0,
-    totalDebit: 0,
-  });
+    totalDebit: 0});
 
   useEffect(() => {
     if (!isAdmin) {
@@ -146,8 +145,7 @@ const ReplaceForm: React.FC = () => {
       totalRecords,
       affectedRecords,
       totalCredit,
-      totalDebit,
-    });
+      totalDebit});
   };
 
   const handleInputChange = (field: keyof ReplaceFormData, value: string) => {
@@ -400,14 +398,14 @@ const ReplaceForm: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={loadEntries}
           >
             Refresh
           </Button>
           <Button
-            icon={X}
+            icon={}
             variant="secondary"
             onClick={resetForm}
           >
@@ -449,7 +447,7 @@ const ReplaceForm: React.FC = () => {
                 Replace Company Name
               </Button>
               <Button
-                icon={Eye}
+                icon={}
                 variant="secondary"
                 onClick={handlePreviewCompanyName}
                 disabled={!replaceData.oldCompanyName || loading}

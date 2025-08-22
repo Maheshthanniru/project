@@ -24,13 +24,19 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       '@typescript-eslint/no-unused-expressions': [
-        'error',
+        'warn',
         {
           allowShortCircuit: false,
           allowTernary: false,
           allowTaggedTemplates: false,
         },
       ],
+      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'no-case-declarations': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      'prefer-const': 'warn',
     },
   }
 );

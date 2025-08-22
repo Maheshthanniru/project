@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Truck, Plus, Edit, AlertTriangle, Calendar, Search, 
-  RefreshCw, Download, Printer, X, Trash2, Eye,
-  Clock, CheckCircle, Filter, Settings
+  Truck, , Edit, , , , 
+  , , , , , ,
+  , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -52,8 +52,7 @@ const Vehicles: React.FC = () => {
     totalVehicles: 0,
     expiredDocuments: 0,
     expiringDocuments: 0,
-    validDocuments: 0,
-  });
+    validDocuments: 0});
 
   useEffect(() => {
     loadVehicles();
@@ -136,8 +135,7 @@ const Vehicles: React.FC = () => {
       totalVehicles,
       expiredDocuments,
       expiringDocuments,
-      validDocuments,
-    });
+      validDocuments});
   };
 
   const getExpiryStatus = (expiryDate: string | null | undefined) => {
@@ -278,8 +276,7 @@ const Vehicles: React.FC = () => {
       'Insurance Expiry': vehicle.insurance_exp_date,
       'Fitness Expiry': vehicle.fitness_exp_date,
       'Permit Expiry': vehicle.permit_exp_date,
-      'Date Added': vehicle.date_added,
-    }));
+      'Date Added': vehicle.date_added}));
 
     // Create CSV content
     const headers = Object.keys(exportData[0] || {});
@@ -326,21 +323,21 @@ const Vehicles: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={loadVehicles}
           >
             Refresh
           </Button>
           <Button
-            icon={Download}
+            icon={}
             variant="secondary"
             onClick={exportToExcel}
           >
             Export
           </Button>
           <Button
-            icon={Plus}
+            icon={}
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingVehicle(null);
@@ -636,7 +633,7 @@ const Vehicles: React.FC = () => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            icon={Eye}
+                            icon={}
                             onClick={() => handleViewDetails(vehicle)}
                             className="px-2"
                           >
@@ -654,7 +651,7 @@ const Vehicles: React.FC = () => {
                           <Button
                             size="sm"
                             variant="danger"
-                            icon={Trash2}
+                            icon={}
                             onClick={() => handleDelete(vehicle.id)}
                             className="px-2"
                           >
@@ -684,7 +681,7 @@ const Vehicles: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={X}
+                  icon={}
                   onClick={() => setShowDetails(false)}
                 >
                   Close

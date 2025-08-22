@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, Search, Filter, Printer, Download, 
-  FileText, Building, User, DollarSign, Eye, 
-  ChevronDown, ChevronUp, RefreshCw, X, Settings,
-  ArrowUpDown, TrendingUp, TrendingDown, BarChart3,
-  Check, CheckCircle, AlertCircle, Clock, Users,
-  ChevronLeft, ChevronRight
+  , , , , , 
+  , , , , , 
+  , , , , ,
+  , , , ,
+  , , , , ,
+  , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -31,8 +31,7 @@ const ApproveRecords: React.FC = () => {
     date: format(new Date(), 'yyyy-MM-dd'),
     company: '',
     staff: '',
-    showUnfiltered: false,
-  });
+    showUnfiltered: false});
 
   const [entries, setEntries] = useState<any[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
@@ -54,8 +53,7 @@ const ApproveRecords: React.FC = () => {
     totalRecords: 0,
     approvedRecords: 0,
     pendingRecords: 0,
-    selectedCount: 0,
-  });
+    selectedCount: 0});
 
   useEffect(() => {
     if (!isAdmin) {
@@ -179,8 +177,7 @@ const ApproveRecords: React.FC = () => {
       totalRecords,
       approvedRecords,
       pendingRecords,
-      selectedCount,
-    });
+      selectedCount});
   };
 
   const handleFilterChange = (field: keyof ApprovalFilters, value: any) => {
@@ -725,28 +722,28 @@ const ApproveRecords: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={loadEntries}
           >
             Refresh
           </Button>
           <Button
-            icon={Printer}
+            icon={}
             variant="secondary"
             onClick={printReport}
           >
             Print
           </Button>
           <Button
-            icon={Printer}
+            icon={}
             variant="secondary"
             onClick={printAll}
           >
             Print All
           </Button>
           <Button
-            icon={X}
+            icon={}
             variant="secondary"
             onClick={closeWindow}
           >
@@ -765,7 +762,7 @@ const ApproveRecords: React.FC = () => {
               <Button
                 size="sm"
                 variant="secondary"
-                icon={ChevronLeft}
+                icon={}
                 onClick={() => navigateDate('prev')}
                 className="px-3"
               >
@@ -780,7 +777,7 @@ const ApproveRecords: React.FC = () => {
               <Button
                 size="sm"
                 variant="secondary"
-                icon={ChevronRight}
+                icon={}
                 onClick={() => navigateDate('next')}
                 className="px-3"
               >
@@ -988,7 +985,7 @@ const ApproveRecords: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <Button
-                        icon={CheckCircle}
+                        icon={}
                         variant="secondary"
                         onClick={() => {
                           handleDirectApprove(entry.id);
@@ -999,7 +996,7 @@ const ApproveRecords: React.FC = () => {
                         Approve
                       </Button>
                       <Button
-                        icon={X}
+                        icon={}
                         variant="secondary"
                         onClick={() => {
                           handleDirectReject(entry.id);
@@ -1010,7 +1007,7 @@ const ApproveRecords: React.FC = () => {
                         Reject
                       </Button>
                       <Button
-                        icon={Eye}
+                        icon={}
                         variant="secondary"
                         onClick={() => {
                           // TODO: Implement view functionality
@@ -1031,7 +1028,7 @@ const ApproveRecords: React.FC = () => {
           <div className="flex items-center justify-between mt-4 px-2 py-3 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <Button
-                icon={ChevronLeft}
+                icon={}
                 variant="secondary"
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
@@ -1039,7 +1036,7 @@ const ApproveRecords: React.FC = () => {
                 Previous
               </Button>
               <Button
-                icon={ChevronRight}
+                icon={}
                 variant="secondary"
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
@@ -1058,7 +1055,7 @@ const ApproveRecords: React.FC = () => {
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                   <Button
-                    icon={ChevronLeft}
+                    icon={}
                     variant="secondary"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
@@ -1067,7 +1064,7 @@ const ApproveRecords: React.FC = () => {
                     Previous
                   </Button>
                   <Button
-                    icon={ChevronRight}
+                    icon={}
                     variant="secondary"
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}

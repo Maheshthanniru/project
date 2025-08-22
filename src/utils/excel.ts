@@ -239,8 +239,7 @@ export const formatDataForExcel = (data: any[], type: 'cashbook' | 'ledger' | 'b
         'Insurance Expiry': item.insurance_exp_date,
         'Fitness Expiry': item.fitness_exp_date,
         'Permit Expiry': item.permit_exp_date,
-        'Date Added': item.date_added,
-      }));
+        'Date Added': item.date_added}));
       
     case 'bankguarantees':
       return data.map(item => ({
@@ -263,8 +262,7 @@ export const formatDataForExcel = (data: any[], type: 'cashbook' | 'ledger' | 'b
         'License Expiry': item.exp_date,
         'Phone': item.phone,
         'Address': item.address,
-        'Particulars': item.particulars,
-      }));
+        'Particulars': item.particulars}));
       
     default:
       return data;

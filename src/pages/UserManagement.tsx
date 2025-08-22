@@ -6,7 +6,7 @@ import Card from '../components/UI/Card';
 import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, User as UserIcon, Shield, ChevronDown, ChevronUp, Edit as EditIcon, X as XIcon, Save as SaveIcon } from 'lucide-react';
+import { , , User as UserIcon, Shield, , , Edit as EditIcon, X as XIcon, Save as SaveIcon } from 'lucide-react';
 
 interface Feature {
   key: string;
@@ -210,7 +210,7 @@ const UserManagement: React.FC = () => {
             <p className="text-gray-600">Manage users and feature access for your organization</p>
           </div>
           <Button
-            icon={Plus}
+            icon={}
             size="lg"
             className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg"
             onClick={() => setShowAddForm(v => !v)}
@@ -319,7 +319,7 @@ const UserManagement: React.FC = () => {
                     <Button
                       variant="danger"
                       size="sm"
-                      icon={Trash2}
+                      icon={}
                       disabled={u.username === user?.username}
                       className="mt-2"
                     >

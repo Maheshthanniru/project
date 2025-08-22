@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { , EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Calculator, Building, FileText, User, Calendar, Trash2, TrendingUp, TrendingDown, Wifi, WifiOff, Upload, Download, AlertCircle } from 'lucide-react';
+import { , , , , , , , , , , , , Upload, ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -46,8 +46,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
-    quantityChecked: false,
-  });
+    quantityChecked: false});
 
   const [dualEntryEnabled, setDualEntryEnabled] = useState(false);
   const [dualEntry, setDualEntry] = useState<NewEntryForm>({
@@ -65,8 +64,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
-    quantityChecked: false,
-  });
+    quantityChecked: false});
 
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
   const [accounts, setAccounts] = useState<{ value: string; label: string }[]>([]);
@@ -222,8 +220,7 @@ const NewEntry: React.FC = () => {
   const handleInputChange = (field: keyof NewEntryForm, value: string | number) => {
     setEntry(prev => ({
       ...prev,
-      [field]: value,
-    }));
+      [field]: value}));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -320,8 +317,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: user?.username || '',
-        quantityChecked: false,
-      });
+        quantityChecked: false});
       setAccounts([]);
       setSubAccounts([]);
       setDualEntry({
@@ -339,8 +335,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: user?.username || '',
-        quantityChecked: false,
-      });
+        quantityChecked: false});
       setDualEntryEnabled(false);
       updateDailyEntryNumber();
       await updateTotalEntryCount();
@@ -1135,8 +1130,7 @@ const NewEntry: React.FC = () => {
                       debitOnline: '',
                       debitOffline: '',
                       staff: user?.username || '',
-                      quantityChecked: false,
-                    });
+                      quantityChecked: false});
                     setAccounts([]);
                     setSubAccounts([]);
                   }}
@@ -1312,7 +1306,7 @@ const NewEntry: React.FC = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    icon={Download}
+                    icon={}
                     onClick={() => {
                       const sampleData = [
                         {

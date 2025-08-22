@@ -303,8 +303,7 @@ class BackupManager {
       subAccounts: data.subAccounts,
       cashBookEntries: data.cashBookEntries,
       editHistory: data.editHistory,
-      users: data.users,
-    };
+      users: data.users};
     
     localStorage.setItem('thirumala_database', JSON.stringify(newData));
     

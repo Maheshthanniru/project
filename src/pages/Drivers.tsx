@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, AlertTriangle, Phone, MapPin, Eye } from 'lucide-react';
+import { , , Edit, , , ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -98,8 +98,7 @@ const Drivers: React.FC = () => {
         const updatedDriver = await supabaseDB.updateDriver(editingDriver.id, {
           ...editingDriver,
           license_front_url: licenseFrontUrl || editingDriver.license_front_url,
-          license_back_url: licenseBackUrl || editingDriver.license_back_url,
-        });
+          license_back_url: licenseBackUrl || editingDriver.license_back_url});
         if (updatedDriver) {
           await loadDrivers();
           setEditingDriver(null);
@@ -112,8 +111,7 @@ const Drivers: React.FC = () => {
         const newDriverData = await supabaseDB.addDriver({
           ...newDriver,
           license_front_url: licenseFrontUrl,
-          license_back_url: licenseBackUrl,
-        });
+          license_back_url: licenseBackUrl});
         if (newDriverData) {
           await loadDrivers();
           setNewDriver({
@@ -160,7 +158,7 @@ const Drivers: React.FC = () => {
           </div>
           
           <Button
-            icon={Plus}
+            icon={}
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingDriver(null);
@@ -281,7 +279,7 @@ const Drivers: React.FC = () => {
                       <Button
                         size="sm"
                         variant="secondary"
-                        icon={Eye}
+                        icon={}
                         onClick={() => setImageModal({
                           url: '',
                           label: 'License Photos',

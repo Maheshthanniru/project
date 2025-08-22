@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, Download, FileText, CheckCircle, AlertCircle, X, RefreshCw } from 'lucide-react';
+import { Upload, , , , , ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
@@ -663,7 +663,7 @@ const CsvUpload: React.FC = () => {
               <p className="text-gray-600">Upload and import CSV data into the cash book system</p>
             </div>
             <Button
-              icon={RefreshCw}
+              icon={}
               variant="secondary"
               onClick={resetUpload}
             >
@@ -719,7 +719,7 @@ const CsvUpload: React.FC = () => {
                    </label>
                    <Button
                      variant="secondary"
-                     icon={Download}
+                     icon={}
                      onClick={downloadSampleCSV}
                    >
                      Download Sample CSV

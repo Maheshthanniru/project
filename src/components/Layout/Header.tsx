@@ -1,5 +1,4 @@
 import React from 'react';
-import { Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Header: React.FC = () => {

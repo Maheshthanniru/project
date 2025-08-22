@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, Search, Filter, Printer, Download, 
-  FileText, Building, User, DollarSign, Eye, 
-  ChevronDown, ChevronUp, RefreshCw, X, Settings,
-  ArrowUpDown, TrendingUp, TrendingDown, BarChart3
+  , , , , , 
+  , , , , , 
+  , , , , ,
+  , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -56,8 +56,7 @@ const DetailedLedger: React.FC = () => {
     staffwise: '',
     creditAmount: 0,
     debitAmount: 0,
-    betweenDates: true,
-  });
+    betweenDates: true});
 
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<LedgerEntry[]>([]);
@@ -79,15 +78,12 @@ const DetailedLedger: React.FC = () => {
     balance: 0,
     recordCount: 0,
     openingBalance: 0,
-    closingBalance: 0,
-  });
+    closingBalance: 0});
 
   useEffect(() => {
     loadDropdownData();
     loadLedgerData();
   }, []);
-
-
 
   useEffect(() => {
     applyFilters();
@@ -132,8 +128,6 @@ const DetailedLedger: React.FC = () => {
     }
   };
 
-
-
   const loadLedgerData = async () => {
     setLoading(true);
     try {
@@ -160,8 +154,7 @@ const DetailedLedger: React.FC = () => {
           entryTime: entry.entry_time,
           approved: entry.approved,
           balance: balance,
-          runningBalance: runningBalance,
-        };
+          runningBalance: runningBalance};
       });
 
       setLedgerEntries(ledgerData);
@@ -238,8 +231,7 @@ const DetailedLedger: React.FC = () => {
       balance,
       recordCount: filtered.length,
       openingBalance: 0, // Calculate based on entries before date range
-      closingBalance: balance,
-    });
+      closingBalance: balance});
 
     setFilteredEntries(filtered);
   };
@@ -274,8 +266,7 @@ const DetailedLedger: React.FC = () => {
       staffwise: '',
       creditAmount: 0,
       debitAmount: 0,
-      betweenDates: true,
-    });
+      betweenDates: true});
     setSearchTerm('');
     toast.success('Filters reset');
   };
@@ -338,21 +329,21 @@ const DetailedLedger: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={Settings}
+            icon={}
             variant="secondary"
             onClick={() => setShowFilters(!showFilters)}
           >
             {showFilters ? 'Hide' : 'Show'} Filters
           </Button>
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={loadLedgerData}
           >
             Refresh
           </Button>
           <Button
-            icon={Download}
+            icon={}
             variant="secondary"
             onClick={exportToExcel}
           >
@@ -482,7 +473,7 @@ const DetailedLedger: React.FC = () => {
               </Button>
               
               <Button
-                icon={Printer}
+                icon={}
                 variant="secondary"
                 onClick={printReport}
               >
@@ -490,7 +481,7 @@ const DetailedLedger: React.FC = () => {
               </Button>
               
               <Button
-                icon={Printer}
+                icon={}
                 variant="secondary"
                 onClick={printAll}
               >
@@ -675,7 +666,7 @@ const DetailedLedger: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    icon={Printer}
+                    icon={}
                     onClick={() => window.print()}
                   >
                     Print
@@ -683,7 +674,7 @@ const DetailedLedger: React.FC = () => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    icon={X}
+                    icon={}
                     onClick={() => setShowPrintPreview(false)}
                   >
                     Close

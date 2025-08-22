@@ -33,7 +33,7 @@ const Input: React.FC<InputProps> = ({
   const [inputValue, setInputValue] = useState(value);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value;
+    const val = e.target.value;
     setInputValue(val);
     if (type === 'number') {
       onChange(val === '' ? '' : val);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Edit, Search, Check, X, Eye, Lock, Unlock, Trash2, 
-  History, Clock, User, Calendar, FileText, AlertTriangle,
-  ChevronDown, ChevronUp, Filter, Download, RefreshCw, Building, Calculator
+  Edit, , , , , Lock, Unlock, , 
+  History, , , , , ,
+  , , , , , , 
 } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
@@ -563,7 +563,7 @@ const EditEntry: React.FC = () => {
           return;
         }
 
-        const { jsPDF } = await import('jspdf');
+        const {  } = await import('jspdf');
         const doc = new jsPDF();
         
         // Add title
@@ -749,11 +749,11 @@ const EditEntry: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Edit Form</h1>
-          <p className="text-gray-600">Search, edit, and manage cash book entries with complete history tracking</p>
+          <p className="text-gray-600">, edit, and manage cash book entries with complete history tracking</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={Download}
+            icon={}
             variant="secondary"
             onClick={() => {
               const format = window.prompt('Enter export format (csv or pdf):', 'csv');
@@ -767,7 +767,7 @@ const EditEntry: React.FC = () => {
             Export
           </Button>
           <Button
-            icon={RefreshCw}
+            icon={}
             variant="secondary"
             onClick={async () => {
               await loadEntries();
@@ -907,7 +907,7 @@ const EditEntry: React.FC = () => {
               }}
               variant="secondary"
               className="w-full"
-              icon={Filter}
+              icon={}
             >
               Clear Filters
             </Button>
@@ -919,8 +919,6 @@ const EditEntry: React.FC = () => {
           </div>
         </div>
       </Card>
-
-
 
       {/* Entries List - Flex Row Card Layout */}
       <Card title="Cash Book Entries" subtitle={`Manage and edit your transaction records`} className="p-6 mb-6">
@@ -962,7 +960,7 @@ const EditEntry: React.FC = () => {
                 </Button>
                 <Button size="sm" icon={Edit} onClick={() => { handleEdit(entry); }} disabled={entry.lock_record && !isAdmin}><span className="sr-only">Edit</span></Button>
                 {isAdmin && (
-                  <Button size="sm" variant="danger" icon={Trash2} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
+                  <Button size="sm" variant="danger" icon={} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
                 )}
               </div>
             ))
@@ -983,7 +981,7 @@ const EditEntry: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={X}
+                  icon={}
                   onClick={() => setShowHistory(false)}
                 >
                   Close
@@ -1059,7 +1057,7 @@ const EditEntry: React.FC = () => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    icon={X}
+                    icon={}
                     onClick={handleCancel}
                   >
                     Close
@@ -1189,7 +1187,7 @@ const EditEntry: React.FC = () => {
               <div className="p-6 border-t border-gray-200 bg-white flex-shrink-0">
                 <div className="flex gap-4">
                   <Button
-                    icon={Check}
+                    icon={}
                     onClick={handleSave}
                     disabled={!editMode || selectedEntry.lock_record || loading}
                   >

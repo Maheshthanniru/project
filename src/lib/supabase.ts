@@ -316,8 +316,7 @@ export const supabaseHelpers = {
   async signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      password,
-    });
+      password});
     return { data, error };
   },
 

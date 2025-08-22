@@ -6,13 +6,11 @@ import Select from '../components/UI/Select';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Download, Printer, Search, FileText } from 'lucide-react';
+import { , , ,  } from 'lucide-react';
 import jsPDF from 'jspdf';
 // Fix for jsPDF autotable type
 // @ts-ignore
 import 'jspdf-autotable';
-import { User } from '../lib/supabaseDatabase';
-
 type AuditLogEntry = {
   id: string;
   cash_book_id: string;
@@ -210,8 +208,8 @@ const EditedRecords = () => {
           options={[{ value: '', label: 'All Users' }, ...users.map(u => ({ value: u.id, label: u.username }))]}
           className="w-48"
         />
-        <Button onClick={handleExportExcel} icon={Download} variant="secondary" size="sm">Export Excel</Button>
-        <Button onClick={handlePrint} icon={Printer} variant="secondary" size="sm">Print</Button>
+        <Button onClick={handleExportExcel} icon={} variant="secondary" size="sm">Export Excel</Button>
+        <Button onClick={handlePrint} icon={} variant="secondary" size="sm">Print</Button>
       </div>
       {loading ? (
         <div className="text-center py-8 text-blue-600 font-semibold">Loading edit history...</div>

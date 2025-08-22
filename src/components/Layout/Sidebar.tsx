@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  Home, Plus, Edit, FileText, Book, BookOpen, CheckCircle, FileEdit, Download, FileDown, Calculator, Truck, CreditCard, Users, LogOut, Replace, Upload
+  Home, , Edit, , Book, BookOpen, , FileEdit, , , , Truck, CreditCard, , LogOut, Replace, Upload
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -19,22 +19,22 @@ const Sidebar: React.FC = () => {
 
   const menuItems: MenuItem[] = [
     { icon: Home, label: 'Dashboard', path: '/', key: 'dashboard' },
-    { icon: Plus, label: 'New Entry', path: '/new-entry', key: 'new_entry' },
+    { icon: , label: 'New Entry', path: '/new-entry', key: 'new_entry' },
     { icon: Edit, label: 'Edit Entry', path: '/edit-entry', key: 'edit_entry' },
-    { icon: FileText, label: 'Daily Report', path: '/daily-report', key: 'daily_report' },
+    { icon: , label: 'Daily Report', path: '/daily-report', key: 'daily_report' },
     { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger', key: 'detailed_ledger' },
     { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary', key: 'ledger_summary' },
-    { icon: CheckCircle, label: 'Approve Records', path: '/approve-records', key: 'approve_records' },
+    { icon: , label: 'Approve Records', path: '/approve-records', key: 'approve_records' },
     { icon: FileEdit, label: 'Edited Records', path: '/edited-records', key: 'edited_records' },
     { icon: Replace, label: 'Replace Form', path: '/replace-form', key: 'replace_form' },
-    { icon: Download, label: 'Export', path: '/export-excel', key: 'export' },
+    { icon: , label: 'Export', path: '/export-excel', key: 'export' },
     { icon: Upload, label: 'CSV Upload', path: '/csv-upload', key: 'csv_upload' },
-    { icon: Calculator, label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
+    { icon: , label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
     { icon: Truck, label: 'Vehicles', path: '/vehicles', key: 'vehicles' },
     { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees', key: 'bank_guarantees' },
-    { icon: Users, label: 'Drivers', path: '/drivers', key: 'drivers' },
+    { icon: , label: 'Drivers', path: '/drivers', key: 'drivers' },
     // Admin only
-    { icon: Users, label: 'User Management', path: '/user-management', key: 'users', adminOnly: true },
+    { icon: , label: 'User Management', path: '/user-management', key: 'users', adminOnly: true },
   ];
 
   return (
