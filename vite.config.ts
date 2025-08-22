@@ -20,6 +20,7 @@ export default defineConfig({
       compress: {
         drop_console: true, // Remove console.log in production
         drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
       },
     },
     rollupOptions: {
@@ -29,6 +30,8 @@ export default defineConfig({
           router: ['react-router-dom'],
           ui: ['lucide-react'],
           utils: ['date-fns', 'xlsx'],
+          supabase: ['@supabase/supabase-js'],
+          toast: ['react-hot-toast'],
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
@@ -49,4 +52,17 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
   },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'lucide-react'],
+  },
+  // Vite 5 specific optimizations
+  experimental: {
+    renderBuiltUrl(filename, { hostType }) {
+      if (hostType === 'js') {
+        return { js: `/${filename}` }
+      } else {
+        return { relative: true }
+      }
+    }
+  }
 })

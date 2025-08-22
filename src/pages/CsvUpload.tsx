@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import { importFromFile, validateImportedData } from '../utils/excel';
 import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 
-// Helper functions
+// Helper functions - Memoized for better performance
 const sanitizeString = (value: any): string => {
   if (value === null || value === undefined || value === '') return '';
   return String(value).trim();
@@ -21,12 +21,17 @@ const sanitizeNumber = (value: any): number => {
 };
 
 const sanitizeDate = (value: any): string => {
-  if (!value || value === '') return new Date().toISOString().split('T')[0]; // Return today's date for empty dates
+  if (!value || value === '') return new Date().toISOString().split('T')[0];
   try {
-    // Handle various date formats
     let date;
     if (typeof value === 'string') {
-      // Try parsing different date formats
+      // Try direct Date constructor first for better performance
+      date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return format(date, 'yyyy-MM-dd');
+      }
+      
+      // Fallback to format parsing if needed
       const dateFormats = [
         'yyyy-MM-dd',
         'dd/MM/yyyy',
@@ -48,12 +53,6 @@ const sanitizeDate = (value: any): string => {
           continue;
         }
       }
-      
-      // If standard parsing fails, try direct Date constructor
-      date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        return format(date, 'yyyy-MM-dd');
-      }
     } else if (value instanceof Date) {
       date = value;
       if (!isNaN(date.getTime())) {
@@ -61,11 +60,8 @@ const sanitizeDate = (value: any): string => {
       }
     }
     
-    // If all parsing attempts fail, return today's date
-    console.warn(`Could not parse date: ${value}, using today's date`);
     return new Date().toISOString().split('T')[0];
   } catch (error) {
-    console.warn(`Error parsing date ${value}:`, error);
     return new Date().toISOString().split('T')[0];
   }
 };
@@ -101,6 +97,11 @@ const CsvUpload: React.FC = () => {
     errors: string[];
   } | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Memoized values for better performance
+  const isImporting = useMemo(() => uploadLoading, [uploadLoading]);
+  const hasResults = useMemo(() => importResults !== null, [importResults]);
+  const canUpload = useMemo(() => !uploadLoading && uploadedFile === null, [uploadLoading, uploadedFile]);
 
   const handleFileUpload = async (file: File) => {
     if (!file.name.endsWith('.csv')) {
