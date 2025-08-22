@@ -1,8 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , 
-  , , , Truck, CreditCard} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -323,14 +319,14 @@ const ExportExcel: React.FC = () => {
   };
 
   const reportTypes = [
-    { value: 'cashbook', label: 'Cash Book Entries', icon:  },
-    { value: 'ledger', label: 'Ledger Report', icon:  },
-    { value: 'balancesheet', label: 'Balance Sheet', icon:  },
+    { value: 'cashbook', label: 'Cash Book Entries', icon: undefined},
+    { value: 'ledger', label: 'Ledger Report', icon: undefined},
+    { value: 'balancesheet', label: 'Balance Sheet', icon: undefined},
     { value: 'vehicles', label: 'Vehicles', icon: Truck },
     { value: 'bankguarantees', label: 'Bank Guarantees', icon: CreditCard },
-    { value: 'drivers', label: 'Drivers', icon:  },
-    { value: 'dailyreport', label: 'Daily Report', icon:  },
-    { value: 'ledgersummary', label: 'Ledger Summary', icon:  }
+    { value: 'drivers', label: 'Drivers', icon: undefined},
+    { value: 'dailyreport', label: 'Daily Report', icon: undefined},
+    { value: 'ledgersummary', label: 'Ledger Summary', icon: undefined}
   ];
 
   const dateRangeOptions = [
@@ -467,7 +463,7 @@ const ExportExcel: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <Button
-            icon={}
+            
             onClick={handleExport}
             disabled={loading}
             className="flex-1"
@@ -475,7 +471,7 @@ const ExportExcel: React.FC = () => {
             {loading ? 'Exporting...' : `Export to ${exportOptions.format.toUpperCase()}`}
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={handlePreview}
             disabled={loading}

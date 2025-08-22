@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { , , , , , ,  } from 'lucide-react';
 import Input from './Input';
 import Select from './Select';
 import Button from './Button';
@@ -117,7 +116,7 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
           />
         </div>
         <Button
-          icon={}
+          
           variant="secondary"
           onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
           className={isAdvancedOpen ? 'bg-blue-100 text-blue-700' : ''}
@@ -125,7 +124,7 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
           {isAdvancedOpen ? 'Hide Filters' : 'Advanced'}
         </Button>
         <Button
-          icon={}
+          
           onClick={handleSearch}
           disabled={!hasActiveFilters()}
         >
@@ -133,7 +132,7 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
         </Button>
         {hasActiveFilters() && (
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={handleClear}
           >

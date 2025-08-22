@@ -600,7 +600,7 @@ class SupabaseDatabase {
     return data;
   }
 
-  async createUser(user: Omit<, 'id' | 'created_at' | 'updated_at'>): Promise<User> {
+  async createUser(user: Omit<any, 'id' | 'created_at' | 'updated_at'>): Promise<User> {
     const { data, error } = await supabase
       .from('users')
       .insert(user)

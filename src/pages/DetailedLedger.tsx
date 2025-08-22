@@ -1,10 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , , 
-  , , , , ,
-  , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -329,21 +323,21 @@ const DetailedLedger: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={() => setShowFilters(!showFilters)}
           >
             {showFilters ? 'Hide' : 'Show'} Filters
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={loadLedgerData}
           >
             Refresh
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={exportToExcel}
           >
@@ -473,7 +467,7 @@ const DetailedLedger: React.FC = () => {
               </Button>
               
               <Button
-                icon={}
+                
                 variant="secondary"
                 onClick={printReport}
               >
@@ -481,7 +475,7 @@ const DetailedLedger: React.FC = () => {
               </Button>
               
               <Button
-                icon={}
+                
                 variant="secondary"
                 onClick={printAll}
               >
@@ -666,7 +660,7 @@ const DetailedLedger: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    icon={}
+                    
                     onClick={() => window.print()}
                   >
                     Print
@@ -674,7 +668,7 @@ const DetailedLedger: React.FC = () => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    icon={}
+                    
                     onClick={() => setShowPrintPreview(false)}
                   >
                     Close

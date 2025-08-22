@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { , , , , , , , , , , , , Upload, ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -1306,7 +1305,7 @@ const NewEntry: React.FC = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    icon={}
+                    
                     onClick={() => {
                       const sampleData = [
                         {

@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, , , , , ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
@@ -7,6 +6,78 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { importFromFile, validateImportedData } from '../utils/excel';
+import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+
+// Helper functions
+const sanitizeString = (value: any): string => {
+  if (value === null || value === undefined || value === '') return '';
+  return String(value).trim();
+};
+
+const sanitizeNumber = (value: any): number => {
+  if (value === null || value === undefined || value === '') return 0;
+  const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+  return isNaN(num) ? 0 : num;
+};
+
+const sanitizeDate = (value: any): string => {
+  if (!value || value === '') return new Date().toISOString().split('T')[0]; // Return today's date for empty dates
+  try {
+    // Handle various date formats
+    let date;
+    if (typeof value === 'string') {
+      // Try parsing different date formats
+      const dateFormats = [
+        'yyyy-MM-dd',
+        'dd/MM/yyyy',
+        'MM/dd/yyyy',
+        'dd-MM-yyyy',
+        'MM-dd-yyyy',
+        'yyyy/MM/dd',
+        'dd.MM.yyyy',
+        'MM.dd.yyyy'
+      ];
+      
+      for (const formatStr of dateFormats) {
+        try {
+          date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            return format(date, 'yyyy-MM-dd');
+          }
+        } catch {
+          continue;
+        }
+      }
+      
+      // If standard parsing fails, try direct Date constructor
+      date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return format(date, 'yyyy-MM-dd');
+      }
+    } else if (value instanceof Date) {
+      date = value;
+      if (!isNaN(date.getTime())) {
+        return format(date, 'yyyy-MM-dd');
+      }
+    }
+    
+    // If all parsing attempts fail, return today's date
+    console.warn(`Could not parse date: ${value}, using today's date`);
+    return new Date().toISOString().split('T')[0];
+  } catch (error) {
+    console.warn(`Error parsing date ${value}:`, error);
+    return new Date().toISOString().split('T')[0];
+  }
+};
+
+const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => {
+  for (const name of possibleNames) {
+    if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+      return row[name];
+    }
+  }
+  return defaultValue;
+};
 
 const CsvUpload: React.FC = () => {
   const { user } = useAuth();
@@ -111,6 +182,7 @@ const CsvUpload: React.FC = () => {
         let successCount = 0;
         let errorCount = 0;
         const errors: string[] = [];
+        const allBatchResults: Array<{ success: boolean; index: number; error?: string }> = [];
 
         // Process data in batches of 500 for maximum reliability
         const batchSize = 500; // Reduced to 500 records per batch for better error handling
@@ -137,77 +209,6 @@ const CsvUpload: React.FC = () => {
              const globalIndex = startIndex + i;
              
              try {
-               // Optimized data mapping functions
-               const sanitizeString = (value: any) => {
-                 if (value === null || value === undefined || value === '') return '';
-                 return String(value).trim();
-               };
-
-               const sanitizeNumber = (value: any) => {
-                 if (value === null || value === undefined || value === '') return 0;
-                 const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
-                 return isNaN(num) ? 0 : num;
-               };
-
-               const sanitizeDate = (value: any) => {
-                 if (!value || value === '') return undefined; // Return undefined for empty dates to use DB default
-                 try {
-                   // Handle various date formats
-                   let date;
-                   if (typeof value === 'string') {
-                     // Try parsing different date formats
-                     const dateFormats = [
-                       'yyyy-MM-dd',
-                       'dd/MM/yyyy',
-                       'MM/dd/yyyy',
-                       'dd-MM-yyyy',
-                       'MM-dd-yyyy',
-                       'yyyy/MM/dd',
-                       'dd.MM.yyyy',
-                       'MM.dd.yyyy'
-                     ];
-                     
-                     for (const formatStr of dateFormats) {
-                       try {
-                         date = new Date(value);
-                         if (!isNaN(date.getTime())) {
-                           return format(date, 'yyyy-MM-dd');
-                         }
-                       } catch {
-                         continue;
-                       }
-                     }
-                     
-                     // If standard parsing fails, try direct Date constructor
-                     date = new Date(value);
-                     if (!isNaN(date.getTime())) {
-                       return format(date, 'yyyy-MM-dd');
-                     }
-                   } else if (value instanceof Date) {
-                     date = value;
-                     if (!isNaN(date.getTime())) {
-                       return format(date, 'yyyy-MM-dd');
-                     }
-                   }
-                   
-                   // If all parsing attempts fail, return undefined to use DB default
-                   console.warn(`Could not parse date: ${value}, using database default`);
-                   return undefined;
-                 } catch (error) {
-                   console.warn(`Error parsing date ${value}:`, error);
-                   return undefined;
-                 }
-               };
-
-               // Optimized field value extraction
-               const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => {
-                 for (const name of possibleNames) {
-                   if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
-                     return row[name];
-                   }
-                 }
-                 return defaultValue;
-               };
 
                                // Clean and validate data before mapping
                 const cleanEntry = {
@@ -372,6 +373,9 @@ const CsvUpload: React.FC = () => {
 
           // Batch processing completed
           
+          // Store batch results for retry logic
+          allBatchResults.push(...batchResults);
+          
           // Count results
           const batchSuccessCount = batchResults.filter(r => r.success).length;
           const batchErrorCount = batchResults.filter(r => !r.success).length;
@@ -407,12 +411,12 @@ const CsvUpload: React.FC = () => {
         // Retry failed entries with smaller batches
         let retrySuccessCount = 0;
         if (errorCount > 0 && errors.length > 0) {
-          toast.info(`Retrying ${errorCount} failed entries...`);
+          toast.success(`Retrying ${errorCount} failed entries...`);
           
           // Get failed entries for retry
-          const failedEntries = batchResults.filter(r => !r.success).map(r => ({
+          const failedEntries = allBatchResults.filter((r) => !r.success).map((r) => ({
             index: r.index,
-            entry: result.data[r.index]
+            entry: result.data![r.index]
           }));
           
           // Retry failed entries in smaller batches of 50
@@ -497,34 +501,34 @@ const CsvUpload: React.FC = () => {
                   cb: 'CB',
                 };
                 
-                                 // Ensure company exists before inserting entry
-                 try {
-                   await supabaseDB.addCompany(cleanEntry.company_name, cleanEntry.address || '');
-                 } catch (companyError) {
-                   // Company might already exist, which is fine
-                   console.log(`Company ${cleanEntry.company_name} already exists or error:`, companyError);
-                 }
-                 
-                 // Ensure account exists before inserting entry
-                 try {
-                   await supabaseDB.addAccount(cleanEntry.company_name, cleanEntry.acc_name);
-                 } catch (accountError) {
-                   // Account might already exist, which is fine
-                   console.log(`Account ${cleanEntry.acc_name} already exists or error:`, accountError);
-                 }
-                 
-                 // Ensure sub account exists if provided
-                 if (cleanEntry.sub_acc_name && cleanEntry.sub_acc_name.trim() !== '') {
-                   try {
-                     await supabaseDB.addSubAccount(cleanEntry.company_name, cleanEntry.acc_name, cleanEntry.sub_acc_name);
-                   } catch (subAccountError) {
-                     // Sub account might already exist, which is fine
-                     console.log(`Sub account ${cleanEntry.sub_acc_name} already exists or error:`, subAccountError);
-                   }
-                 }
-                 
-                 await supabaseDB.addCashBookEntry(cleanEntry);
-                 return { success: true, index: globalIndex };
+                // Ensure company exists before inserting entry
+                try {
+                  await supabaseDB.addCompany(cleanEntry.company_name, cleanEntry.address || '');
+                } catch (companyError) {
+                  // Company might already exist, which is fine
+                  console.log(`Company ${cleanEntry.company_name} already exists or error:`, companyError);
+                }
+                
+                // Ensure account exists before inserting entry
+                try {
+                  await supabaseDB.addAccount(cleanEntry.company_name, cleanEntry.acc_name);
+                } catch (accountError) {
+                  // Account might already exist, which is fine
+                  console.log(`Account ${cleanEntry.acc_name} already exists or error:`, accountError);
+                }
+                
+                // Ensure sub account exists if provided
+                if (cleanEntry.sub_acc_name && cleanEntry.sub_acc_name.trim() !== '') {
+                  try {
+                    await supabaseDB.addSubAccount(cleanEntry.company_name, cleanEntry.acc_name, cleanEntry.sub_acc_name);
+                  } catch (subAccountError) {
+                    // Sub account might already exist, which is fine
+                    console.log(`Sub account ${cleanEntry.sub_acc_name} already exists or error:`, subAccountError);
+                  }
+                }
+                
+                await supabaseDB.addCashBookEntry(cleanEntry);
+                return { success: true, index: globalIndex };
               } catch (retryError) {
                 return { 
                   success: false, 
@@ -535,7 +539,7 @@ const CsvUpload: React.FC = () => {
             });
             
             const retryResults = await Promise.all(retryPromises);
-            retrySuccessCount += retryResults.filter(r => r.success).length;
+            retrySuccessCount += retryResults.filter((r) => r.success).length;
             
             // Small delay between retry batches
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -663,7 +667,7 @@ const CsvUpload: React.FC = () => {
               <p className="text-gray-600">Upload and import CSV data into the cash book system</p>
             </div>
             <Button
-              icon={}
+              
               variant="secondary"
               onClick={resetUpload}
             >
@@ -719,7 +723,7 @@ const CsvUpload: React.FC = () => {
                    </label>
                    <Button
                      variant="secondary"
-                     icon={}
+                     
                      onClick={downloadSampleCSV}
                    >
                      Download Sample CSV

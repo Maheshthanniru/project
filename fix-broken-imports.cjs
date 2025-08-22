@@ -1,28 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 
-// Function to properly clean import statements
-function cleanImports(filePath) {
+// Function to fix broken import statements
+function fixBrokenImports(filePath) {
   try {
     let content = fs.readFileSync(filePath, 'utf8');
     let modified = false;
 
-    // Fix empty import statements
-    content = content.replace(/import\s*{\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
+    // Fix import statements with empty commas
     content = content.replace(/import\s*{\s*,+\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
-    
-    // Fix imports with only commas
+    content = content.replace(/import\s*{\s*[^}]*,\s*,+\s*[^}]*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, (match) => {
+      // Remove all empty commas from the import statement
+      return match.replace(/,\s*,+/g, ',').replace(/,\s*}/g, '}').replace(/{\s*,/g, '{');
+    });
+
+    // Fix import statements with only commas
     content = content.replace(/import\s*{\s*,+\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
     
     // Remove trailing commas in import statements
     content = content.replace(/(\w+),\s*}/g, '$1}');
+    content = content.replace(/{\s*,/g, '{');
     
     // Clean up multiple consecutive empty lines
     content = content.replace(/\n\s*\n\s*\n/g, '\n\n');
 
     if (content !== fs.readFileSync(filePath, 'utf8')) {
       fs.writeFileSync(filePath, content);
-      console.log(`Cleaned imports in: ${filePath}`);
+      console.log(`Fixed broken imports in: ${filePath}`);
       modified = true;
     }
   } catch (error) {
@@ -50,12 +54,12 @@ function findTsFiles(dir) {
 }
 
 // Main execution
-console.log('Cleaning import statements...');
+console.log('Fixing broken import statements...');
 const srcDir = path.join(__dirname, 'src');
 const files = findTsFiles(srcDir);
 
 files.forEach(file => {
-  cleanImports(file);
+  fixBrokenImports(file);
 });
 
 console.log('Done!');

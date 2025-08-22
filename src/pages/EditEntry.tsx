@@ -1,9 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Edit, , , , , Lock, Unlock, , 
-  History, , , , , ,
-  , , , , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -753,7 +748,7 @@ const EditEntry: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={() => {
               const format = window.prompt('Enter export format (csv or pdf):', 'csv');
@@ -767,7 +762,7 @@ const EditEntry: React.FC = () => {
             Export
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={async () => {
               await loadEntries();
@@ -907,7 +902,7 @@ const EditEntry: React.FC = () => {
               }}
               variant="secondary"
               className="w-full"
-              icon={}
+              
             >
               Clear Filters
             </Button>
@@ -960,7 +955,7 @@ const EditEntry: React.FC = () => {
                 </Button>
                 <Button size="sm" icon={Edit} onClick={() => { handleEdit(entry); }} disabled={entry.lock_record && !isAdmin}><span className="sr-only">Edit</span></Button>
                 {isAdmin && (
-                  <Button size="sm" variant="danger" icon={} onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
+                  <Button size="sm" variant="danger"  onClick={() => { handleDelete(entry); }} disabled={entry.lock_record}><span className="sr-only">Delete</span></Button>
                 )}
               </div>
             ))
@@ -981,7 +976,7 @@ const EditEntry: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={}
+                  
                   onClick={() => setShowHistory(false)}
                 >
                   Close
@@ -1057,7 +1052,7 @@ const EditEntry: React.FC = () => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    icon={}
+                    
                     onClick={handleCancel}
                   >
                     Close
@@ -1187,7 +1182,7 @@ const EditEntry: React.FC = () => {
               <div className="p-6 border-t border-gray-200 bg-white flex-shrink-0">
                 <div className="flex gap-4">
                   <Button
-                    icon={}
+                    
                     onClick={handleSave}
                     disabled={!editMode || selectedEntry.lock_record || loading}
                   >

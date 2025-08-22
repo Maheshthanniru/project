@@ -1,12 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , , 
-  , , , , ,
-  , , , ,
-  , , , , ,
-  , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -722,28 +714,28 @@ const ApproveRecords: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={loadEntries}
           >
             Refresh
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={printReport}
           >
             Print
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={printAll}
           >
             Print All
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={closeWindow}
           >
@@ -762,7 +754,7 @@ const ApproveRecords: React.FC = () => {
               <Button
                 size="sm"
                 variant="secondary"
-                icon={}
+                
                 onClick={() => navigateDate('prev')}
                 className="px-3"
               >
@@ -777,7 +769,7 @@ const ApproveRecords: React.FC = () => {
               <Button
                 size="sm"
                 variant="secondary"
-                icon={}
+                
                 onClick={() => navigateDate('next')}
                 className="px-3"
               >
@@ -985,7 +977,7 @@ const ApproveRecords: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <Button
-                        icon={}
+                        
                         variant="secondary"
                         onClick={() => {
                           handleDirectApprove(entry.id);
@@ -996,7 +988,7 @@ const ApproveRecords: React.FC = () => {
                         Approve
                       </Button>
                       <Button
-                        icon={}
+                        
                         variant="secondary"
                         onClick={() => {
                           handleDirectReject(entry.id);
@@ -1007,7 +999,7 @@ const ApproveRecords: React.FC = () => {
                         Reject
                       </Button>
                       <Button
-                        icon={}
+                        
                         variant="secondary"
                         onClick={() => {
                           // TODO: Implement view functionality
@@ -1028,7 +1020,7 @@ const ApproveRecords: React.FC = () => {
           <div className="flex items-center justify-between mt-4 px-2 py-3 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <Button
-                icon={}
+                
                 variant="secondary"
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
@@ -1036,7 +1028,7 @@ const ApproveRecords: React.FC = () => {
                 Previous
               </Button>
               <Button
-                icon={}
+                
                 variant="secondary"
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
@@ -1055,7 +1047,7 @@ const ApproveRecords: React.FC = () => {
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                   <Button
-                    icon={}
+                    
                     variant="secondary"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
@@ -1064,7 +1056,7 @@ const ApproveRecords: React.FC = () => {
                     Previous
                   </Button>
                   <Button
-                    icon={}
+                    
                     variant="secondary"
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}

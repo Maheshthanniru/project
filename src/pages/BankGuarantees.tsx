@@ -1,9 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  CreditCard, , Edit, , , ,
-  , , , , , , ,
-  , , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -291,21 +286,21 @@ const BankGuarantees: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={loadBankGuarantees}
           >
             Refresh
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={exportToExcel}
           >
             Export
           </Button>
           <Button
-            icon={}
+            
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingBG(null);
@@ -594,7 +589,7 @@ const BankGuarantees: React.FC = () => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            icon={}
+                            
                             onClick={() => handleViewDetails(bg)}
                             className="px-2"
                           >
@@ -645,7 +640,7 @@ const BankGuarantees: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={}
+                  
                   onClick={() => setShowDetails(false)}
                 >
                   Close

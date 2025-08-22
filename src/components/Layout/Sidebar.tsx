@@ -1,8 +1,5 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  Home, , Edit, , Book, BookOpen, , FileEdit, , , , Truck, CreditCard, , LogOut, Replace, Upload
-} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface MenuItem {
@@ -19,22 +16,22 @@ const Sidebar: React.FC = () => {
 
   const menuItems: MenuItem[] = [
     { icon: Home, label: 'Dashboard', path: '/', key: 'dashboard' },
-    { icon: , label: 'New Entry', path: '/new-entry', key: 'new_entry' },
+    { icon: undefined, label: 'New Entry', path: '/new-entry', key: 'new_entry' },
     { icon: Edit, label: 'Edit Entry', path: '/edit-entry', key: 'edit_entry' },
-    { icon: , label: 'Daily Report', path: '/daily-report', key: 'daily_report' },
+    { icon: undefined, label: 'Daily Report', path: '/daily-report', key: 'daily_report' },
     { icon: Book, label: 'Detailed Ledger', path: '/detailed-ledger', key: 'detailed_ledger' },
     { icon: BookOpen, label: 'Ledger Summary', path: '/ledger-summary', key: 'ledger_summary' },
-    { icon: , label: 'Approve Records', path: '/approve-records', key: 'approve_records' },
+    { icon: undefined, label: 'Approve Records', path: '/approve-records', key: 'approve_records' },
     { icon: FileEdit, label: 'Edited Records', path: '/edited-records', key: 'edited_records' },
     { icon: Replace, label: 'Replace Form', path: '/replace-form', key: 'replace_form' },
-    { icon: , label: 'Export', path: '/export-excel', key: 'export' },
+    { icon: undefined, label: 'Export', path: '/export-excel', key: 'export' },
     { icon: Upload, label: 'CSV Upload', path: '/csv-upload', key: 'csv_upload' },
-    { icon: , label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
+    { icon: undefined, label: 'Balance Sheet', path: '/balance-sheet', key: 'balance_sheet' },
     { icon: Truck, label: 'Vehicles', path: '/vehicles', key: 'vehicles' },
     { icon: CreditCard, label: 'Bank Guarantees', path: '/bank-guarantees', key: 'bank_guarantees' },
-    { icon: , label: 'Drivers', path: '/drivers', key: 'drivers' },
+    { icon: undefined, label: 'Drivers', path: '/drivers', key: 'drivers' },
     // Admin only
-    { icon: , label: 'User Management', path: '/user-management', key: 'users', adminOnly: true },
+    { icon: undefined, label: 'User Management', path: '/user-management', key: 'users', adminOnly: true },
   ];
 
   return (

@@ -1,28 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 
-// Function to properly clean import statements
-function cleanImports(filePath) {
+// Function to fix critical syntax errors
+function fixCriticalErrors(filePath) {
   try {
     let content = fs.readFileSync(filePath, 'utf8');
     let modified = false;
 
-    // Fix empty import statements
+    // Fix empty icon attributes in JSX
+    content = content.replace(/icon=\{\}/g, '');
+    content = content.replace(/icon=\{\s*\}/g, '');
+    
+    // Fix empty icon values in object literals
+    content = content.replace(/icon:\s*,/g, 'icon: undefined,');
+    content = content.replace(/icon:\s*}/g, 'icon: undefined}');
+    
+    // Fix broken TypeScript generic syntax
+    content = content.replace(/Omit<,\s*'([^']+)'/g, "Omit<any, '$1'");
+    
+    // Remove empty import statements
     content = content.replace(/import\s*{\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
-    content = content.replace(/import\s*{\s*,+\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
-    
-    // Fix imports with only commas
-    content = content.replace(/import\s*{\s*,+\s*}\s*from\s*['"][^'"]+['"];?\s*\n?/g, '');
-    
-    // Remove trailing commas in import statements
-    content = content.replace(/(\w+),\s*}/g, '$1}');
     
     // Clean up multiple consecutive empty lines
     content = content.replace(/\n\s*\n\s*\n/g, '\n\n');
 
     if (content !== fs.readFileSync(filePath, 'utf8')) {
       fs.writeFileSync(filePath, content);
-      console.log(`Cleaned imports in: ${filePath}`);
+      console.log(`Fixed critical errors in: ${filePath}`);
       modified = true;
     }
   } catch (error) {
@@ -50,12 +54,12 @@ function findTsFiles(dir) {
 }
 
 // Main execution
-console.log('Cleaning import statements...');
+console.log('Fixing critical syntax errors...');
 const srcDir = path.join(__dirname, 'src');
 const files = findTsFiles(srcDir);
 
 files.forEach(file => {
-  cleanImports(file);
+  fixCriticalErrors(file);
 });
 
 console.log('Done!');

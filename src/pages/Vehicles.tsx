@@ -1,9 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Truck, , Edit, , , , 
-  , , , , , ,
-  , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -323,21 +318,21 @@ const Vehicles: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={loadVehicles}
           >
             Refresh
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={exportToExcel}
           >
             Export
           </Button>
           <Button
-            icon={}
+            
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingVehicle(null);
@@ -633,7 +628,7 @@ const Vehicles: React.FC = () => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            icon={}
+                            
                             onClick={() => handleViewDetails(vehicle)}
                             className="px-2"
                           >
@@ -651,7 +646,7 @@ const Vehicles: React.FC = () => {
                           <Button
                             size="sm"
                             variant="danger"
-                            icon={}
+                            
                             onClick={() => handleDelete(vehicle.id)}
                             className="px-2"
                           >
@@ -681,7 +676,7 @@ const Vehicles: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={}
+                  
                   onClick={() => setShowDetails(false)}
                 >
                   Close

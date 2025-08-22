@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { , , Edit, , , ,  } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -158,7 +157,7 @@ const Drivers: React.FC = () => {
           </div>
           
           <Button
-            icon={}
+            
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingDriver(null);
@@ -279,7 +278,7 @@ const Drivers: React.FC = () => {
                       <Button
                         size="sm"
                         variant="secondary"
-                        icon={}
+                        
                         onClick={() => setImageModal({
                           url: '',
                           label: 'License Photos',

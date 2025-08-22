@@ -1,11 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , , 
-  , , , , ,
-  , , , ,
-  , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -615,7 +608,7 @@ const LedgerSummary: React.FC = () => {
         <div className="flex items-center gap-3">
           {/*
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={refreshData}
           >
@@ -623,14 +616,14 @@ const LedgerSummary: React.FC = () => {
           </Button>
           */}
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={printSummary}
           >
             Print
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={exportToExcel}
           >

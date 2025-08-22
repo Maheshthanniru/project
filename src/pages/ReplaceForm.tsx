@@ -1,11 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , , 
-  , , , ,
-  , , , ,
-  Replace, , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -398,14 +391,14 @@ const ReplaceForm: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={loadEntries}
           >
             Refresh
           </Button>
           <Button
-            icon={}
+            
             variant="secondary"
             onClick={resetForm}
           >
@@ -447,7 +440,7 @@ const ReplaceForm: React.FC = () => {
                 Replace Company Name
               </Button>
               <Button
-                icon={}
+                
                 variant="secondary"
                 onClick={handlePreviewCompanyName}
                 disabled={!replaceData.oldCompanyName || loading}

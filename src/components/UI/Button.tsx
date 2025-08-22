@@ -1,6 +1,4 @@
 import React from 'react';
-import { DivideIcon as LucideIcon } from 'lucide-react';
-
 interface ButtonProps {
   children: React.ReactNode;
   onClick?: () => void;

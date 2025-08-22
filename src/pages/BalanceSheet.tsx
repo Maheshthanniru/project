@@ -1,11 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  , , , , , 
-  , , , , , 
-  , , , , ,
-  , , , ,
-  , , , , 
-} from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -287,10 +280,10 @@ const BalanceSheet: React.FC = () => {
             />
           </div>
           <div className="flex flex-row gap-2 mt-2 md:mt-0">
-            <Button icon={} variant="secondary" onClick={refreshData}>Refresh</Button>
-            <Button icon={} variant="secondary" onClick={exportToExcel}>Export</Button>
-            <Button icon={} variant="secondary" onClick={printReport}>Print</Button>
-            <Button icon={} variant="secondary" onClick={resetFilters}>Reset</Button>
+            <Button  variant="secondary" onClick={refreshData}>Refresh</Button>
+            <Button  variant="secondary" onClick={exportToExcel}>Export</Button>
+            <Button  variant="secondary" onClick={printReport}>Print</Button>
+            <Button  variant="secondary" onClick={resetFilters}>Reset</Button>
           </div>
         </div>
         {/* Responsive table/card layout */}
