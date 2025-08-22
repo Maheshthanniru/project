@@ -1036,12 +1036,13 @@ const EditEntry: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Modal - Use Two Column Grid and Sticky Save/Cancel Bar */}
+      {/* Edit Modal - Fixed Layout with Proper Spacing */}
       {selectedEntry && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-lg">
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] flex flex-col shadow-lg">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">
                   {editMode ? 'Edit Entry' : 'View Entry'} #{selectedEntry.sno}
                 </h3>
@@ -1065,6 +1066,10 @@ const EditEntry: React.FC = () => {
                   </Button>
                 </div>
               </div>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Basic Information */}
                 <div className="space-y-6">
@@ -1152,6 +1157,7 @@ const EditEntry: React.FC = () => {
                   />
                 </div>
               </div>
+              
               {/* Entry Metadata */}
               <div className="bg-gray-50 p-4 rounded-lg mt-8">
                 <h4 className="font-medium text-gray-900 mb-3">Entry Information</h4>
@@ -1176,9 +1182,12 @@ const EditEntry: React.FC = () => {
                   </div>
                 )}
               </div>
-              {/* Sticky Save/Cancel Bar */}
-              {editMode && (
-                <div className="sticky bottom-0 left-0 right-0 bg-white py-4 flex gap-4 border-t border-gray-200 mt-8 z-10">
+            </div>
+
+            {/* Footer - Fixed at Bottom */}
+            {editMode && (
+              <div className="p-6 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="flex gap-4">
                   <Button
                     icon={Check}
                     onClick={handleSave}
@@ -1193,8 +1202,8 @@ const EditEntry: React.FC = () => {
                     Cancel
                   </Button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

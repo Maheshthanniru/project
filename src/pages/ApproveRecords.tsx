@@ -105,6 +105,17 @@ const ApproveRecords: React.FC = () => {
     try {
       const allEntries = await supabaseDB.getCashBookEntries();
       console.log('[ApproveRecords] Fetched entries:', allEntries);
+      
+      // Debug: Check approval status of entries
+      const pendingEntries = allEntries.filter(entry => 
+        entry.approved === false || 
+        entry.approved === null || 
+        entry.approved === undefined || 
+        entry.approved === '' || 
+        entry.approved === 'false'
+      );
+      console.log('[ApproveRecords] Pending entries:', pendingEntries);
+      
       setEntries(allEntries);
       if (!allEntries || allEntries.length === 0) {
         setFetchError('No entries found in the database.');
@@ -137,12 +148,20 @@ const ApproveRecords: React.FC = () => {
       filtered = filtered.filter(entry => entry.staff === filters.staff);
     }
 
-    // Only show pending records
-    filtered = filtered.filter(entry => !entry.approved || entry.approved === '');
+    // Only show pending records (not approved)
+    filtered = filtered.filter(entry => {
+      // Check if entry is not approved (false, null, undefined, or empty string)
+      return entry.approved === false || 
+             entry.approved === null || 
+             entry.approved === undefined || 
+             entry.approved === '' || 
+             entry.approved === 'false';
+    });
+    
     setFilteredEntries(filtered);
     setCurrentPage(1);
     if (filtered.length === 0) {
-      setFetchError('No records found matching the selected filters.');
+      setFetchError('No pending records found matching the selected filters.');
     } else {
       setFetchError(null);
     }
@@ -150,7 +169,9 @@ const ApproveRecords: React.FC = () => {
 
   const updateSummary = () => {
     const totalRecords = filteredEntries.length;
-    const approvedRecords = filteredEntries.filter(entry => entry.approved === 'true').length;
+    const approvedRecords = filteredEntries.filter(entry => 
+      entry.approved === true || entry.approved === 'true'
+    ).length;
     const pendingRecords = totalRecords - approvedRecords;
     const selectedCount = selectedEntries.size;
 
@@ -457,18 +478,212 @@ const ApproveRecords: React.FC = () => {
   };
 
   const printReport = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    try {
+      // Create a print-friendly version of the current page
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error('Popup blocked. Please allow popups for this site.');
+        return;
+      }
+
+      const currentPageEntries = getCurrentPageEntries();
+      const title = `Approve Records - ${filters.date}`;
+      
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              @media print {
+                @page { margin: 1in; }
+              }
+              body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 20px; }
+              .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+              .title { font-size: 24px; font-weight: bold; margin: 0; }
+              .subtitle { font-size: 16px; color: #666; margin: 5px 0; }
+              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f3f4f6; font-weight: bold; }
+              .approved { background-color: #d1fae5; }
+              .pending { background-color: #fef3c7; }
+              .summary { margin: 20px 0; padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; }
+              .footer { text-align: center; margin-top: 20px; font-size: 10px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="title">Thirumala Group</h1>
+              <p class="subtitle">Approve Records Report</p>
+              <p>Date: ${filters.date} | Company: ${filters.company || 'All'} | Staff: ${filters.staff || 'All'}</p>
+            </div>
+
+            <div class="summary">
+              <h3>Summary</h3>
+              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Pending: ${summary.pendingRecords}</p>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Date</th>
+                  <th>Company</th>
+                  <th>Account</th>
+                  <th>Particulars</th>
+                  <th>Credit</th>
+                  <th>Debit</th>
+                  <th>Staff</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${currentPageEntries.map((entry, index) => `
+                  <tr class="${entry.approved ? 'approved' : 'pending'}">
+                    <td>${entry.sno}</td>
+                    <td>${entry.c_date}</td>
+                    <td>${entry.company_name || ''}</td>
+                    <td>${entry.acc_name || ''}</td>
+                    <td>${entry.particulars || ''}</td>
+                    <td>${entry.credit || 0}</td>
+                    <td>${entry.debit || 0}</td>
+                    <td>${entry.staff || ''}</td>
+                    <td>${entry.approved ? 'Approved' : 'Pending'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              <p>Generated by Thirumala Group Business Management System</p>
+              <p>Generated on: ${new Date().toLocaleString()}</p>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      // Wait for content to load then print
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+      toast.success('Print dialog opened');
+    } catch (error) {
+      console.error('Print error:', error);
+      toast.error('Failed to open print dialog');
+    }
   };
 
   const printAll = () => {
-    // Print all records logic
-    toast.success('Preparing to print all records');
+    try {
+      // Create a print-friendly version of all filtered records
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error('Popup blocked. Please allow popups for this site.');
+        return;
+      }
+
+      const title = `All Approve Records - ${filters.date}`;
+      
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              @media print {
+                @page { margin: 1in; }
+              }
+              body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 20px; }
+              .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+              .title { font-size: 24px; font-weight: bold; margin: 0; }
+              .subtitle { font-size: 16px; color: #666; margin: 5px 0; }
+              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f3f4f6; font-weight: bold; }
+              .approved { background-color: #d1fae5; }
+              .pending { background-color: #fef3c7; }
+              .summary { margin: 20px 0; padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; }
+              .footer { text-align: center; margin-top: 20px; font-size: 10px; color: #666; }
+              .page-break { page-break-before: always; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="title">Thirumala Group</h1>
+              <p class="subtitle">All Approve Records Report</p>
+              <p>Date: ${filters.date} | Company: ${filters.company || 'All'} | Staff: ${filters.staff || 'All'}</p>
+            </div>
+
+            <div class="summary">
+              <h3>Summary</h3>
+              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Pending: ${summary.pendingRecords}</p>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Date</th>
+                  <th>Company</th>
+                  <th>Account</th>
+                  <th>Particulars</th>
+                  <th>Credit</th>
+                  <th>Debit</th>
+                  <th>Staff</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredEntries.map((entry, index) => `
+                  <tr class="${entry.approved ? 'approved' : 'pending'}">
+                    <td>${entry.sno}</td>
+                    <td>${entry.c_date}</td>
+                    <td>${entry.company_name || ''}</td>
+                    <td>${entry.acc_name || ''}</td>
+                    <td>${entry.particulars || ''}</td>
+                    <td>${entry.credit || 0}</td>
+                    <td>${entry.debit || 0}</td>
+                    <td>${entry.staff || ''}</td>
+                    <td>${entry.approved ? 'Approved' : 'Pending'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="footer">
+              <p>Generated by Thirumala Group Business Management System</p>
+              <p>Generated on: ${new Date().toLocaleString()}</p>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      // Wait for content to load then print
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+      toast.success('Print all dialog opened');
+    } catch (error) {
+      console.error('Print all error:', error);
+      toast.error('Failed to open print all dialog');
+    }
   };
 
   const closeWindow = () => {
-    // Close window logic
-    toast.success('Close window requested');
+    // Close the current window/tab
+    window.close();
   };
 
   const getCurrentPageEntries = () => {
@@ -478,8 +693,8 @@ const ApproveRecords: React.FC = () => {
   };
 
   const getRowColor = (entry: any) => {
-    if (entry.approved === true || entry.approved === 'true') return 'bg-white border-gray-200';
-    return 'bg-red-100 border-red-300';
+    if (entry.approved === true || entry.approved === 'true') return 'bg-green-50 border-green-200';
+    return 'bg-yellow-50 border-yellow-300';
   };
 
   if (!isAdmin) {

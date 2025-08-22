@@ -316,10 +316,15 @@ class SupabaseDatabase {
 
     const nextSno = lastEntry && lastEntry.length > 0 ? lastEntry[0].sno + 1 : 1;
 
+    // Filter out undefined values to allow database defaults to work
+    const filteredEntry = Object.fromEntries(
+      Object.entries(entry).filter(([_, value]) => value !== undefined)
+    );
+
     const { data, error } = await supabase
       .from('cash_book')
       .insert({
-        ...entry,
+        ...filteredEntry,
         sno: nextSno,
         entry_time: new Date().toISOString(),
         approved: '', // Set to pending by default

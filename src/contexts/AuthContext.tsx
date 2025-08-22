@@ -65,11 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!username.trim() || !password.trim()) {
         return { success: false, error: 'Username and password are required' };
       }
-      // 1. Fetch user from userss table
+      // 1. Fetch user from users table with user type (case-insensitive)
       const { data: dbUser, error } = await supabase
-        .from('userss')
-        .select('*')
-        .eq('username', username)
+        .from('users')
+        .select(`
+          *,
+          user_types!inner(user_type)
+        `)
+        .ilike('username', username)
         .single();
       if (error || !dbUser) {
         return { success: false, error: 'Invalid username or password' };
@@ -79,28 +82,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!passwordMatch) {
         return { success: false, error: 'Invalid username or password' };
       }
-      let features: string[] = [];
-      if (dbUser.is_admin) {
-        // Admin: fetch all features
-        const { data: allFeatures } = await supabase.from('features').select('key');
-        features = (allFeatures || []).map((f: any) => f.key);
-        console.log('Admin login: all features', features);
-      } else {
-        // Non-admin: fetch allowed features
-        const { data: accessRows, error: accessError } = await supabase
-          .from('user_access')
-          .select('feature_key')
-          .eq('user_id', dbUser.id);
-        if (accessError) {
-          console.error('Error fetching user_access:', accessError);
-        }
-        features = (accessRows || []).map((row: any) => row.feature_key);
-        console.log('User login: allowed features', features);
+      
+      // 3. Check if user is active
+      if (!dbUser.is_active) {
+        return { success: false, error: 'Account is deactivated' };
       }
+      
+      // 4. Determine if user is admin based on user type
+      const isAdmin = dbUser.user_types?.user_type === 'Admin';
+      
+      // 5. For now, give all features to admin users, empty array to others
+      let features: string[] = [];
+      if (isAdmin) {
+        // Admin gets all features - we'll implement feature management later
+        features = [
+          'dashboard', 
+          'new_entry', 
+          'edit_entry',
+          'daily_report',
+          'detailed_ledger', 
+          'ledger_summary',
+          'approve_records',
+          'edited_records',
+          'replace_form',
+          'balance_sheet', 
+          'export',
+          'csv_upload', 
+          'export_excel',
+          'vehicles', 
+          'drivers', 
+          'bank_guarantees', 
+          'users'
+        ];
+      }
+      
       const userData: User = {
         id: dbUser.id,
         username: dbUser.username,
-        is_admin: dbUser.is_admin,
+        is_admin: isAdmin,
         features,
       };
       setUser(userData);
