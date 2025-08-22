@@ -1,11 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Hardcoded Supabase configuration for deployment
-const supabaseUrl = 'https://pmqeegdmcrktccszgbwu.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcWVlZ2RtY3JrdGNjc3pnYnd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MDY1OTUsImV4cCI6MjA2NzQ4MjU5NX0.OqaYKbr2CcLd10JTdyy0IRawUPwW3KGCAbsPNThcCFM';
+// Supabase configuration with environment variables and fallbacks
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pmqeegdmcrktccszgbwu.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcWVlZ2RtY3JrdGNjc3pnYnd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MDY1OTUsImV4cCI6MjA2NzQ4MjU5NX0.OqaYKbr2CcLd10JTdyy0IRawUPwW3KGCAbsPNThcCFM';
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validate configuration
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase configuration. Please check your environment variables.');
+}
+
+// Create Supabase client with error handling
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
 
 // Database types based on your schema
 export interface Database {
@@ -308,28 +319,49 @@ export interface Database {
 export const supabaseHelpers = {
   // Get current user
   async getCurrentUser() {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    return { user, error };
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      return { user, error };
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return { user: null, error };
+    }
   },
 
   // Sign in
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password});
-    return { data, error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      return { data, error };
+    } catch (error) {
+      console.error('Error signing in:', error);
+      return { data: null, error };
+    }
   },
 
   // Sign out
   async signOut() {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    try {
+      const { error } = await supabase.auth.signOut();
+      return { error };
+    } catch (error) {
+      console.error('Error signing out:', error);
+      return { error };
+    }
   },
 
   // Check if user is authenticated
   async isAuthenticated() {
-    const { data: { session } } = await supabase.auth.getSession();
-    return !!session;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      return !!session;
+    } catch (error) {
+      console.error('Error checking authentication:', error);
+      return false;
+    }
   },
 };
 
