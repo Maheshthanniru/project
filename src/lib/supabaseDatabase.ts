@@ -120,12 +120,12 @@ class SupabaseDatabase {
       .from('companies')
       .select('*')
       .order('company_name');
-    
+
     if (error) {
       console.error('Error fetching companies:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
@@ -134,7 +134,7 @@ class SupabaseDatabase {
       .from('companies')
       .insert({
         company_name: companyName,
-        address: address
+        address: address,
       })
       .select()
       .single();
@@ -166,12 +166,12 @@ class SupabaseDatabase {
       .from('company_main_accounts')
       .select('*')
       .order('acc_name');
-    
+
     if (error) {
       console.error('Error fetching accounts:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
@@ -181,12 +181,12 @@ class SupabaseDatabase {
       .select('*')
       .eq('company_name', companyName)
       .order('acc_name');
-    
+
     if (error) {
       console.error('Error fetching accounts by company:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
@@ -195,7 +195,7 @@ class SupabaseDatabase {
       .from('company_main_accounts')
       .insert({
         company_name: companyName,
-        acc_name: accountName
+        acc_name: accountName,
       })
       .select()
       .single();
@@ -227,38 +227,45 @@ class SupabaseDatabase {
       .from('company_main_sub_acc')
       .select('*')
       .order('sub_acc');
-    
+
     if (error) {
       console.error('Error fetching sub accounts:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async getSubAccountsByAccount(companyName: string, accountName: string): Promise<SubAccount[]> {
+  async getSubAccountsByAccount(
+    companyName: string,
+    accountName: string
+  ): Promise<SubAccount[]> {
     const { data, error } = await supabase
       .from('company_main_sub_acc')
       .select('*')
       .eq('company_name', companyName)
       .eq('acc_name', accountName)
       .order('sub_acc');
-    
+
     if (error) {
       console.error('Error fetching sub accounts by account:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async addSubAccount(companyName: string, accountName: string, subAccountName: string): Promise<SubAccount> {
+  async addSubAccount(
+    companyName: string,
+    accountName: string,
+    subAccountName: string
+  ): Promise<SubAccount> {
     const { data, error } = await supabase
       .from('company_main_sub_acc')
       .insert({
         company_name: companyName,
         acc_name: accountName,
-        sub_acc: subAccountName
+        sub_acc: subAccountName,
       })
       .select()
       .single();
@@ -291,18 +298,36 @@ class SupabaseDatabase {
       .select('*')
       .order('c_date', { ascending: false })
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching cash book entries:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async addCashBookEntry(entry: Omit<CashBookEntry, 'id' | 'sno' | 'entry_time' | 'approved' | 'edited' | 'e_count' | 'lock_record' | 'created_at' | 'updated_at'>): Promise<CashBookEntry> {
-    // Validate financial entry
-    const validation = FinancialCalculator.validateEntry(entry.credit, entry.debit);
+  async addCashBookEntry(
+    entry: Omit<
+      CashBookEntry,
+      | 'id'
+      | 'sno'
+      | 'entry_time'
+      | 'approved'
+      | 'edited'
+      | 'e_count'
+      | 'lock_record'
+      | 'created_at'
+      | 'updated_at'
+    >,
+    allowBothZero: boolean = false
+  ): Promise<CashBookEntry> {
+    // Validate financial entry with option to allow both zero amounts
+    const validation = FinancialCalculator.validateEntry(
+      entry.credit,
+      entry.debit,
+      allowBothZero
+    );
     if (!validation.isValid) {
       throw new Error(`Invalid entry: ${validation.errors.join(', ')}`);
     }
@@ -314,7 +339,8 @@ class SupabaseDatabase {
       .order('sno', { ascending: false })
       .limit(1);
 
-    const nextSno = lastEntry && lastEntry.length > 0 ? lastEntry[0].sno + 1 : 1;
+    const nextSno =
+      lastEntry && lastEntry.length > 0 ? lastEntry[0].sno + 1 : 1;
 
     // Filter out undefined values to allow database defaults to work
     const filteredEntry = Object.fromEntries(
@@ -327,10 +353,10 @@ class SupabaseDatabase {
         ...filteredEntry,
         sno: nextSno,
         entry_time: new Date().toISOString(),
-        approved: '', // Set to pending by default
+        approved: false, // Set to pending by default (boolean)
         edited: false,
         e_count: 0,
-        lock_record: false
+        lock_record: false,
       })
       .select()
       .single();
@@ -342,12 +368,30 @@ class SupabaseDatabase {
     return data;
   }
 
-  async updateCashBookEntry(id: string, updates: Partial<CashBookEntry>, editedBy?: string): Promise<CashBookEntry | null> {
+  async updateCashBookEntry(
+    id: string,
+    updates: Partial<CashBookEntry>,
+    editedBy?: string
+  ): Promise<CashBookEntry | null> {
     // Only pick fields that exist in the table
     const allowedFields = [
-      'acc_name', 'sub_acc_name', 'particulars', 'credit', 'debit', 'company_name',
-      'address', 'staff', 'users', 'entry_time', 'sale_qty', 'purchase_qty',
-      'approved', 'cb', 'c_date', 'e_count', 'edited'
+      'acc_name',
+      'sub_acc_name',
+      'particulars',
+      'credit',
+      'debit',
+      'company_name',
+      'address',
+      'staff',
+      'users',
+      'entry_time',
+      'sale_qty',
+      'purchase_qty',
+      'approved',
+      'cb',
+      'c_date',
+      'e_count',
+      'edited',
     ];
     const filteredUpdates: any = {};
     for (const key of allowedFields) {
@@ -363,7 +407,10 @@ class SupabaseDatabase {
       .eq('id', id)
       .single();
     if (fetchError) {
-      console.error('Error fetching old cash book entry for audit log:', fetchError);
+      console.error(
+        'Error fetching old cash book entry for audit log:',
+        fetchError
+      );
     }
 
     const { data, error } = await supabase
@@ -391,7 +438,10 @@ class SupabaseDatabase {
         .from('edit_cash_book')
         .insert(auditLog);
       if (auditError) {
-        console.error('Error inserting audit log into edit_cash_book:', auditError);
+        console.error(
+          'Error inserting audit log into edit_cash_book:',
+          auditError
+        );
       }
     }
 
@@ -436,7 +486,10 @@ class SupabaseDatabase {
         .from('edit_cash_book')
         .insert(auditLog);
       if (auditError) {
-        console.error('Error inserting lock audit log into edit_cash_book:', auditError);
+        console.error(
+          'Error inserting lock audit log into edit_cash_book:',
+          auditError
+        );
       }
     }
 
@@ -444,7 +497,10 @@ class SupabaseDatabase {
   }
 
   // Unlock a cash book entry
-  async unlockEntry(id: string, unlockedBy: string): Promise<CashBookEntry | null> {
+  async unlockEntry(
+    id: string,
+    unlockedBy: string
+  ): Promise<CashBookEntry | null> {
     // Fetch the old entry for audit logging
     const { data: oldEntry, error: fetchError } = await supabase
       .from('cash_book')
@@ -452,7 +508,10 @@ class SupabaseDatabase {
       .eq('id', id)
       .single();
     if (fetchError) {
-      console.error('Error fetching old cash book entry for unlock:', fetchError);
+      console.error(
+        'Error fetching old cash book entry for unlock:',
+        fetchError
+      );
     }
 
     const { data, error } = await supabase
@@ -481,7 +540,10 @@ class SupabaseDatabase {
         .from('edit_cash_book')
         .insert(auditLog);
       if (auditError) {
-        console.error('Error inserting unlock audit log into edit_cash_book:', auditError);
+        console.error(
+          'Error inserting unlock audit log into edit_cash_book:',
+          auditError
+        );
       }
     }
 
@@ -489,8 +551,13 @@ class SupabaseDatabase {
   }
 
   async deleteCashBookEntry(id: string, deletedBy: string): Promise<boolean> {
-    console.log('deleteCashBookEntry called with id:', id, 'deletedBy:', deletedBy);
-    
+    console.log(
+      'deleteCashBookEntry called with id:',
+      id,
+      'deletedBy:',
+      deletedBy
+    );
+
     try {
       // Fetch the old entry for backup
       const { data: oldEntry, error: fetchError } = await supabase
@@ -498,9 +565,12 @@ class SupabaseDatabase {
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (fetchError) {
-        console.error('Error fetching old cash book entry for deletion:', fetchError);
+        console.error(
+          'Error fetching old cash book entry for deletion:',
+          fetchError
+        );
         return false;
       }
 
@@ -514,15 +584,18 @@ class SupabaseDatabase {
             deleted_by: deletedBy || 'unknown',
             deleted_at: new Date().toISOString(),
           };
-          
+
           console.log('Inserting into deleted_cash_book:', deletedRecord);
-          
+
           const { error: insertError } = await supabase
             .from('deleted_cash_book')
             .insert(deletedRecord);
-            
+
           if (insertError) {
-            console.error('Error inserting into deleted_cash_book:', insertError);
+            console.error(
+              'Error inserting into deleted_cash_book:',
+              insertError
+            );
             console.log('Continuing with delete without backup...');
             // Continue with delete even if backup fails
           } else {
@@ -536,10 +609,7 @@ class SupabaseDatabase {
 
       // Now delete the record
       console.log('Deleting from cash_book with id:', id);
-      const { error } = await supabase
-        .from('cash_book')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('cash_book').delete().eq('id', id);
 
       if (error) {
         console.error('Error deleting cash book entry:', error);
@@ -561,12 +631,12 @@ class SupabaseDatabase {
       .select('*')
       .eq('is_active', true)
       .order('username');
-    
+
     if (error) {
       console.error('Error fetching users:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
@@ -576,12 +646,12 @@ class SupabaseDatabase {
       .select('*')
       .eq('username', username)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user by username:', error);
       return null;
     }
-    
+
     return data;
   }
 
@@ -591,16 +661,18 @@ class SupabaseDatabase {
       .select('*')
       .eq('id', id)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user by ID:', error);
       return null;
     }
-    
+
     return data;
   }
 
-  async createUser(user: Omit<any, 'id' | 'created_at' | 'updated_at'>): Promise<User> {
+  async createUser(
+    user: Omit<any, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<User> {
     const { data, error } = await supabase
       .from('users')
       .insert(user)
@@ -619,7 +691,7 @@ class SupabaseDatabase {
       .from('users')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -634,10 +706,7 @@ class SupabaseDatabase {
   }
 
   async deleteUser(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('users').delete().eq('id', id);
 
     if (error) {
       console.error('Error deleting user:', error);
@@ -653,16 +722,18 @@ class SupabaseDatabase {
       .from('bank_guarantees')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching bank guarantees:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async addBankGuarantee(bg: Omit<BankGuarantee, 'id' | 'sno' | 'created_at' | 'updated_at'>): Promise<BankGuarantee> {
+  async addBankGuarantee(
+    bg: Omit<BankGuarantee, 'id' | 'sno' | 'created_at' | 'updated_at'>
+  ): Promise<BankGuarantee> {
     const { data, error } = await supabase
       .from('bank_guarantees')
       .insert(bg)
@@ -676,12 +747,15 @@ class SupabaseDatabase {
     return data;
   }
 
-  async updateBankGuarantee(id: string, updates: Partial<BankGuarantee>): Promise<BankGuarantee | null> {
+  async updateBankGuarantee(
+    id: string,
+    updates: Partial<BankGuarantee>
+  ): Promise<BankGuarantee | null> {
     const { data, error } = await supabase
       .from('bank_guarantees')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -715,16 +789,18 @@ class SupabaseDatabase {
       .from('vehicles')
       .select('*')
       .order('v_no');
-    
+
     if (error) {
       console.error('Error fetching vehicles:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async addVehicle(vehicle: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>): Promise<Vehicle> {
+  async addVehicle(
+    vehicle: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<Vehicle> {
     const { data, error } = await supabase
       .from('vehicles')
       .insert(vehicle)
@@ -738,12 +814,15 @@ class SupabaseDatabase {
     return data;
   }
 
-  async updateVehicle(id: string, updates: Partial<Vehicle>): Promise<Vehicle | null> {
+  async updateVehicle(
+    id: string,
+    updates: Partial<Vehicle>
+  ): Promise<Vehicle | null> {
     const { data, error } = await supabase
       .from('vehicles')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -758,10 +837,7 @@ class SupabaseDatabase {
   }
 
   async deleteVehicle(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('vehicles')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('vehicles').delete().eq('id', id);
 
     if (error) {
       console.error('Error deleting vehicle:', error);
@@ -777,16 +853,18 @@ class SupabaseDatabase {
       .from('drivers')
       .select('*')
       .order('driver_name');
-    
+
     if (error) {
       console.error('Error fetching drivers:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
-  async addDriver(driver: Omit<Driver, 'id' | 'created_at' | 'updated_at'>): Promise<Driver> {
+  async addDriver(
+    driver: Omit<Driver, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<Driver> {
     const { data, error } = await supabase
       .from('drivers')
       .insert(driver)
@@ -800,12 +878,15 @@ class SupabaseDatabase {
     return data;
   }
 
-  async updateDriver(id: string, updates: Partial<Driver>): Promise<Driver | null> {
+  async updateDriver(
+    id: string,
+    updates: Partial<Driver>
+  ): Promise<Driver | null> {
     const { data, error } = await supabase
       .from('drivers')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -820,10 +901,7 @@ class SupabaseDatabase {
   }
 
   async deleteDriver(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('drivers')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('drivers').delete().eq('id', id);
 
     if (error) {
       console.error('Error deleting driver:', error);
@@ -834,13 +912,16 @@ class SupabaseDatabase {
   }
 
   // Search operations
-  async searchCashBookEntries(searchTerm: string, dateFilter?: string): Promise<CashBookEntry[]> {
-    let query = supabase
-      .from('cash_book')
-      .select('*');
+  async searchCashBookEntries(
+    searchTerm: string,
+    dateFilter?: string
+  ): Promise<CashBookEntry[]> {
+    let query = supabase.from('cash_book').select('*');
 
     if (searchTerm) {
-      query = query.or(`particulars.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,acc_name.ilike.%${searchTerm}%`);
+      query = query.or(
+        `particulars.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,acc_name.ilike.%${searchTerm}%`
+      );
     }
 
     if (dateFilter) {
@@ -861,7 +942,9 @@ class SupabaseDatabase {
   async getDashboardStats(date?: string) {
     const { data, error } = await supabase
       .from('cash_book')
-      .select('credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline');
+      .select(
+        'credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline'
+      );
 
     if (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -875,23 +958,38 @@ class SupabaseDatabase {
         onlineDebit: 0,
         offlineDebit: 0,
         totalOnline: 0,
-        totalOffline: 0
+        totalOffline: 0,
       };
     }
 
     const entries = data || [];
     const today = date || new Date().toISOString().split('T')[0];
-    
+
     const todayEntries = entries.filter(e => e.c_date === today);
-    const totalCredit = todayEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+    const totalCredit = todayEntries.reduce(
+      (sum, e) => sum + (e.credit || 0),
+      0
+    );
     const totalDebit = todayEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
     const balance = totalCredit - totalDebit;
 
     // Calculate online vs offline amounts using new fields
-    const onlineCredit = todayEntries.reduce((sum, e) => sum + (e.credit_online || 0), 0);
-    const offlineCredit = todayEntries.reduce((sum, e) => sum + (e.credit_offline || 0), 0);
-    const onlineDebit = todayEntries.reduce((sum, e) => sum + (e.debit_online || 0), 0);
-    const offlineDebit = todayEntries.reduce((sum, e) => sum + (e.debit_offline || 0), 0);
+    const onlineCredit = todayEntries.reduce(
+      (sum, e) => sum + (e.credit_online || 0),
+      0
+    );
+    const offlineCredit = todayEntries.reduce(
+      (sum, e) => sum + (e.credit_offline || 0),
+      0
+    );
+    const onlineDebit = todayEntries.reduce(
+      (sum, e) => sum + (e.debit_online || 0),
+      0
+    );
+    const offlineDebit = todayEntries.reduce(
+      (sum, e) => sum + (e.debit_offline || 0),
+      0
+    );
 
     const totalOnline = onlineCredit + onlineDebit;
     const totalOffline = offlineCredit + offlineDebit;
@@ -906,7 +1004,7 @@ class SupabaseDatabase {
       onlineDebit,
       offlineDebit,
       totalOnline,
-      totalOffline
+      totalOffline,
     };
   }
 
@@ -928,9 +1026,9 @@ class SupabaseDatabase {
       // Toggle the approval status
       const { error: updateError } = await supabase
         .from('cash_book')
-        .update({ 
+        .update({
           approved: !currentEntry.approved,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -949,7 +1047,16 @@ class SupabaseDatabase {
   // Export data for backup
   async exportData(): Promise<any> {
     try {
-      const [companies, accounts, subAccounts, entries, users, bankGuarantees, vehicles, drivers] = await Promise.all([
+      const [
+        companies,
+        accounts,
+        subAccounts,
+        entries,
+        users,
+        bankGuarantees,
+        vehicles,
+        drivers,
+      ] = await Promise.all([
         this.getCompanies(),
         this.getAccounts(),
         this.getSubAccounts(),
@@ -957,7 +1064,7 @@ class SupabaseDatabase {
         this.getUsers(),
         this.getBankGuarantees(),
         this.getVehicles(),
-        this.getDrivers()
+        this.getDrivers(),
       ]);
 
       return {
@@ -970,7 +1077,7 @@ class SupabaseDatabase {
         vehicles,
         drivers,
         exportDate: new Date().toISOString(),
-        version: '1.0'
+        version: '1.0',
       };
     } catch (error) {
       console.error('Error exporting data:', error);
@@ -999,7 +1106,9 @@ class SupabaseDatabase {
   }
 
   // Get entries by approval status
-  async getEntriesByApprovalStatus(approved: boolean): Promise<CashBookEntry[]> {
+  async getEntriesByApprovalStatus(
+    approved: boolean
+  ): Promise<CashBookEntry[]> {
     try {
       const { data, error } = await supabase
         .from('cash_book')
@@ -1057,12 +1166,12 @@ class SupabaseDatabase {
       .from('deleted_cash_book')
       .select('*')
       .order('deleted_at', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching deleted cash book entries:', error);
       return [];
     }
-    
+
     return data || [];
   }
 
@@ -1073,13 +1182,15 @@ class SupabaseDatabase {
       .select('particulars')
       .not('particulars', 'is', null)
       .not('particulars', 'eq', '');
-    
+
     if (error) {
       console.error('Error fetching unique particulars:', error);
       return [];
     }
-    
-    const uniqueParticulars = [...new Set(data?.map(item => item.particulars).filter(Boolean))];
+
+    const uniqueParticulars = [
+      ...new Set(data?.map(item => item.particulars).filter(Boolean)),
+    ];
     return uniqueParticulars.sort();
   }
 
@@ -1089,13 +1200,15 @@ class SupabaseDatabase {
       .select('sale_qty')
       .not('sale_qty', 'is', null)
       .gt('sale_qty', 0);
-    
+
     if (error) {
       console.error('Error fetching unique sale quantities:', error);
       return [];
     }
-    
-    const uniqueQuantities = [...new Set(data?.map(item => item.sale_qty).filter(Boolean))];
+
+    const uniqueQuantities = [
+      ...new Set(data?.map(item => item.sale_qty).filter(Boolean)),
+    ];
     return uniqueQuantities.sort((a, b) => a - b);
   }
 
@@ -1105,13 +1218,15 @@ class SupabaseDatabase {
       .select('purchase_qty')
       .not('purchase_qty', 'is', null)
       .gt('purchase_qty', 0);
-    
+
     if (error) {
       console.error('Error fetching unique purchase quantities:', error);
       return [];
     }
-    
-    const uniqueQuantities = [...new Set(data?.map(item => item.purchase_qty).filter(Boolean))];
+
+    const uniqueQuantities = [
+      ...new Set(data?.map(item => item.purchase_qty).filter(Boolean)),
+    ];
     return uniqueQuantities.sort((a, b) => a - b);
   }
 
@@ -1121,13 +1236,15 @@ class SupabaseDatabase {
       .select('credit')
       .not('credit', 'is', null)
       .gt('credit', 0);
-    
+
     if (error) {
       console.error('Error fetching unique credit amounts:', error);
       return [];
     }
-    
-    const uniqueAmounts = [...new Set(data?.map(item => item.credit).filter(Boolean))];
+
+    const uniqueAmounts = [
+      ...new Set(data?.map(item => item.credit).filter(Boolean)),
+    ];
     return uniqueAmounts.sort((a, b) => a - b);
   }
 
@@ -1137,16 +1254,18 @@ class SupabaseDatabase {
       .select('debit')
       .not('debit', 'is', null)
       .gt('debit', 0);
-    
+
     if (error) {
       console.error('Error fetching unique debit amounts:', error);
       return [];
     }
-    
-    const uniqueAmounts = [...new Set(data?.map(item => item.debit).filter(Boolean))];
+
+    const uniqueAmounts = [
+      ...new Set(data?.map(item => item.debit).filter(Boolean)),
+    ];
     return uniqueAmounts.sort((a, b) => a - b);
   }
 }
 
 // Export singleton instance
-export const supabaseDB = new SupabaseDatabase(); 
+export const supabaseDB = new SupabaseDatabase();

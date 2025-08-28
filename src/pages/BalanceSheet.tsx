@@ -29,7 +29,7 @@ interface BalanceSheetAccount {
 
 const BalanceSheet: React.FC = () => {
   const { user } = useAuth();
-  
+
   const [filters, setFilters] = useState<BalanceSheetFilters>({
     companyName: '',
     betweenDates: true,
@@ -39,18 +39,23 @@ const BalanceSheet: React.FC = () => {
     bothYesNo: '',
   });
 
-  const [balanceSheetData, setBalanceSheetData] = useState<BalanceSheetAccount[]>([]);
+  const [balanceSheetData, setBalanceSheetData] = useState<
+    BalanceSheetAccount[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [showFinalReport, setShowFinalReport] = useState(false);
 
   // Dropdown data
-  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
+  const [companies, setCompanies] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // Summary totals
   const [totals, setTotals] = useState({
     totalCredit: 0,
     totalDebit: 0,
-    balanceRs: 0});
+    balanceRs: 0,
+  });
 
   const yesNoOptions = [
     { value: '', label: 'All' },
@@ -74,7 +79,7 @@ const BalanceSheet: React.FC = () => {
       const companies = await supabaseDB.getCompanies();
       const companiesData = companies.map(company => ({
         value: company.company_name,
-        label: company.company_name
+        label: company.company_name,
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
     } catch (error) {
@@ -87,10 +92,10 @@ const BalanceSheet: React.FC = () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // Get filtered entries
       let entries = await supabaseDB.getCashBookEntries();
-      
+
       // Apply date filter
       if (filters.betweenDates) {
         entries = entries.filter(entry => {
@@ -103,7 +108,9 @@ const BalanceSheet: React.FC = () => {
 
       // Apply company filter
       if (filters.companyName) {
-        entries = entries.filter(entry => entry.company_name === filters.companyName);
+        entries = entries.filter(
+          entry => entry.company_name === filters.companyName
+        );
       }
 
       // Group by account name and calculate balances
@@ -121,7 +128,7 @@ const BalanceSheet: React.FC = () => {
             result: '',
           });
         }
-        
+
         const account = accountMap.get(entry.acc_name)!;
         account.credit += entry.credit;
         account.debit += entry.debit;
@@ -133,29 +140,41 @@ const BalanceSheet: React.FC = () => {
 
       // Apply P&L filter
       if (filters.plYesNo) {
-        balanceSheetAccounts = balanceSheetAccounts.filter(acc => acc.plYesNo === filters.plYesNo);
+        balanceSheetAccounts = balanceSheetAccounts.filter(
+          acc => acc.plYesNo === filters.plYesNo
+        );
       }
 
       // Apply Both filter
       if (filters.bothYesNo) {
-        balanceSheetAccounts = balanceSheetAccounts.filter(acc => acc.bothYesNo === filters.bothYesNo);
+        balanceSheetAccounts = balanceSheetAccounts.filter(
+          acc => acc.bothYesNo === filters.bothYesNo
+        );
       }
 
       // Sort by account name
-      balanceSheetAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
+      balanceSheetAccounts.sort((a, b) =>
+        a.accountName.localeCompare(b.accountName)
+      );
 
       setBalanceSheetData(balanceSheetAccounts);
 
       // Calculate totals
-      const totalCredit = balanceSheetAccounts.reduce((sum, acc) => sum + acc.credit, 0);
-      const totalDebit = balanceSheetAccounts.reduce((sum, acc) => sum + acc.debit, 0);
+      const totalCredit = balanceSheetAccounts.reduce(
+        (sum, acc) => sum + acc.credit,
+        0
+      );
+      const totalDebit = balanceSheetAccounts.reduce(
+        (sum, acc) => sum + acc.debit,
+        0
+      );
       const balanceRs = totalCredit - totalDebit;
 
       setTotals({
         totalCredit,
         totalDebit,
-        balanceRs});
-
+        balanceRs,
+      });
     } catch (error) {
       console.error('Error generating balance sheet:', error);
       toast.error('Failed to generate balance sheet');
@@ -167,7 +186,7 @@ const BalanceSheet: React.FC = () => {
   const getAccountPLStatus = (accountName: string): string => {
     // Determine if account should be included in P&L
     const plAccounts = ['SALES', 'PURCHASE', 'EXPENSE', 'INCOME', 'REVENUE'];
-    const isPlAccount = plAccounts.some(type => 
+    const isPlAccount = plAccounts.some(type =>
       accountName.toUpperCase().includes(type)
     );
     return isPlAccount ? 'YES' : 'NO';
@@ -176,7 +195,7 @@ const BalanceSheet: React.FC = () => {
   const getAccountBothStatus = (accountName: string): string => {
     // Determine if account appears in both balance sheet and P&L
     const bothAccounts = ['CAPITAL', 'DRAWINGS', 'RESERVES'];
-    const isBothAccount = bothAccounts.some(type => 
+    const isBothAccount = bothAccounts.some(type =>
       accountName.toUpperCase().includes(type)
     );
     return isBothAccount ? 'BOTH' : 'NO';
@@ -185,7 +204,7 @@ const BalanceSheet: React.FC = () => {
   const handleFilterChange = (field: keyof BalanceSheetFilters, value: any) => {
     setFilters(prev => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -214,18 +233,21 @@ const BalanceSheet: React.FC = () => {
   const exportToExcel = () => {
     const exportData = balanceSheetData.map(account => ({
       'Account Name': account.accountName,
-      'Credit': account.credit,
-      'Debit': account.debit,
-      'Balance': account.balance,
+      Credit: account.credit,
+      Debit: account.debit,
+      Balance: account.balance,
       'P&L Yes/No': account.plYesNo,
       'Both Yes/No': account.bothYesNo,
-      'Result': account.result}));
+      Result: account.result,
+    }));
 
     // Create CSV content
     const headers = Object.keys(exportData[0] || {});
     const csvContent = [
       headers.join(','),
-      ...exportData.map(row => headers.map(header => `"${row[header as keyof typeof row]}"`).join(','))
+      ...exportData.map(row =>
+        headers.map(header => `"${row[header as keyof typeof row]}"`).join(',')
+      ),
     ].join('\n');
 
     // Download file
@@ -245,72 +267,103 @@ const BalanceSheet: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="max-w-6xl w-full mx-auto space-y-6">
+    <div className='min-h-screen flex flex-col'>
+      <div className='max-w-6xl w-full mx-auto space-y-6'>
         {/* Responsive filter bar */}
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+        <div className='flex flex-col md:flex-row gap-4 items-end'>
+          <div className='flex-1'>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              Company
+            </label>
             <select
               value={filters.companyName}
               onChange={e => handleFilterChange('companyName', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
             >
               {companies.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
               ))}
             </select>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+          <div className='flex-1'>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              From Date
+            </label>
             <input
-              type="date"
+              type='date'
               value={filters.fromDate}
               onChange={e => handleFilterChange('fromDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
             />
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+          <div className='flex-1'>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              To Date
+            </label>
             <input
-              type="date"
+              type='date'
               value={filters.toDate}
               onChange={e => handleFilterChange('toDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
             />
           </div>
-          <div className="flex flex-row gap-2 mt-2 md:mt-0">
-            <Button  variant="secondary" onClick={refreshData}>Refresh</Button>
-            <Button  variant="secondary" onClick={exportToExcel}>Export</Button>
-            <Button  variant="secondary" onClick={printReport}>Print</Button>
-            <Button  variant="secondary" onClick={resetFilters}>Reset</Button>
+          <div className='flex flex-row gap-2 mt-2 md:mt-0'>
+            <Button variant='secondary' onClick={refreshData}>
+              Refresh
+            </Button>
+            <Button variant='secondary' onClick={exportToExcel}>
+              Export
+            </Button>
+            <Button variant='secondary' onClick={printReport}>
+              Print
+            </Button>
+            <Button variant='secondary' onClick={resetFilters}>
+              Reset
+            </Button>
           </div>
         </div>
         {/* Responsive table/card layout */}
-        <Card className="overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <Card className='overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
           {loading ? (
-            <div className="text-center text-gray-500 py-8">Loading...</div>
+            <div className='text-center text-gray-500 py-8'>Loading...</div>
           ) : balanceSheetData.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">No accounts found for these filters.</div>
+            <div className='text-center text-gray-500 py-8'>
+              No accounts found for these filters.
+            </div>
           ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-blue-100">
+            <table className='min-w-full text-sm'>
+              <thead className='bg-blue-100'>
                 <tr>
-                  <th className="px-3 py-2 text-left">Account Name</th>
-                  <th className="px-3 py-2 text-right">Credit</th>
-                  <th className="px-3 py-2 text-right">Debit</th>
-                  <th className="px-3 py-2 text-right">Balance</th>
-                  <th className="px-3 py-2 text-center">Result</th>
+                  <th className='px-3 py-2 text-left'>Account Name</th>
+                  <th className='px-3 py-2 text-right'>Credit</th>
+                  <th className='px-3 py-2 text-right'>Debit</th>
+                  <th className='px-3 py-2 text-right'>Balance</th>
+                  <th className='px-3 py-2 text-center'>Result</th>
                 </tr>
               </thead>
               <tbody>
                 {balanceSheetData.map((acc, idx) => (
-                  <tr key={acc.accountName} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                    <td className="px-3 py-2">{acc.accountName}</td>
-                    <td className="px-3 py-2 text-right text-green-700">{acc.credit > 0 ? `₹${acc.credit.toLocaleString()}` : '-'}</td>
-                    <td className="px-3 py-2 text-right text-red-700">{acc.debit > 0 ? `₹${acc.debit.toLocaleString()}` : '-'}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{acc.balance > 0 ? `₹${acc.balance.toLocaleString()}` : '-'}</td>
-                    <td className="px-3 py-2 text-center font-bold">{acc.result}</td>
+                  <tr
+                    key={acc.accountName}
+                    className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}
+                  >
+                    <td className='px-3 py-2'>{acc.accountName}</td>
+                    <td className='px-3 py-2 text-right text-green-700'>
+                      {acc.credit > 0 ? `₹${acc.credit.toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right text-red-700'>
+                      {acc.debit > 0 ? `₹${acc.debit.toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right font-semibold'>
+                      {acc.balance > 0
+                        ? `₹${acc.balance.toLocaleString()}`
+                        : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-center font-bold'>
+                      {acc.result}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -44,7 +44,7 @@ interface SubAccountSummary {
 
 const LedgerSummary: React.FC = () => {
   const { user } = useAuth();
-  
+
   const [filters, setFilters] = useState<LedgerSummaryFilters>({
     betweenDates: true,
     fromDate: '2016-10-31',
@@ -55,24 +55,41 @@ const LedgerSummary: React.FC = () => {
     staff: '',
   });
 
-  const [companySummaries, setCompanySummaries] = useState<CompanySummary[]>([]);
-  const [mainAccountSummaries, setMainAccountSummaries] = useState<AccountSummary[]>([]);
-  const [subAccountSummaries, setSubAccountSummaries] = useState<SubAccountSummary[]>([]);
+  const [companySummaries, setCompanySummaries] = useState<CompanySummary[]>(
+    []
+  );
+  const [mainAccountSummaries, setMainAccountSummaries] = useState<
+    AccountSummary[]
+  >([]);
+  const [subAccountSummaries, setSubAccountSummaries] = useState<
+    SubAccountSummary[]
+  >([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'company' | 'mainAccount' | 'subAccount' | 'subAccountGrand'>('company');
+  const [activeTab, setActiveTab] = useState<
+    'company' | 'mainAccount' | 'subAccount' | 'subAccountGrand'
+  >('company');
 
   // Dropdown data
-  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
-  const [accounts, setAccounts] = useState<{ value: string; label: string }[]>([]);
-  const [subAccounts, setSubAccounts] = useState<{ value: string; label: string }[]>([]);
-  const [staffList, setStaffList] = useState<{ value: string; label: string }[]>([]);
+  const [companies, setCompanies] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [accounts, setAccounts] = useState<{ value: string; label: string }[]>(
+    []
+  );
+  const [subAccounts, setSubAccounts] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [staffList, setStaffList] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // Summary totals
   const [grandTotals, setGrandTotals] = useState({
     totalCredit: 0,
     totalDebit: 0,
     balance: 0,
-    recordCount: 0});
+    recordCount: 0,
+  });
 
   useEffect(() => {
     loadDropdownData();
@@ -103,16 +120,18 @@ const LedgerSummary: React.FC = () => {
       const companies = await supabaseDB.getCompanies();
       const companiesData = companies.map(company => ({
         value: company.company_name,
-        label: company.company_name
+        label: company.company_name,
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
 
       // Load staff
       const users = await supabaseDB.getUsers();
-      const usersData = users.filter(u => u.is_active).map(user => ({
-        value: user.username,
-        label: user.username
-      }));
+      const usersData = users
+        .filter(u => u.is_active)
+        .map(user => ({
+          value: user.username,
+          label: user.username,
+        }));
       setStaffList([{ value: '', label: 'All Staff' }, ...usersData]);
     } catch (error) {
       console.error('Error loading dropdown data:', error);
@@ -125,12 +144,14 @@ const LedgerSummary: React.FC = () => {
       setAccounts([{ value: '', label: 'All Accounts' }]);
       return;
     }
-    
+
     try {
-      const accounts = await supabaseDB.getAccountsByCompany(filters.companyName);
+      const accounts = await supabaseDB.getAccountsByCompany(
+        filters.companyName
+      );
       const accountsData = accounts.map(account => ({
         value: account.acc_name,
-        label: account.acc_name
+        label: account.acc_name,
       }));
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
     } catch (error) {
@@ -144,14 +165,20 @@ const LedgerSummary: React.FC = () => {
       setSubAccounts([{ value: '', label: 'All Sub Accounts' }]);
       return;
     }
-    
+
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(filters.companyName, filters.mainAccount);
+      const subAccounts = await supabaseDB.getSubAccountsByAccount(
+        filters.companyName,
+        filters.mainAccount
+      );
       const subAccountsData = subAccounts.map(subAcc => ({
         value: subAcc.sub_acc,
-        label: subAcc.sub_acc
+        label: subAcc.sub_acc,
       }));
-      setSubAccounts([{ value: '', label: 'All Sub Accounts' }, ...subAccountsData]);
+      setSubAccounts([
+        { value: '', label: 'All Sub Accounts' },
+        ...subAccountsData,
+      ]);
     } catch (error) {
       console.error('Error loading sub accounts:', error);
       toast.error('Failed to load sub accounts');
@@ -162,10 +189,10 @@ const LedgerSummary: React.FC = () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // Get filtered entries from Supabase
       let entries = await supabaseDB.getCashBookEntries();
-      
+
       // Apply date filter
       if (filters.betweenDates) {
         entries = entries.filter(entry => {
@@ -178,13 +205,19 @@ const LedgerSummary: React.FC = () => {
 
       // Apply other filters
       if (filters.companyName) {
-        entries = entries.filter(entry => entry.company_name === filters.companyName);
+        entries = entries.filter(
+          entry => entry.company_name === filters.companyName
+        );
       }
       if (filters.mainAccount) {
-        entries = entries.filter(entry => entry.acc_name === filters.mainAccount);
+        entries = entries.filter(
+          entry => entry.acc_name === filters.mainAccount
+        );
       }
       if (filters.subAccount) {
-        entries = entries.filter(entry => entry.sub_acc_name === filters.subAccount);
+        entries = entries.filter(
+          entry => entry.sub_acc_name === filters.subAccount
+        );
       }
       if (filters.staff) {
         entries = entries.filter(entry => entry.staff === filters.staff);
@@ -209,13 +242,14 @@ const LedgerSummary: React.FC = () => {
             totalCredit: 0,
             totalDebit: 0,
             balance: 0,
-            accounts: []
+            accounts: [],
           });
         }
         const companySummary = companyMap.get(entry.company_name)!;
         companySummary.totalCredit += entry.credit;
         companySummary.totalDebit += entry.debit;
-        companySummary.balance = companySummary.totalCredit - companySummary.totalDebit;
+        companySummary.balance =
+          companySummary.totalCredit - companySummary.totalDebit;
 
         // Account summary
         const accountKey = `${entry.company_name}-${entry.acc_name}`;
@@ -225,7 +259,7 @@ const LedgerSummary: React.FC = () => {
             credit: 0,
             debit: 0,
             balance: 0,
-            transactionCount: 0
+            transactionCount: 0,
           });
         }
         const accountSummary = accountMap.get(accountKey)!;
@@ -243,28 +277,29 @@ const LedgerSummary: React.FC = () => {
               credit: 0,
               debit: 0,
               balance: 0,
-              transactionCount: 0
+              transactionCount: 0,
             });
           }
           const subAccountSummary = subAccountMap.get(subAccountKey)!;
           subAccountSummary.credit += entry.credit;
           subAccountSummary.debit += entry.debit;
-          subAccountSummary.balance = subAccountSummary.credit - subAccountSummary.debit;
+          subAccountSummary.balance =
+            subAccountSummary.credit - subAccountSummary.debit;
           subAccountSummary.transactionCount++;
         }
       });
 
       // Convert maps to arrays and sort
-      const companySummariesArray = Array.from(companyMap.values()).sort((a, b) => 
-        Math.abs(b.balance) - Math.abs(a.balance)
+      const companySummariesArray = Array.from(companyMap.values()).sort(
+        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
       );
 
-      const mainAccountSummariesArray = Array.from(accountMap.values()).sort((a, b) => 
-        Math.abs(b.balance) - Math.abs(a.balance)
+      const mainAccountSummariesArray = Array.from(accountMap.values()).sort(
+        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
       );
 
-      const subAccountSummariesArray = Array.from(subAccountMap.values()).sort((a, b) => 
-        Math.abs(b.balance) - Math.abs(a.balance)
+      const subAccountSummariesArray = Array.from(subAccountMap.values()).sort(
+        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
       );
 
       setCompanySummaries(companySummariesArray);
@@ -275,8 +310,8 @@ const LedgerSummary: React.FC = () => {
         totalCredit,
         totalDebit,
         balance: totalCredit - totalDebit,
-        recordCount: entries.length});
-
+        recordCount: entries.length,
+      });
     } catch (error) {
       console.error('Error generating summary:', error);
       toast.error('Failed to generate summary');
@@ -285,10 +320,13 @@ const LedgerSummary: React.FC = () => {
     }
   };
 
-  const handleFilterChange = (field: keyof LedgerSummaryFilters, value: any) => {
+  const handleFilterChange = (
+    field: keyof LedgerSummaryFilters,
+    value: any
+  ) => {
     setFilters(prev => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
 
     // Reset dependent filters
@@ -333,26 +371,29 @@ const LedgerSummary: React.FC = () => {
           'Company Name': company.companyName,
           'Total Credit': company.totalCredit,
           'Total Debit': company.totalDebit,
-          'Balance': company.balance}));
+          Balance: company.balance,
+        }));
         filename = 'company-wise-summary';
         break;
       case 'mainAccount':
         exportData = mainAccountSummaries.map(account => ({
           'Account Name': account.accountName,
-          'Credit': account.credit,
-          'Debit': account.debit,
-          'Balance': account.balance,
-          'Transaction Count': account.transactionCount}));
+          Credit: account.credit,
+          Debit: account.debit,
+          Balance: account.balance,
+          'Transaction Count': account.transactionCount,
+        }));
         filename = 'main-account-summary';
         break;
       case 'subAccount':
       case 'subAccountGrand':
         exportData = subAccountSummaries.map(subAccount => ({
           'Sub Account': subAccount.subAccount,
-          'Credit': subAccount.credit,
-          'Debit': subAccount.debit,
-          'Balance': subAccount.balance,
-          'Transaction Count': subAccount.transactionCount}));
+          Credit: subAccount.credit,
+          Debit: subAccount.debit,
+          Balance: subAccount.balance,
+          'Transaction Count': subAccount.transactionCount,
+        }));
         filename = 'sub-account-summary';
         break;
     }
@@ -361,7 +402,9 @@ const LedgerSummary: React.FC = () => {
     const headers = Object.keys(exportData[0] || {});
     const csvContent = [
       headers.join(','),
-      ...exportData.map(row => headers.map(header => `"${row[header]}"`).join(','))
+      ...exportData.map(row =>
+        headers.map(header => `"${row[header]}"`).join(',')
+      ),
     ].join('\n');
 
     // Download file
@@ -384,8 +427,12 @@ const LedgerSummary: React.FC = () => {
     }
 
     const currentData = getCurrentData();
-    const title = activeTab === 'company' ? 'Company Summary' : 
-                  activeTab === 'mainAccount' ? 'Main Account Summary' : 'Sub Account Summary';
+    const title =
+      activeTab === 'company'
+        ? 'Company Summary'
+        : activeTab === 'mainAccount'
+          ? 'Main Account Summary'
+          : 'Sub Account Summary';
 
     const printContent = `
       <!DOCTYPE html>
@@ -429,7 +476,9 @@ const LedgerSummary: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              ${currentData.map(item => `
+              ${currentData
+                .map(
+                  item => `
                 <tr>
                   <td>${activeTab === 'company' ? item.companyName : activeTab === 'mainAccount' ? item.accountName : item.subAccount}</td>
                   <td class="text-right text-green">₹${(activeTab === 'company' ? item.totalCredit : item.credit).toLocaleString()}</td>
@@ -439,7 +488,9 @@ const LedgerSummary: React.FC = () => {
                     ${(activeTab === 'company' ? item.balance : item.balance) >= 0 ? ' CR' : ' DR'}
                   </td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join('')}
             </tbody>
           </table>
 
@@ -453,13 +504,13 @@ const LedgerSummary: React.FC = () => {
     printWindow.document.write(printContent);
     printWindow.document.close();
     printWindow.focus();
-    
+
     // Wait for content to load then print
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
     }, 500);
-    
+
     toast.success('Print dialog opened');
   };
 
@@ -482,31 +533,46 @@ const LedgerSummary: React.FC = () => {
 
     if (activeTab === 'company') {
       return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className='overflow-x-auto'>
+          <table className='w-full text-sm'>
+            <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Company Name</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Credit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Debit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Balance</th>
+                <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                  Company Name
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Credit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Debit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Balance
+                </th>
               </tr>
             </thead>
             <tbody>
               {companySummaries.map((company, index) => (
-                <tr key={company.companyName} className={`border-b hover:bg-gray-50 ${
-                  index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                }`}>
-                  <td className="px-4 py-3 font-medium text-blue-600">{company.companyName}</td>
-                  <td className="px-4 py-3 text-right font-medium text-green-600">
+                <tr
+                  key={company.companyName}
+                  className={`border-b hover:bg-gray-50 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                  }`}
+                >
+                  <td className='px-4 py-3 font-medium text-blue-600'>
+                    {company.companyName}
+                  </td>
+                  <td className='px-4 py-3 text-right font-medium text-green-600'>
                     ₹{company.totalCredit.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-red-600">
+                  <td className='px-4 py-3 text-right font-medium text-red-600'>
                     ₹{company.totalDebit.toLocaleString()}
                   </td>
-                  <td className={`px-4 py-3 text-right font-bold ${
-                    company.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <td
+                    className={`px-4 py-3 text-right font-bold ${
+                      company.balance >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
                     ₹{Math.abs(company.balance).toLocaleString()}
                     {company.balance >= 0 ? ' CR' : ' DR'}
                   </td>
@@ -520,31 +586,46 @@ const LedgerSummary: React.FC = () => {
 
     if (activeTab === 'mainAccount') {
       return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className='overflow-x-auto'>
+          <table className='w-full text-sm'>
+            <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Main Account</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Credit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Debit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Balance</th>
+                <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                  Main Account
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Credit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Debit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Balance
+                </th>
               </tr>
             </thead>
             <tbody>
               {mainAccountSummaries.map((account, index) => (
-                <tr key={account.accountName} className={`border-b hover:bg-gray-50 ${
-                  index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                }`}>
-                  <td className="px-4 py-3 font-medium text-blue-600">{account.accountName}</td>
-                  <td className="px-4 py-3 text-right font-medium text-green-600">
+                <tr
+                  key={account.accountName}
+                  className={`border-b hover:bg-gray-50 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                  }`}
+                >
+                  <td className='px-4 py-3 font-medium text-blue-600'>
+                    {account.accountName}
+                  </td>
+                  <td className='px-4 py-3 text-right font-medium text-green-600'>
                     ₹{account.credit.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-red-600">
+                  <td className='px-4 py-3 text-right font-medium text-red-600'>
                     ₹{account.debit.toLocaleString()}
                   </td>
-                  <td className={`px-4 py-3 text-right font-bold ${
-                    account.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <td
+                    className={`px-4 py-3 text-right font-bold ${
+                      account.balance >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
                     ₹{Math.abs(account.balance).toLocaleString()}
                     {account.balance >= 0 ? ' CR' : ' DR'}
                   </td>
@@ -558,31 +639,48 @@ const LedgerSummary: React.FC = () => {
 
     if (activeTab === 'subAccount' || activeTab === 'subAccountGrand') {
       return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className='overflow-x-auto'>
+          <table className='w-full text-sm'>
+            <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Sub Account</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Credit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Debit</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-700">Balance</th>
+                <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                  Sub Account
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Credit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Debit
+                </th>
+                <th className='px-4 py-3 text-right font-medium text-gray-700'>
+                  Balance
+                </th>
               </tr>
             </thead>
             <tbody>
               {subAccountSummaries.map((subAccount, index) => (
-                <tr key={subAccount.subAccount} className={`border-b hover:bg-gray-50 ${
-                  index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                }`}>
-                  <td className="px-4 py-3 font-medium text-blue-600">{subAccount.subAccount}</td>
-                  <td className="px-4 py-3 text-right font-medium text-green-600">
+                <tr
+                  key={subAccount.subAccount}
+                  className={`border-b hover:bg-gray-50 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                  }`}
+                >
+                  <td className='px-4 py-3 font-medium text-blue-600'>
+                    {subAccount.subAccount}
+                  </td>
+                  <td className='px-4 py-3 text-right font-medium text-green-600'>
                     ₹{subAccount.credit.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-red-600">
+                  <td className='px-4 py-3 text-right font-medium text-red-600'>
                     ₹{subAccount.debit.toLocaleString()}
                   </td>
-                  <td className={`px-4 py-3 text-right font-bold ${
-                    subAccount.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <td
+                    className={`px-4 py-3 text-right font-bold ${
+                      subAccount.balance >= 0
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`}
+                  >
                     ₹{Math.abs(subAccount.balance).toLocaleString()}
                     {subAccount.balance >= 0 ? ' CR' : ' DR'}
                   </td>
@@ -598,14 +696,17 @@ const LedgerSummary: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className='flex items-center justify-between'>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ledger Summary</h1>
-          <p className="text-gray-600">Comprehensive financial summary with company, account, and sub-account analysis</p>
+          <h1 className='text-3xl font-bold text-gray-900'>Ledger Summary</h1>
+          <p className='text-gray-600'>
+            Comprehensive financial summary with company, account, and
+            sub-account analysis
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className='flex items-center gap-3'>
           {/*
           <Button
             
@@ -615,57 +716,58 @@ const LedgerSummary: React.FC = () => {
             Refresh
           </Button>
           */}
-          <Button
-            
-            variant="secondary"
-            onClick={printSummary}
-          >
+          <Button variant='secondary' onClick={printSummary}>
             Print
           </Button>
-          <Button
-            
-            variant="secondary"
-            onClick={exportToExcel}
-          >
+          <Button variant='secondary' onClick={exportToExcel}>
             Export
           </Button>
         </div>
       </div>
 
       {/* Filters Panel */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="space-y-6">
+      <Card className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
+        <div className='space-y-6'>
           {/* Date Range Section */}
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-4">
+          <div className='bg-white p-4 rounded-lg border border-gray-200'>
+            <div className='flex items-center gap-2 mb-4'>
               <input
-                type="checkbox"
-                id="betweenDates"
+                type='checkbox'
+                id='betweenDates'
                 checked={filters.betweenDates}
-                onChange={(e) => handleFilterChange('betweenDates', e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                onChange={e =>
+                  handleFilterChange('betweenDates', e.target.checked)
+                }
+                className='w-4 h-4 text-blue-600 rounded focus:ring-blue-500'
               />
-              <label htmlFor="betweenDates" className="text-sm font-medium text-gray-700">
+              <label
+                htmlFor='betweenDates'
+                className='text-sm font-medium text-gray-700'
+              >
                 Between Dates
               </label>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  From
+                </label>
                 <Input
-                  type="date"
+                  type='date'
                   value={filters.fromDate}
-                  onChange={(value) => handleFilterChange('fromDate', value)}
+                  onChange={value => handleFilterChange('fromDate', value)}
                   disabled={!filters.betweenDates}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  To
+                </label>
                 <Input
-                  type="date"
+                  type='date'
                   value={filters.toDate}
-                  onChange={(value) => handleFilterChange('toDate', value)}
+                  onChange={value => handleFilterChange('toDate', value)}
                   disabled={!filters.betweenDates}
                 />
               </div>
@@ -673,32 +775,32 @@ const LedgerSummary: React.FC = () => {
           </div>
 
           {/* Filter Options */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
             <Select
-              label="Company Name"
+              label='Company Name'
               value={filters.companyName}
-              onChange={(value) => handleFilterChange('companyName', value)}
+              onChange={value => handleFilterChange('companyName', value)}
               options={companies}
             />
-            
+
             <Select
-              label="Main Account"
+              label='Main Account'
               value={filters.mainAccount}
-              onChange={(value) => handleFilterChange('mainAccount', value)}
+              onChange={value => handleFilterChange('mainAccount', value)}
               options={accounts}
             />
-            
+
             <Select
-              label="Sub Account"
+              label='Sub Account'
               value={filters.subAccount}
-              onChange={(value) => handleFilterChange('subAccount', value)}
+              onChange={value => handleFilterChange('subAccount', value)}
               options={subAccounts}
             />
-            
+
             <Select
-              label="Staff"
+              label='Staff'
               value={filters.staff}
-              onChange={(value) => handleFilterChange('staff', value)}
+              onChange={value => handleFilterChange('staff', value)}
               options={staffList}
             />
           </div>
@@ -733,8 +835,8 @@ const LedgerSummary: React.FC = () => {
 
       {/* Summary Tabs */}
       <Card>
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8">
+        <div className='border-b border-gray-200'>
+          <nav className='flex space-x-8'>
             <button
               onClick={() => setActiveTab('company')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -778,37 +880,55 @@ const LedgerSummary: React.FC = () => {
           </nav>
         </div>
 
-        <div className="p-6">
+        <div className='p-6'>
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Generating summary...</p>
+            <div className='text-center py-8'>
+              <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+              <p className='mt-2 text-gray-600'>Generating summary...</p>
             </div>
           ) : (
             <>
               {renderSummaryTable()}
-              
+
               {/* Summary Footer */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border">
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <div className="text-sm font-medium text-green-800">Total Credit:</div>
-                  <div className="text-lg font-bold text-green-900">₹{grandTotals.totalCredit.toLocaleString()}</div>
+              <div className='mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border'>
+                <div className='bg-green-100 p-3 rounded-lg'>
+                  <div className='text-sm font-medium text-green-800'>
+                    Total Credit:
+                  </div>
+                  <div className='text-lg font-bold text-green-900'>
+                    ₹{grandTotals.totalCredit.toLocaleString()}
+                  </div>
                 </div>
-                <div className="bg-red-100 p-3 rounded-lg">
-                  <div className="text-sm font-medium text-red-800">Total Debit:</div>
-                  <div className="text-lg font-bold text-red-900">₹{grandTotals.totalDebit.toLocaleString()}</div>
+                <div className='bg-red-100 p-3 rounded-lg'>
+                  <div className='text-sm font-medium text-red-800'>
+                    Total Debit:
+                  </div>
+                  <div className='text-lg font-bold text-red-900'>
+                    ₹{grandTotals.totalDebit.toLocaleString()}
+                  </div>
                 </div>
-                <div className={`p-3 rounded-lg ${
-                  grandTotals.balance >= 0 ? 'bg-blue-100' : 'bg-orange-100'
-                }`}>
-                  <div className={`text-sm font-medium ${
-                    grandTotals.balance >= 0 ? 'text-blue-800' : 'text-orange-800'
-                  }`}>
+                <div
+                  className={`p-3 rounded-lg ${
+                    grandTotals.balance >= 0 ? 'bg-blue-100' : 'bg-orange-100'
+                  }`}
+                >
+                  <div
+                    className={`text-sm font-medium ${
+                      grandTotals.balance >= 0
+                        ? 'text-blue-800'
+                        : 'text-orange-800'
+                    }`}
+                  >
                     Balance:
                   </div>
-                  <div className={`text-lg font-bold ${
-                    grandTotals.balance >= 0 ? 'text-blue-900' : 'text-orange-900'
-                  }`}>
+                  <div
+                    className={`text-lg font-bold ${
+                      grandTotals.balance >= 0
+                        ? 'text-blue-900'
+                        : 'text-orange-900'
+                    }`}
+                  >
                     ₹{Math.abs(grandTotals.balance).toLocaleString()}
                     {grandTotals.balance >= 0 ? ' CR' : ' DR'}
                   </div>

@@ -110,7 +110,8 @@ class JsonDatabase {
       subAccounts: this.subAccounts,
       cashBookEntries: this.cashBookEntries,
       editHistory: this.editHistory,
-      users: this.users};
+      users: this.users,
+    };
     localStorage.setItem('thirumala_database', JSON.stringify(data));
   }
 
@@ -156,31 +157,143 @@ class JsonDatabase {
     ];
 
     this.accounts = [
-      { id: '1', companyName: 'BR AND BVT', accountName: 'BBB', createdAt: new Date().toISOString() },
-      { id: '2', companyName: 'TT 2022-2023 (TCJ)', accountName: 'BALE PARTIES A/C', createdAt: new Date().toISOString() },
-      { id: '3', companyName: 'SRINIVASA COTTON', accountName: 'BANK A/C', createdAt: new Date().toISOString() },
-      { id: '4', companyName: 'TIRUMALA AUTO FI', accountName: 'INTEREST A/C', createdAt: new Date().toISOString() },
-      { id: '5', companyName: 'TIRUMALA AUTO FI', accountName: 'LOAN A/C', createdAt: new Date().toISOString() },
-      { id: '6', companyName: 'BUKKA SAI VIVEK A', accountName: 'BANK A/C', createdAt: new Date().toISOString() },
-      { id: '7', companyName: 'RAMESH BUKKA A/', accountName: 'ANAMATH A/C', createdAt: new Date().toISOString() },
+      {
+        id: '1',
+        companyName: 'BR AND BVT',
+        accountName: 'BBB',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        companyName: 'TT 2022-2023 (TCJ)',
+        accountName: 'BALE PARTIES A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '3',
+        companyName: 'SRINIVASA COTTON',
+        accountName: 'BANK A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '4',
+        companyName: 'TIRUMALA AUTO FI',
+        accountName: 'INTEREST A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '5',
+        companyName: 'TIRUMALA AUTO FI',
+        accountName: 'LOAN A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '6',
+        companyName: 'BUKKA SAI VIVEK A',
+        accountName: 'BANK A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '7',
+        companyName: 'RAMESH BUKKA A/',
+        accountName: 'ANAMATH A/C',
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     this.subAccounts = [
-      { id: '1', companyName: 'BR AND BVT', accountName: 'BBB', subAccount: 'HH', createdAt: new Date().toISOString() },
-      { id: '2', companyName: 'TT 2022-2023 (TCJ)', accountName: 'BALE PARTIES A/C', subAccount: 'JAYALAKSHMI COTTON JK', createdAt: new Date().toISOString() },
-      { id: '3', companyName: 'SRINIVASA COTTON', accountName: 'BANK A/C', subAccount: 'AB GAJWEL CURRENT A NHGB', createdAt: new Date().toISOString() },
-      { id: '4', companyName: 'TIRUMALA AUTO FI', accountName: 'LOAN A/C', subAccount: 'RAJU NEELA A/C', createdAt: new Date().toISOString() },
-      { id: '5', companyName: 'BUKKA SAI VIVEK A', accountName: 'BANK A/C', subAccount: 'UNION BANK GJL A/C', createdAt: new Date().toISOString() },
-      { id: '6', companyName: 'TIRUMALA AUTO FI', accountName: 'LOAN A/C', subAccount: 'GANGIREDDY SWAMY A/C', createdAt: new Date().toISOString() },
-      { id: '7', companyName: 'RAMESH BUKKA A/', accountName: 'ANAMATH A/C', subAccount: 'VEERESHAM M A/C', createdAt: new Date().toISOString() },
+      {
+        id: '1',
+        companyName: 'BR AND BVT',
+        accountName: 'BBB',
+        subAccount: 'HH',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        companyName: 'TT 2022-2023 (TCJ)',
+        accountName: 'BALE PARTIES A/C',
+        subAccount: 'JAYALAKSHMI COTTON JK',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '3',
+        companyName: 'SRINIVASA COTTON',
+        accountName: 'BANK A/C',
+        subAccount: 'AB GAJWEL CURRENT A NHGB',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '4',
+        companyName: 'TIRUMALA AUTO FI',
+        accountName: 'LOAN A/C',
+        subAccount: 'RAJU NEELA A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '5',
+        companyName: 'BUKKA SAI VIVEK A',
+        accountName: 'BANK A/C',
+        subAccount: 'UNION BANK GJL A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '6',
+        companyName: 'TIRUMALA AUTO FI',
+        accountName: 'LOAN A/C',
+        subAccount: 'GANGIREDDY SWAMY A/C',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '7',
+        companyName: 'RAMESH BUKKA A/',
+        accountName: 'ANAMATH A/C',
+        subAccount: 'VEERESHAM M A/C',
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     this.users = [
-      { id: '1', username: 'admin', email: 'admin@thirumala.com', userType: 'Admin', isActive: true, createdAt: new Date().toISOString() },
-      { id: '2', username: 'operator', email: 'operator@thirumala.com', userType: 'Operator', isActive: true, createdAt: new Date().toISOString() },
-      { id: '3', username: 'RAMESH', email: 'ramesh@thirumala.com', userType: 'Operator', isActive: true, createdAt: new Date().toISOString() },
-      { id: '4', username: 'TC DOUBLE', email: 'tc@thirumala.com', userType: 'Operator', isActive: true, createdAt: new Date().toISOString() },
-      { id: '5', username: 'RAM', email: 'ram@thirumala.com', userType: 'Operator', isActive: true, createdAt: new Date().toISOString() },
+      {
+        id: '1',
+        username: 'admin',
+        email: 'admin@thirumala.com',
+        userType: 'Admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        username: 'operator',
+        email: 'operator@thirumala.com',
+        userType: 'Operator',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '3',
+        username: 'RAMESH',
+        email: 'ramesh@thirumala.com',
+        userType: 'Operator',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '4',
+        username: 'TC DOUBLE',
+        email: 'tc@thirumala.com',
+        userType: 'Operator',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '5',
+        username: 'RAM',
+        email: 'ram@thirumala.com',
+        userType: 'Operator',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     this.cashBookEntries = [
@@ -195,15 +308,16 @@ class JsonDatabase {
         particulars: 'HH',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 10.00,
-        debit: 0.00,
+        credit: 10.0,
+        debit: 0.0,
         staff: 'TC DOUBLE',
         user: 'admin',
         entryTime: new Date().toISOString(),
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
       {
         id: '2',
         sno: 2,
@@ -215,15 +329,16 @@ class JsonDatabase {
         particulars: 'JAYALAKSHMI COTTON JK',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 0.00,
-        debit: 10.00,
+        credit: 0.0,
+        debit: 10.0,
         staff: 'TC DOUBLE',
         user: 'operator',
         entryTime: new Date().toISOString(),
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
       {
         id: '3',
         sno: 3,
@@ -235,15 +350,16 @@ class JsonDatabase {
         particulars: 'AB GAJWEL CURRENT A NHGB',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 0.00,
-        debit: 1.00,
+        credit: 0.0,
+        debit: 1.0,
         staff: 'D',
         user: 'RAM',
         entryTime: new Date().toISOString(),
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
       {
         id: '4',
         sno: 4,
@@ -255,15 +371,16 @@ class JsonDatabase {
         particulars: 'CD NO 501 INT AMOUNT VIVEK P PAY',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 60000.00,
-        debit: 0.00,
+        credit: 60000.0,
+        debit: 0.0,
         staff: 'D',
         user: 'RAM',
         entryTime: new Date().toISOString(),
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
       {
         id: '5',
         sno: 5,
@@ -275,15 +392,16 @@ class JsonDatabase {
         particulars: 'UPI TRFR FROM NEELA RAJU',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 0.00,
-        debit: 60000.00,
+        credit: 0.0,
+        debit: 60000.0,
         staff: 'D',
         user: 'RAM',
         entryTime: new Date().toISOString(),
         approved: false,
         edited: true,
         editCount: 1,
-        locked: false},
+        locked: false,
+      },
       {
         id: '6',
         sno: 6,
@@ -295,15 +413,16 @@ class JsonDatabase {
         particulars: 'CD NO 467 INT AMOUNT MV G PAY',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 9000.00,
-        debit: 0.00,
+        credit: 9000.0,
+        debit: 0.0,
         staff: 'D',
         user: 'RAM',
         entryTime: new Date().toISOString(),
         approved: true,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
       {
         id: '7',
         sno: 7,
@@ -315,15 +434,16 @@ class JsonDatabase {
         particulars: 'UPI TRFR FROM GANGIREDDY SWAMY',
         saleQ: 0,
         purchaseQ: 0,
-        credit: 0.00,
-        debit: 9000.00,
+        credit: 0.0,
+        debit: 9000.0,
         staff: 'D',
         user: 'RAM',
         entryTime: new Date().toISOString(),
         approved: false,
         edited: false,
         editCount: 0,
-        locked: false},
+        locked: false,
+      },
     ];
 
     this.editHistory = [];
@@ -332,13 +452,17 @@ class JsonDatabase {
 
   // Get next daily entry number for a specific date
   getNextDailyEntryNumber(date: string): number {
-    const entriesForDate = this.cashBookEntries.filter(entry => entry.date === date);
+    const entriesForDate = this.cashBookEntries.filter(
+      entry => entry.date === date
+    );
     if (entriesForDate.length === 0) {
       return 1; // Start from 1 for new day
     }
-    
+
     // Find the highest daily entry number for this date and add 1
-    const maxDailyEntryNo = Math.max(...entriesForDate.map(entry => entry.dailyEntryNo || 0));
+    const maxDailyEntryNo = Math.max(
+      ...entriesForDate.map(entry => entry.dailyEntryNo || 0)
+    );
     return maxDailyEntryNo + 1;
   }
 
@@ -368,7 +492,8 @@ class JsonDatabase {
       changes,
       originalData,
       newData,
-      reason};
+      reason,
+    };
     this.editHistory.unshift(historyEntry);
     this.saveToStorage();
   }
@@ -383,7 +508,9 @@ class JsonDatabase {
 
   // Get all activity history
   getAllActivityHistory(): EditHistory[] {
-    return this.editHistory.sort((a, b) => new Date(b.editedAt).getTime() - new Date(a.editedAt).getTime());
+    return this.editHistory.sort(
+      (a, b) => new Date(b.editedAt).getTime() - new Date(a.editedAt).getTime()
+    );
   }
 
   // Company operations
@@ -449,13 +576,20 @@ class JsonDatabase {
     return this.subAccounts;
   }
 
-  getSubAccountsByAccount(companyName: string, accountName: string): SubAccount[] {
+  getSubAccountsByAccount(
+    companyName: string,
+    accountName: string
+  ): SubAccount[] {
     return this.subAccounts.filter(
       sub => sub.companyName === companyName && sub.accountName === accountName
     );
   }
 
-  addSubAccount(companyName: string, accountName: string, subAccount: string): SubAccount {
+  addSubAccount(
+    companyName: string,
+    accountName: string,
+    subAccount: string
+  ): SubAccount {
     const newSubAccount: SubAccount = {
       id: Date.now().toString(),
       companyName,
@@ -483,9 +617,24 @@ class JsonDatabase {
     return this.cashBookEntries.sort((a, b) => b.sno - a.sno);
   }
 
-  addCashBookEntry(entry: Omit<CashBookEntry, 'id' | 'sno' | 'dailyEntryNo' | 'entryTime' | 'approved' | 'edited' | 'editCount' | 'locked'>): CashBookEntry {
+  addCashBookEntry(
+    entry: Omit<
+      CashBookEntry,
+      | 'id'
+      | 'sno'
+      | 'dailyEntryNo'
+      | 'entryTime'
+      | 'approved'
+      | 'edited'
+      | 'editCount'
+      | 'locked'
+    >
+  ): CashBookEntry {
     // Validate financial entry
-    const validation = FinancialCalculator.validateEntry(entry.credit, entry.debit);
+    const validation = FinancialCalculator.validateEntry(
+      entry.credit,
+      entry.debit
+    );
     if (!validation.isValid) {
       throw new Error(`Invalid entry: ${validation.errors.join(', ')}`);
     }
@@ -508,9 +657,10 @@ class JsonDatabase {
       approved: false,
       edited: false,
       editCount: 0,
-      locked: false};
+      locked: false,
+    };
     this.cashBookEntries.push(newEntry);
-    
+
     // Add to history
     this.addToHistory(
       newEntry.id,
@@ -520,22 +670,31 @@ class JsonDatabase {
       {},
       newEntry
     );
-    
+
     this.saveToStorage();
     return newEntry;
   }
 
-  updateCashBookEntry(id: string, updates: Partial<CashBookEntry>, editedBy?: string): CashBookEntry | null {
+  updateCashBookEntry(
+    id: string,
+    updates: Partial<CashBookEntry>,
+    editedBy?: string
+  ): CashBookEntry | null {
     const index = this.cashBookEntries.findIndex(entry => entry.id === id);
     if (index !== -1) {
       const originalEntry = { ...this.cashBookEntries[index] };
-      
+
       // Validate financial updates if credit/debit are being changed
       if (updates.credit !== undefined || updates.debit !== undefined) {
-        const newCredit = updates.credit !== undefined ? updates.credit : originalEntry.credit;
-        const newDebit = updates.debit !== undefined ? updates.debit : originalEntry.debit;
-        
-        const validation = FinancialCalculator.validateEntry(newCredit, newDebit);
+        const newCredit =
+          updates.credit !== undefined ? updates.credit : originalEntry.credit;
+        const newDebit =
+          updates.debit !== undefined ? updates.debit : originalEntry.debit;
+
+        const validation = FinancialCalculator.validateEntry(
+          newCredit,
+          newDebit
+        );
         if (!validation.isValid) {
           throw new Error(`Invalid update: ${validation.errors.join(', ')}`);
         }
@@ -548,7 +707,7 @@ class JsonDatabase {
           updates.debit = FinancialCalculator.toCents(updates.debit) / 100;
         }
       }
-      
+
       // Calculate changes
       const changes: EditHistory['changes'] = [];
       Object.keys(updates).forEach(key => {
@@ -558,7 +717,8 @@ class JsonDatabase {
           changes.push({
             field: key,
             oldValue,
-            newValue});
+            newValue,
+          });
         }
       });
 
@@ -592,7 +752,7 @@ class JsonDatabase {
     const index = this.cashBookEntries.findIndex(entry => entry.id === id);
     if (index !== -1) {
       const deletedEntry = { ...this.cashBookEntries[index] };
-      
+
       // Add to history before deletion
       this.addToHistory(
         id,
@@ -665,16 +825,20 @@ class JsonDatabase {
   }
 
   // Search and filter operations
-  searchCashBookEntries(searchTerm: string, dateFilter?: string): CashBookEntry[] {
+  searchCashBookEntries(
+    searchTerm: string,
+    dateFilter?: string
+  ): CashBookEntry[] {
     let filtered = this.cashBookEntries;
 
     if (searchTerm) {
-      filtered = filtered.filter(entry =>
-        entry.particulars.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.subAccount.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.staff.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        entry =>
+          entry.particulars.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.subAccount.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.staff.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -687,30 +851,40 @@ class JsonDatabase {
 
   // Statistics with precise calculations
   getDashboardStats(date?: string) {
-    const entries = date 
+    const entries = date
       ? this.cashBookEntries.filter(entry => entry.date === date)
       : this.cashBookEntries;
 
-    const totalCredit = FinancialCalculator.sum(entries.map(entry => entry.credit));
-    const totalDebit = FinancialCalculator.sum(entries.map(entry => entry.debit));
-    const balance = FinancialCalculator.calculateBalance(totalCredit, totalDebit);
-    const pendingApprovals = this.cashBookEntries.filter(entry => !entry.approved).length;
+    const totalCredit = FinancialCalculator.sum(
+      entries.map(entry => entry.credit)
+    );
+    const totalDebit = FinancialCalculator.sum(
+      entries.map(entry => entry.debit)
+    );
+    const balance = FinancialCalculator.calculateBalance(
+      totalCredit,
+      totalDebit
+    );
+    const pendingApprovals = this.cashBookEntries.filter(
+      entry => !entry.approved
+    ).length;
 
     return {
       totalCredit,
       totalDebit,
       balance,
       totalTransactions: entries.length,
-      pendingApprovals};
+      pendingApprovals,
+    };
   }
 
   // Financial reconciliation
   getFinancialReconciliation() {
     const entries = this.cashBookEntries.map(entry => ({
       credit: entry.credit,
-      debit: entry.debit
+      debit: entry.debit,
     }));
-    
+
     return FinancialCalculator.reconcileAccounts(entries);
   }
 

@@ -79,3 +79,5 @@ echo "1. Commit the updated package.json and package-lock.json"
 echo "2. Push to your repository"
 echo "3. Redeploy on Vercel"
 echo ""
+
+

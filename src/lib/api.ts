@@ -23,7 +23,9 @@ export interface BusinessEntry {
 }
 
 // Create new business entry
-export const createBusinessEntry = async (entry: BusinessEntry): Promise<ApiResponse> => {
+export const createBusinessEntry = async (
+  entry: BusinessEntry
+): Promise<ApiResponse> => {
   try {
     const response = await fetch(`${API_BASE_URL}/business/create`, {
       method: 'POST',
@@ -41,13 +43,13 @@ export const createBusinessEntry = async (entry: BusinessEntry): Promise<ApiResp
     return {
       success: true,
       data,
-      message: 'Entry created successfully'
+      message: 'Entry created successfully',
     };
   } catch (error) {
     console.error('API Error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to create entry'
+      error: error instanceof Error ? error.message : 'Failed to create entry',
     };
   }
 };

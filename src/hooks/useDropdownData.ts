@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { 
-  mockCompanies, 
-  mockAccounts, 
-  mockSubAccounts, 
-  mockUsers, 
+import {
+  mockCompanies,
+  mockAccounts,
+  mockSubAccounts,
+  mockUsers,
   mockVehicles,
   transactionTypes,
   yesNoOptions,
-  departments
+  departments,
 } from '../lib/mockData';
 
 interface DropdownData {
@@ -45,23 +45,28 @@ export const useDropdownData = () => {
         setData({
           companies: mockCompanies.map(item => ({
             value: item.company_name,
-            label: item.company_name
+            label: item.company_name,
           })),
-          accounts: Array.from(new Set(mockAccounts.map(item => item.acc_name)))
-            .map(acc => ({ value: acc, label: acc })),
-          subAccounts: Array.from(new Set(mockSubAccounts.map(item => item.sub_acc)))
-            .map(sub => ({ value: sub, label: sub })),
-          users: mockUsers.filter(user => user.is_active).map(item => ({
-            value: item.username,
-            label: item.username
-          })),
+          accounts: Array.from(
+            new Set(mockAccounts.map(item => item.acc_name))
+          ).map(acc => ({ value: acc, label: acc })),
+          subAccounts: Array.from(
+            new Set(mockSubAccounts.map(item => item.sub_acc))
+          ).map(sub => ({ value: sub, label: sub })),
+          users: mockUsers
+            .filter(user => user.is_active)
+            .map(item => ({
+              value: item.username,
+              label: item.username,
+            })),
           vehicles: mockVehicles.map(item => ({
             value: item.v_no,
-            label: item.v_no
+            label: item.v_no,
           })),
           departments,
           transactionTypes,
-          yesNoOptions});
+          yesNoOptions,
+        });
       } catch (error) {
         console.error('Error fetching dropdown data:', error);
       } finally {
@@ -72,17 +77,20 @@ export const useDropdownData = () => {
     fetchDropdownData();
   }, []);
 
-  const getSubAccountsByAccount = async (accountName: string, companyName: string) => {
+  const getSubAccountsByAccount = async (
+    accountName: string,
+    companyName: string
+  ) => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 200));
-    
+
     const filteredSubAccounts = mockSubAccounts.filter(
       item => item.acc_name === accountName && item.company_name === companyName
     );
 
     return filteredSubAccounts.map(item => ({
       value: item.sub_acc,
-      label: item.sub_acc
+      label: item.sub_acc,
     }));
   };
 

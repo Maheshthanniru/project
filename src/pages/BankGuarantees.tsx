@@ -9,6 +9,13 @@ import toast from 'react-hot-toast';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { BankGuarantee } from '../lib/supabaseDatabase';
 import { supabaseDB } from '../lib/supabaseDatabase';
+import {
+  CreditCard,
+  AlertTriangle,
+  DollarSign,
+  Search,
+  CheckCircle,
+} from 'lucide-react';
 
 const BankGuarantees: React.FC = () => {
   const { user } = useAuth();
@@ -47,7 +54,8 @@ const BankGuarantees: React.FC = () => {
     expiredBGs: 0,
     expiringBGs: 0,
     totalCredit: 0,
-    totalDebit: 0});
+    totalDebit: 0,
+  });
 
   useEffect(() => {
     loadBankGuarantees();
@@ -81,10 +89,11 @@ const BankGuarantees: React.FC = () => {
 
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(bg =>
-        bg.bg_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bg.work_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bg.department.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        bg =>
+          bg.bg_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          bg.work_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          bg.department.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -117,10 +126,10 @@ const BankGuarantees: React.FC = () => {
     const totalBGs = bankGuarantees.length;
     const activeBGs = bankGuarantees.filter(bg => !bg.cancelled).length;
     const cancelledBGs = bankGuarantees.filter(bg => bg.cancelled).length;
-    
+
     let expiredBGs = 0;
     let expiringBGs = 0;
-    
+
     bankGuarantees.forEach(bg => {
       if (!bg.cancelled) {
         const status = getExpiryStatus(bg.exp_date).status;
@@ -139,7 +148,8 @@ const BankGuarantees: React.FC = () => {
       expiredBGs,
       expiringBGs,
       totalCredit,
-      totalDebit});
+      totalDebit,
+    });
   };
 
   const getExpiryStatus = (expiryDate: string) => {
@@ -148,11 +158,23 @@ const BankGuarantees: React.FC = () => {
     const daysUntilExpiry = differenceInDays(expiry, today);
 
     if (daysUntilExpiry < 0) {
-      return { status: 'expired', color: 'bg-red-500 text-white', days: Math.abs(daysUntilExpiry) };
+      return {
+        status: 'expired',
+        color: 'bg-red-500 text-white',
+        days: Math.abs(daysUntilExpiry),
+      };
     } else if (daysUntilExpiry <= 30) {
-      return { status: 'expiring', color: 'bg-orange-500 text-white', days: daysUntilExpiry };
+      return {
+        status: 'expiring',
+        color: 'bg-orange-500 text-white',
+        days: daysUntilExpiry,
+      };
     } else {
-      return { status: 'valid', color: 'bg-green-500 text-white', days: daysUntilExpiry };
+      return {
+        status: 'valid',
+        color: 'bg-green-500 text-white',
+        days: daysUntilExpiry,
+      };
     }
   };
 
@@ -171,7 +193,10 @@ const BankGuarantees: React.FC = () => {
     try {
       if (editingBG) {
         // Update existing bank guarantee
-        const updatedBG = await supabaseDB.updateBankGuarantee(editingBG.id, editingBG);
+        const updatedBG = await supabaseDB.updateBankGuarantee(
+          editingBG.id,
+          editingBG
+        );
         if (updatedBG) {
           await loadBankGuarantees();
           setEditingBG(null);
@@ -213,8 +238,10 @@ const BankGuarantees: React.FC = () => {
   };
 
   const handleCancel = (bgId: string) => {
-    if (window.confirm('Are you sure you want to cancel this Bank Guarantee?')) {
-      const updatedBGs = bankGuarantees.map(bg => 
+    if (
+      window.confirm('Are you sure you want to cancel this Bank Guarantee?')
+    ) {
+      const updatedBGs = bankGuarantees.map(bg =>
         bg.id === bgId ? { ...bg, cancelled: true } : bg
       );
       setBankGuarantees(updatedBGs);
@@ -234,17 +261,19 @@ const BankGuarantees: React.FC = () => {
       'Issue Date': bg.issue_date,
       'Expiry Date': bg.exp_date,
       'Work Name': bg.work_name,
-      'Department': bg.department,
-      'Credit': bg.credit,
-      'Debit': bg.debit,
-      'Status': bg.cancelled ? 'Cancelled' : 'Active',
+      Department: bg.department,
+      Credit: bg.credit,
+      Debit: bg.debit,
+      Status: bg.cancelled ? 'Cancelled' : 'Active',
     }));
 
     // Create CSV content
     const headers = Object.keys(exportData[0] || {});
     const csvContent = [
       headers.join(','),
-      ...exportData.map(row => headers.map(header => `"${row[header as keyof typeof row]}"`).join(','))
+      ...exportData.map(row =>
+        headers.map(header => `"${row[header as keyof typeof row]}"`).join(',')
+      ),
     ].join('\n');
 
     // Download file
@@ -260,7 +289,7 @@ const BankGuarantees: React.FC = () => {
 
   const departmentOptions = [
     { value: '', label: 'All Departments' },
-    ...departments
+    ...departments,
   ];
 
   const statusOptions = [
@@ -277,30 +306,23 @@ const BankGuarantees: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className='flex items-center justify-between'>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Bank Guarantees</h1>
-          <p className="text-gray-600">Comprehensive bank guarantee management with expiry tracking</p>
+          <h1 className='text-3xl font-bold text-gray-900'>Bank Guarantees</h1>
+          <p className='text-gray-600'>
+            Comprehensive bank guarantee management with expiry tracking
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            
-            variant="secondary"
-            onClick={loadBankGuarantees}
-          >
+        <div className='flex items-center gap-3'>
+          <Button variant='secondary' onClick={loadBankGuarantees}>
             Refresh
           </Button>
-          <Button
-            
-            variant="secondary"
-            onClick={exportToExcel}
-          >
+          <Button variant='secondary' onClick={exportToExcel}>
             Export
           </Button>
           <Button
-            
             onClick={() => {
               setShowAddForm(!showAddForm);
               setEditingBG(null);
@@ -312,89 +334,102 @@ const BankGuarantees: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-          <div className="flex items-center justify-between">
+      <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
+        <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-blue-100 text-sm font-medium">Total BGs</p>
-              <p className="text-2xl font-bold">{stats.totalBGs}</p>
+              <p className='text-blue-100 text-sm font-medium'>Total BGs</p>
+              <p className='text-2xl font-bold'>{stats.totalBGs}</p>
             </div>
-            <CreditCard className="w-8 h-8 text-blue-200" />
+            <CreditCard className='w-8 h-8 text-blue-200' />
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-          <div className="flex items-center justify-between">
+        <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-green-100 text-sm font-medium">Active BGs</p>
-              <p className="text-2xl font-bold">{stats.activeBGs}</p>
+              <p className='text-green-100 text-sm font-medium'>Active BGs</p>
+              <p className='text-2xl font-bold'>{stats.activeBGs}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-200" />
+            <CheckCircle className='w-8 h-8 text-green-200' />
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white">
-          <div className="flex items-center justify-between">
+        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-red-100 text-sm font-medium">Expired BGs</p>
-              <p className="text-2xl font-bold">{stats.expiredBGs}</p>
+              <p className='text-red-100 text-sm font-medium'>Expired BGs</p>
+              <p className='text-2xl font-bold'>{stats.expiredBGs}</p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-red-200" />
+            <AlertTriangle className='w-8 h-8 text-red-200' />
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-          <div className="flex items-center justify-between">
+        <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-purple-100 text-sm font-medium">Total Amount</p>
-              <p className="text-xl font-bold">₹{(stats.totalCredit + stats.totalDebit).toLocaleString()}</p>
+              <p className='text-purple-100 text-sm font-medium'>
+                Total Amount
+              </p>
+              <p className='text-xl font-bold'>
+                ₹{(stats.totalCredit + stats.totalDebit).toLocaleString()}
+              </p>
             </div>
-            <DollarSign className="w-8 h-8 text-purple-200" />
+            <DollarSign className='w-8 h-8 text-purple-200' />
           </div>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card className="bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex flex-col justify-end">
-            <label htmlFor="bg-search" className="text-sm font-medium text-gray-700 mb-1">Search</label>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      <Card className='bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200'>
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
+          <div className='flex flex-col justify-end'>
+            <label
+              htmlFor='bg-search'
+              className='text-sm font-medium text-gray-700 mb-1'
+            >
+              Search
+            </label>
+            <div className='relative'>
+              <Search className='w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400' />
               <input
-                id="bg-search"
-                type="text"
-                placeholder="Search BGs..."
+                id='bg-search'
+                type='text'
+                placeholder='Search BGs...'
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 h-12 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+                onChange={e => setSearchTerm(e.target.value)}
+                className='pl-10 pr-4 h-12 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base'
               />
             </div>
           </div>
 
           <Select
-            label="Department"
+            label='Department'
             value={filters.department}
-            onChange={(value) => setFilters(prev => ({ ...prev, department: value }))}
+            onChange={value =>
+              setFilters(prev => ({ ...prev, department: value }))
+            }
             options={departmentOptions}
           />
 
           <Select
-            label="Status"
+            label='Status'
             value={filters.status}
-            onChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
+            onChange={value => setFilters(prev => ({ ...prev, status: value }))}
             options={statusOptions}
           />
 
           <Select
-            label="Expiry Status"
+            label='Expiry Status'
             value={filters.expiryStatus}
-            onChange={(value) => setFilters(prev => ({ ...prev, expiryStatus: value }))}
+            onChange={value =>
+              setFilters(prev => ({ ...prev, expiryStatus: value }))
+            }
             options={expiryStatusOptions}
           />
 
-          <div className="flex items-end">
-            <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center">
+          <div className='flex items-end'>
+            <div className='text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center'>
               <strong>{filteredBGs.length}</strong> BGs found
             </div>
           </div>
@@ -403,91 +438,100 @@ const BankGuarantees: React.FC = () => {
 
       {/* Add/Edit BG Form */}
       {(showAddForm || editingBG) && (
-        <Card title={editingBG ? 'Edit Bank Guarantee' : 'New Bank Guarantee Entry Form'}>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card
+          title={
+            editingBG ? 'Edit Bank Guarantee' : 'New Bank Guarantee Entry Form'
+          }
+        >
+          <form onSubmit={handleSubmit} className='space-y-4'>
+            <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
               <Input
-                label="S.No"
-                value={editingBG ? editingBG.sno.toString() : (bankGuarantees.length + 1).toString()}
+                label='S.No'
+                value={
+                  editingBG
+                    ? editingBG.sno.toString()
+                    : (bankGuarantees.length + 1).toString()
+                }
                 onChange={() => {}}
                 disabled
               />
-              
+
               <Input
-                label="BG No."
+                label='BG No.'
                 value={editingBG ? editingBG.bg_no : newBG.bg_no}
-                onChange={(value) => handleInputChange('bg_no', value)}
-                placeholder="BG/BANK/2025/001"
+                onChange={value => handleInputChange('bg_no', value)}
+                placeholder='BG/BANK/2025/001'
                 required
               />
-              
+
               <Input
-                label="Issue Date"
-                type="date"
+                label='Issue Date'
+                type='date'
                 value={editingBG ? editingBG.issue_date : newBG.issue_date}
-                onChange={(value) => handleInputChange('issue_date', value)}
+                onChange={value => handleInputChange('issue_date', value)}
                 required
               />
-              
+
               <Input
-                label="Exp Date"
-                type="date"
+                label='Exp Date'
+                type='date'
                 value={editingBG ? editingBG.exp_date : newBG.exp_date}
-                onChange={(value) => handleInputChange('exp_date', value)}
+                onChange={value => handleInputChange('exp_date', value)}
                 required
               />
             </div>
 
             <Input
-              label="Work Name"
+              label='Work Name'
               value={editingBG ? editingBG.work_name : newBG.work_name}
-              onChange={(value) => handleInputChange('work_name', value)}
-              placeholder="Contract or work description..."
+              onChange={value => handleInputChange('work_name', value)}
+              placeholder='Contract or work description...'
               required
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
               <Select
-                label="Department"
+                label='Department'
                 value={editingBG ? editingBG.department : newBG.department}
-                onChange={(value) => handleInputChange('department', value)}
+                onChange={value => handleInputChange('department', value)}
                 options={departments}
-                placeholder="Select department..."
+                placeholder='Select department...'
                 required
               />
-              
+
               <Input
-                label="Credit"
-                type="number"
+                label='Credit'
+                type='number'
                 value={editingBG ? editingBG.credit : newBG.credit}
-                onChange={(value) => handleInputChange('credit', parseFloat(value) || 0)}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
+                onChange={value =>
+                  handleInputChange('credit', parseFloat(value) || 0)
+                }
+                placeholder='0.00'
+                min='0'
+                step='0.01'
               />
-              
+
               <Input
-                label="Debit"
-                type="number"
+                label='Debit'
+                type='number'
                 value={editingBG ? editingBG.debit : newBG.debit}
-                onChange={(value) => handleInputChange('debit', parseFloat(value) || 0)}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
+                onChange={value =>
+                  handleInputChange('debit', parseFloat(value) || 0)
+                }
+                placeholder='0.00'
+                min='0'
+                step='0.01'
               />
             </div>
 
-            <div className="flex gap-4">
-              <Button
-                type="submit"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : (editingBG ? 'Update' : 'Add')}
+            <div className='flex gap-4'>
+              <Button type='submit' disabled={loading}>
+                {loading ? 'Saving...' : editingBG ? 'Update' : 'Add'}
               </Button>
-              
+
               <Button
-                type="button"
-                variant="secondary"
+                type='button'
+                variant='secondary'
                 onClick={() => {
                   setShowAddForm(false);
                   setEditingBG(null);
@@ -501,15 +545,17 @@ const BankGuarantees: React.FC = () => {
       )}
 
       {/* Cancelled BGs Toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {showCancelledBGs ? 'Cancelled Bank Guarantees' : 'Active Bank Guarantees'}
+      <div className='flex items-center justify-between'>
+        <div className='flex items-center gap-4'>
+          <h2 className='text-xl font-semibold text-gray-900'>
+            {showCancelledBGs
+              ? 'Cancelled Bank Guarantees'
+              : 'Active Bank Guarantees'}
           </h2>
           <Button
-            variant="secondary"
+            variant='secondary'
             onClick={() => setShowCancelledBGs(!showCancelledBGs)}
-            className="text-sm"
+            className='text-sm'
           >
             {showCancelledBGs ? 'Show Active' : 'Show Cancelled'}
           </Button>
@@ -517,100 +563,137 @@ const BankGuarantees: React.FC = () => {
       </div>
 
       {/* Bank Guarantees Table */}
-      <Card title={showCancelledBGs ? 'Cancelled Bank Guarantees' : 'Bank Guarantees List'} 
-            subtitle={`${filteredBGs.length} bank guarantees`}>
+      <Card
+        title={
+          showCancelledBGs
+            ? 'Cancelled Bank Guarantees'
+            : 'Bank Guarantees List'
+        }
+        subtitle={`${filteredBGs.length} bank guarantees`}
+      >
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Loading bank guarantees...</p>
+          <div className='text-center py-8'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+            <p className='mt-2 text-gray-600'>Loading bank guarantees...</p>
           </div>
         ) : filteredBGs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className='text-center py-8 text-gray-500'>
             No bank guarantees found matching your criteria.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div className='overflow-x-auto'>
+            <table className='w-full text-sm'>
+              <thead className='bg-gray-50 border-b border-gray-200'>
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">S.No</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Number</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Issue Date</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Exp Date</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Work Name</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Department</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-700">Credit</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-700">Debit</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Cancel</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">Actions</th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    S.No
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Number
+                  </th>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    Issue Date
+                  </th>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    Exp Date
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Work Name
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Department
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Credit
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Debit
+                  </th>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    Cancel
+                  </th>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBGs.map((bg, index) => {
                   const expiryStatus = getExpiryStatus(bg.exp_date);
-                  
+
                   return (
-                    <tr key={bg.id} className={`border-b hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                    } ${bg.cancelled ? 'opacity-60' : ''}`}>
-                      <td className="px-3 py-2 font-medium">{bg.sno}</td>
-                      <td className="px-3 py-2 font-medium text-blue-600">{bg.bg_no}</td>
-                      <td className="px-3 py-2 text-center">
+                    <tr
+                      key={bg.id}
+                      className={`border-b hover:bg-gray-50 transition-colors ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                      } ${bg.cancelled ? 'opacity-60' : ''}`}
+                    >
+                      <td className='px-3 py-2 font-medium'>{bg.sno}</td>
+                      <td className='px-3 py-2 font-medium text-blue-600'>
+                        {bg.bg_no}
+                      </td>
+                      <td className='px-3 py-2 text-center'>
                         {format(new Date(bg.issue_date), 'dd-MM-yyyy')}
                       </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${expiryStatus.color}`}>
+                      <td className='px-3 py-2 text-center'>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${expiryStatus.color}`}
+                        >
                           {format(new Date(bg.exp_date), 'dd-MM-yyyy')}
                         </span>
                       </td>
-                      <td className="px-3 py-2 max-w-xs truncate" title={bg.work_name}>
+                      <td
+                        className='px-3 py-2 max-w-xs truncate'
+                        title={bg.work_name}
+                      >
                         {bg.work_name}
                       </td>
-                      <td className="px-3 py-2">{bg.department}</td>
-                      <td className="px-3 py-2 text-right font-medium text-green-600">
-                        {bg.credit > 0 ? ` ₹${bg.credit.toLocaleString()}` : '-'}
+                      <td className='px-3 py-2'>{bg.department}</td>
+                      <td className='px-3 py-2 text-right font-medium text-green-600'>
+                        {bg.credit > 0
+                          ? ` ₹${bg.credit.toLocaleString()}`
+                          : '-'}
                       </td>
-                      <td className="px-3 py-2 text-right font-medium text-red-600">
+                      <td className='px-3 py-2 text-right font-medium text-red-600'>
                         {bg.debit > 0 ? ` ₹${bg.debit.toLocaleString()}` : '-'}
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className='px-3 py-2 text-center'>
                         {bg.cancelled ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
                             Cancelled
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
                             Active
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className='px-3 py-2 text-center'>
+                        <div className='flex items-center justify-center gap-2'>
                           <Button
-                            size="sm"
-                            variant="secondary"
-                            
+                            size='sm'
+                            variant='secondary'
                             onClick={() => handleViewDetails(bg)}
-                            className="px-2"
+                            className='px-2'
                           >
                             View
                           </Button>
                           {!bg.cancelled && (
                             <>
                               <Button
-                                size="sm"
-                                variant="secondary"
+                                size='sm'
+                                variant='secondary'
                                 icon={Edit}
                                 onClick={() => handleEdit(bg)}
-                                className="px-2"
+                                className='px-2'
                               >
                                 Edit
                               </Button>
                               <Button
-                                size="sm"
-                                variant="danger"
+                                size='sm'
+                                variant='danger'
                                 onClick={() => handleCancel(bg.id)}
-                                className="px-2"
+                                className='px-2'
                               >
                                 Cancel
                               </Button>
@@ -629,81 +712,125 @@ const BankGuarantees: React.FC = () => {
 
       {/* BG Details Modal */}
       {showDetails && selectedBG && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
+          <div className='bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto'>
+            <div className='p-6'>
+              <div className='flex items-center justify-between mb-6'>
+                <h3 className='text-lg font-semibold flex items-center gap-2'>
+                  <CreditCard className='w-5 h-5' />
                   Bank Guarantee Details - {selectedBG.bg_no}
                 </h3>
                 <Button
-                  size="sm"
-                  variant="secondary"
-                  
+                  size='sm'
+                  variant='secondary'
                   onClick={() => setShowDetails(false)}
                 >
                   Close
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-3">BG Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div><strong>S.No:</strong> {selectedBG.sno}</div>
-                      <div><strong>BG Number:</strong> {selectedBG.bg_no}</div>
-                      <div><strong>Issue Date:</strong> {format(new Date(selectedBG.issue_date), 'MMM dd, yyyy')}</div>
-                      <div><strong>Expiry Date:</strong> {format(new Date(selectedBG.exp_date), 'MMM dd, yyyy')}</div>
-                      <div><strong>Department:</strong> {selectedBG.department}</div>
-                      <div><strong>Status:</strong> 
-                        <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
-                          selectedBG.cancelled ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                        }`}>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                <div className='space-y-4'>
+                  <div className='bg-blue-50 p-4 rounded-lg'>
+                    <h4 className='font-medium text-blue-900 mb-3'>
+                      BG Information
+                    </h4>
+                    <div className='space-y-2 text-sm'>
+                      <div>
+                        <strong>S.No:</strong> {selectedBG.sno}
+                      </div>
+                      <div>
+                        <strong>BG Number:</strong> {selectedBG.bg_no}
+                      </div>
+                      <div>
+                        <strong>Issue Date:</strong>{' '}
+                        {format(
+                          new Date(selectedBG.issue_date),
+                          'MMM dd, yyyy'
+                        )}
+                      </div>
+                      <div>
+                        <strong>Expiry Date:</strong>{' '}
+                        {format(new Date(selectedBG.exp_date), 'MMM dd, yyyy')}
+                      </div>
+                      <div>
+                        <strong>Department:</strong> {selectedBG.department}
+                      </div>
+                      <div>
+                        <strong>Status:</strong>
+                        <span
+                          className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                            selectedBG.cancelled
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}
+                        >
                           {selectedBG.cancelled ? 'Cancelled' : 'Active'}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-green-900 mb-3">Financial Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div><strong>Credit Amount:</strong> ₹{selectedBG.credit.toLocaleString()}</div>
-                      <div><strong>Debit Amount:</strong> ₹{selectedBG.debit.toLocaleString()}</div>
-                      <div><strong>Net Amount:</strong> ₹{(selectedBG.credit + selectedBG.debit).toLocaleString()}</div>
+                  <div className='bg-green-50 p-4 rounded-lg'>
+                    <h4 className='font-medium text-green-900 mb-3'>
+                      Financial Details
+                    </h4>
+                    <div className='space-y-2 text-sm'>
+                      <div>
+                        <strong>Credit Amount:</strong> ₹
+                        {selectedBG.credit.toLocaleString()}
+                      </div>
+                      <div>
+                        <strong>Debit Amount:</strong> ₹
+                        {selectedBG.debit.toLocaleString()}
+                      </div>
+                      <div>
+                        <strong>Net Amount:</strong> ₹
+                        {(
+                          selectedBG.credit + selectedBG.debit
+                        ).toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-purple-900 mb-3">Work Details</h4>
-                    <div className="text-sm">
-                      <div><strong>Work Name:</strong></div>
-                      <div className="mt-2 p-3 bg-white rounded border">
+                <div className='space-y-4'>
+                  <div className='bg-purple-50 p-4 rounded-lg'>
+                    <h4 className='font-medium text-purple-900 mb-3'>
+                      Work Details
+                    </h4>
+                    <div className='text-sm'>
+                      <div>
+                        <strong>Work Name:</strong>
+                      </div>
+                      <div className='mt-2 p-3 bg-white rounded border'>
                         {selectedBG.work_name}
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-orange-900 mb-3">Expiry Status</h4>
-                    <div className="text-sm">
+                  <div className='bg-orange-50 p-4 rounded-lg'>
+                    <h4 className='font-medium text-orange-900 mb-3'>
+                      Expiry Status
+                    </h4>
+                    <div className='text-sm'>
                       {(() => {
                         const status = getExpiryStatus(selectedBG.exp_date);
                         return (
-                          <div className="space-y-2">
-                            <div className={`px-3 py-2 rounded text-center font-medium ${status.color}`}>
-                              {status.status === 'expired' ? 'EXPIRED' :
-                               status.status === 'expiring' ? 'EXPIRING SOON' : 'VALID'}
+                          <div className='space-y-2'>
+                            <div
+                              className={`px-3 py-2 rounded text-center font-medium ${status.color}`}
+                            >
+                              {status.status === 'expired'
+                                ? 'EXPIRED'
+                                : status.status === 'expiring'
+                                  ? 'EXPIRING SOON'
+                                  : 'VALID'}
                             </div>
-                            <div className="text-center text-gray-600">
-                              {status.status === 'expired' 
+                            <div className='text-center text-gray-600'>
+                              {status.status === 'expired'
                                 ? `Expired ${status.days} days ago`
-                                : `${status.days} days remaining`
-                              }
+                                : `${status.days} days remaining`}
                             </div>
                           </div>
                         );

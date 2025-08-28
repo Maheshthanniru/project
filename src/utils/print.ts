@@ -31,7 +31,7 @@ export const printTable = (
     includeHeader = true,
     includeFooter = true,
     headerText = 'Thirumala Group Business Management System',
-    footerText = `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`
+    footerText = `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
   } = options;
 
   // Create print window
@@ -173,52 +173,59 @@ export const printTable = (
   `;
 
   // Generate table HTML
-  const tableRows = data.map(row => {
-    const cells = columns.map(col => {
-      const value = row[col.key];
-      let displayValue = value;
-      
-      // Format numbers
-      if (typeof value === 'number') {
-        if (col.key.toLowerCase().includes('amount') || 
-            col.key.toLowerCase().includes('credit') || 
-            col.key.toLowerCase().includes('debit') ||
-            col.key.toLowerCase().includes('balance')) {
-          displayValue = `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        } else {
-          displayValue = value.toLocaleString('en-IN');
-        }
-      }
-      
-      // Format dates
-      if (col.key.toLowerCase().includes('date') && value) {
-        try {
-          displayValue = format(new Date(value), 'dd/MM/yyyy');
-        } catch (e) {
-          displayValue = value;
-        }
-      }
-      
-      return `<td>${displayValue || ''}</td>`;
-    }).join('');
-    
-    return `<tr>${cells}</tr>`;
-  }).join('');
+  const tableRows = data
+    .map(row => {
+      const cells = columns
+        .map(col => {
+          const value = row[col.key];
+          let displayValue = value;
 
-  const tableHeaders = columns.map(col => 
-    `<th style="width: ${col.width || 'auto'}">${col.label}</th>`
-  ).join('');
+          // Format numbers
+          if (typeof value === 'number') {
+            if (
+              col.key.toLowerCase().includes('amount') ||
+              col.key.toLowerCase().includes('credit') ||
+              col.key.toLowerCase().includes('debit') ||
+              col.key.toLowerCase().includes('balance')
+            ) {
+              displayValue = `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+            } else {
+              displayValue = value.toLocaleString('en-IN');
+            }
+          }
+
+          // Format dates
+          if (col.key.toLowerCase().includes('date') && value) {
+            try {
+              displayValue = format(new Date(value), 'dd/MM/yyyy');
+            } catch (e) {
+              displayValue = value;
+            }
+          }
+
+          return `<td>${displayValue || ''}</td>`;
+        })
+        .join('');
+
+      return `<tr>${cells}</tr>`;
+    })
+    .join('');
+
+  const tableHeaders = columns
+    .map(col => `<th style="width: ${col.width || 'auto'}">${col.label}</th>`)
+    .join('');
 
   // Generate summary if data has totals
   let summaryHTML = '';
   if (data.length > 0) {
-    const numericColumns = columns.filter(col => 
-      col.key.toLowerCase().includes('amount') || 
-      col.key.toLowerCase().includes('credit') || 
-      col.key.toLowerCase().includes('debit') ||
-      col.key.toLowerCase().includes('balance')
+    const numericColumns = columns.filter(
+      col =>
+        col.key.toLowerCase().includes('amount') ||
+        col.key.toLowerCase().includes('credit') ||
+        col.key.toLowerCase().includes('debit') ||
+        col.key.toLowerCase().includes('balance')
     );
-    
+
     if (numericColumns.length > 0) {
       const totals = numericColumns.map(col => {
         const total = data.reduce((sum, row) => {
@@ -227,16 +234,20 @@ export const printTable = (
         }, 0);
         return { label: col.label, total };
       });
-      
+
       summaryHTML = `
         <div class="print-summary">
           <h3>Summary</h3>
-          ${totals.map(item => `
+          ${totals
+            .map(
+              item => `
             <div class="print-summary-row">
               <span class="print-summary-label">Total ${item.label}:</span>
               <span class="print-summary-value">₹${item.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
-          `).join('')}
+          `
+            )
+            .join('')}
           <div class="print-summary-row">
             <span class="print-summary-label">Total Records:</span>
             <span class="print-summary-value">${data.length}</span>
@@ -255,13 +266,17 @@ export const printTable = (
       <style>${css}</style>
     </head>
     <body>
-      ${includeHeader ? `
+      ${
+        includeHeader
+          ? `
         <div class="print-header">
           <h1 class="print-title">${title}</h1>
           ${subtitle ? `<p class="print-subtitle">${subtitle}</p>` : ''}
           <p class="print-header-text">${headerText}</p>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
       ${summaryHTML}
       
@@ -274,11 +289,15 @@ export const printTable = (
         </tbody>
       </table>
       
-      ${includeFooter ? `
+      ${
+        includeFooter
+          ? `
         <div class="print-footer">
           <p>${footerText}</p>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
     </body>
     </html>
   `;
@@ -306,13 +325,13 @@ export const printCashBook = (data: any[], options: PrintOptions = {}) => {
     { key: 'credit', label: 'Credit', width: '100px' },
     { key: 'debit', label: 'Debit', width: '100px' },
     { key: 'staff', label: 'Staff', width: '100px' },
-    { key: 'approved', label: 'Status', width: '80px' }
+    { key: 'approved', label: 'Status', width: '80px' },
   ];
 
   return printTable(data, columns, {
     title: 'Cash Book Report',
     subtitle: 'Financial Transaction Details',
-    ...options
+    ...options,
   });
 };
 
@@ -322,13 +341,13 @@ export const printLedger = (data: any[], options: PrintOptions = {}) => {
     { key: 'credit', label: 'Credit', width: '120px' },
     { key: 'debit', label: 'Debit', width: '120px' },
     { key: 'balance', label: 'Balance', width: '120px' },
-    { key: 'yesNo', label: 'Category', width: '100px' }
+    { key: 'yesNo', label: 'Category', width: '100px' },
   ];
 
   return printTable(data, columns, {
     title: 'Ledger Report',
     subtitle: 'Account-wise Summary',
-    ...options
+    ...options,
   });
 };
 
@@ -339,13 +358,13 @@ export const printBalanceSheet = (data: any[], options: PrintOptions = {}) => {
     { key: 'debit', label: 'Debit', width: '120px' },
     { key: 'balance', label: 'Balance', width: '120px' },
     { key: 'yesNo', label: 'P&L', width: '80px' },
-    { key: 'result', label: 'Result', width: '100px' }
+    { key: 'result', label: 'Result', width: '100px' },
   ];
 
   return printTable(data, columns, {
     title: 'Balance Sheet',
     subtitle: 'Financial Position Report',
-    ...options
+    ...options,
   });
 };
 
@@ -358,17 +377,20 @@ export const printVehicles = (data: any[], options: PrintOptions = {}) => {
     { key: 'tax_exp_date', label: 'Tax Expiry', width: '100px' },
     { key: 'insurance_exp_date', label: 'Insurance Expiry', width: '120px' },
     { key: 'fitness_exp_date', label: 'Fitness Expiry', width: '120px' },
-    { key: 'permit_exp_date', label: 'Permit Expiry', width: '120px' }
+    { key: 'permit_exp_date', label: 'Permit Expiry', width: '120px' },
   ];
 
   return printTable(data, columns, {
     title: 'Vehicle Management Report',
     subtitle: 'Fleet and Document Status',
-    ...options
+    ...options,
   });
 };
 
-export const printBankGuarantees = (data: any[], options: PrintOptions = {}) => {
+export const printBankGuarantees = (
+  data: any[],
+  options: PrintOptions = {}
+) => {
   const columns = [
     { key: 'sno', label: 'S.No', width: '60px' },
     { key: 'bg_no', label: 'BG No', width: '150px' },
@@ -377,13 +399,13 @@ export const printBankGuarantees = (data: any[], options: PrintOptions = {}) => 
     { key: 'work_name', label: 'Work Name', width: '250px' },
     { key: 'credit', label: 'Credit', width: '100px' },
     { key: 'debit', label: 'Debit', width: '100px' },
-    { key: 'department', label: 'Department', width: '150px' }
+    { key: 'department', label: 'Department', width: '150px' },
   ];
 
   return printTable(data, columns, {
     title: 'Bank Guarantees Report',
     subtitle: 'BG Tracking and Management',
-    ...options
+    ...options,
   });
 };
 
@@ -395,12 +417,12 @@ export const printDrivers = (data: any[], options: PrintOptions = {}) => {
     { key: 'exp_date', label: 'License Expiry', width: '120px' },
     { key: 'phone', label: 'Phone', width: '120px' },
     { key: 'address', label: 'Address', width: '250px' },
-    { key: 'particulars', label: 'Particulars', width: '200px' }
+    { key: 'particulars', label: 'Particulars', width: '200px' },
   ];
 
   return printTable(data, columns, {
     title: 'Drivers Report',
     subtitle: 'Driver Information and License Status',
-    ...options
+    ...options,
   });
-}; 
+};

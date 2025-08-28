@@ -1,5 +1,10 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout/Layout';
@@ -43,23 +48,28 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
-            <div className="text-red-500 text-6xl mb-4">⚠️</div>
-            <h1 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-            <p className="text-gray-600 mb-4">
-              We're sorry, but something unexpected happened. Please try refreshing the page.
+        <div className='min-h-screen bg-gray-50 flex items-center justify-center p-4'>
+          <div className='max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center'>
+            <div className='text-red-500 text-6xl mb-4'>⚠️</div>
+            <h1 className='text-xl font-bold text-gray-900 mb-2'>
+              Something went wrong
+            </h1>
+            <p className='text-gray-600 mb-4'>
+              We're sorry, but something unexpected happened. Please try
+              refreshing the page.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+              className='bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors'
             >
               Refresh Page
             </button>
             {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mt-4 text-left">
-                <summary className="cursor-pointer text-sm text-gray-500">Error Details</summary>
-                <pre className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto">
+              <details className='mt-4 text-left'>
+                <summary className='cursor-pointer text-sm text-gray-500'>
+                  Error Details
+                </summary>
+                <pre className='mt-2 text-xs text-red-600 bg-red-50 p-2 rounded overflow-auto'>
                   {this.state.error.toString()}
                 </pre>
               </details>
@@ -74,29 +84,31 @@ class ErrorBoundary extends React.Component<
 }
 
 // Protected Route Component
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto'></div>
+          <p className='mt-4 text-gray-600'>Loading...</p>
         </div>
       </div>
     );
   }
-  
-  return user ? <>{children}</> : <Navigate to="/login" replace />;
+
+  return user ? <>{children}</> : <Navigate to='/login' replace />;
 };
 
 // Main App Component
 const AppContent: React.FC = () => {
   return (
     <Router>
-      <Toaster 
-        position="top-right"
+      <Toaster
+        position='top-right'
         toastOptions={{
           duration: 4000,
           style: {
@@ -119,11 +131,11 @@ const AppContent: React.FC = () => {
           },
         }}
       />
-      
+
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path='/login' element={<Login />} />
         <Route
-          path="/*"
+          path='/*'
           element={
             <ProtectedRoute>
               <Layout />
@@ -131,21 +143,21 @@ const AppContent: React.FC = () => {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="new-entry" element={<NewEntry />} />
-          <Route path="edit-entry" element={<EditEntry />} />
-          <Route path="daily-report" element={<DailyReport />} />
-          <Route path="detailed-ledger" element={<DetailedLedger />} />
-          <Route path="ledger-summary" element={<LedgerSummary />} />
-          <Route path="approve-records" element={<ApproveRecords />} />
-          <Route path="edited-records" element={<EditedRecords />} />
-          <Route path="replace-form" element={<ReplaceForm />} />
-          <Route path="balance-sheet" element={<BalanceSheet />} />
-          <Route path="export-excel" element={<ExportExcel />} />
-          <Route path="vehicles" element={<Vehicles />} />
-          <Route path="bank-guarantees" element={<BankGuarantees />} />
-          <Route path="drivers" element={<Drivers />} />
-          <Route path="user-management" element={<UserManagement />} />
-          <Route path="csv-upload" element={<CsvUpload />} />
+          <Route path='new-entry' element={<NewEntry />} />
+          <Route path='edit-entry' element={<EditEntry />} />
+          <Route path='daily-report' element={<DailyReport />} />
+          <Route path='detailed-ledger' element={<DetailedLedger />} />
+          <Route path='ledger-summary' element={<LedgerSummary />} />
+          <Route path='approve-records' element={<ApproveRecords />} />
+          <Route path='edited-records' element={<EditedRecords />} />
+          <Route path='replace-form' element={<ReplaceForm />} />
+          <Route path='balance-sheet' element={<BalanceSheet />} />
+          <Route path='export-excel' element={<ExportExcel />} />
+          <Route path='vehicles' element={<Vehicles />} />
+          <Route path='bank-guarantees' element={<BankGuarantees />} />
+          <Route path='drivers' element={<Drivers />} />
+          <Route path='user-management' element={<UserManagement />} />
+          <Route path='csv-upload' element={<CsvUpload />} />
         </Route>
       </Routes>
     </Router>
@@ -158,7 +170,7 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <AuthProvider>
         <AppContent />
-        <DebugInfo isVisible={true} />
+        <DebugInfo isVisible={false} />
       </AuthProvider>
     </ErrorBoundary>
   );

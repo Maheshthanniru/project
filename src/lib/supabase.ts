@@ -1,21 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase configuration with environment variables and fallbacks
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pmqeegdmcrktccszgbwu.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcWVlZ2RtY3JrdGNjc3pnYnd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MDY1OTUsImV4cCI6MjA2NzQ4MjU5NX0.OqaYKbr2CcLd10JTdyy0IRawUPwW3KGCAbsPNThcCFM';
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL ||
+  'https://pmqeegdmcrktccszgbwu.supabase.co';
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcWVlZ2RtY3JrdGNjc3pnYnd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MDY1OTUsImV4cCI6MjA2NzQ4MjU5NX0.OqaYKbr2CcLd10JTdyy0IRawUPwW3KGCAbsPNThcCFM';
 
 // Validate configuration
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase configuration. Please check your environment variables.');
+  console.error(
+    'Missing Supabase configuration. Please check your environment variables.'
+  );
 }
 
-// Create Supabase client with error handling
+// Create Supabase client with error handling and CORS configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'thirumala-business-app',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
 });
 
 // Database types based on your schema
@@ -320,7 +334,10 @@ export const supabaseHelpers = {
   // Get current user
   async getCurrentUser() {
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
       return { user, error };
     } catch (error) {
       console.error('Error getting current user:', error);
@@ -333,7 +350,7 @@ export const supabaseHelpers = {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
       return { data, error };
     } catch (error) {
@@ -356,7 +373,9 @@ export const supabaseHelpers = {
   // Check if user is authenticated
   async isAuthenticated() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       return !!session;
     } catch (error) {
       console.error('Error checking authentication:', error);
@@ -365,4 +384,4 @@ export const supabaseHelpers = {
   },
 };
 
-export default supabase; 
+export default supabase;

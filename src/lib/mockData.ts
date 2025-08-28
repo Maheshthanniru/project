@@ -88,49 +88,191 @@ export interface Driver {
 
 // Mock Users
 export const mockUsers: User[] = [
-  { id: '1', username: 'admin', email: 'admin@thirumala.com', user_type: 'Admin', is_active: true },
-  { id: '2', username: 'operator', email: 'operator@thirumala.com', user_type: 'Operator', is_active: true },
-  { id: '3', username: 'manager', email: 'manager@thirumala.com', user_type: 'Admin', is_active: true },
-  { id: '4', username: 'rajesh.kumar', email: 'rajesh@thirumala.com', user_type: 'Operator', is_active: true },
-  { id: '5', username: 'priya.sharma', email: 'priya@thirumala.com', user_type: 'Operator', is_active: true },
+  {
+    id: '1',
+    username: 'admin',
+    email: 'admin@thirumala.com',
+    user_type: 'Admin',
+    is_active: true,
+  },
+  {
+    id: '2',
+    username: 'operator',
+    email: 'operator@thirumala.com',
+    user_type: 'Operator',
+    is_active: true,
+  },
+  {
+    id: '3',
+    username: 'manager',
+    email: 'manager@thirumala.com',
+    user_type: 'Admin',
+    is_active: true,
+  },
+  {
+    id: '4',
+    username: 'rajesh.kumar',
+    email: 'rajesh@thirumala.com',
+    user_type: 'Operator',
+    is_active: true,
+  },
+  {
+    id: '5',
+    username: 'priya.sharma',
+    email: 'priya@thirumala.com',
+    user_type: 'Operator',
+    is_active: true,
+  },
 ];
 
 // Mock Companies
 export const mockCompanies: Company[] = [
-  { id: '1', company_name: 'Thirumala Cotton Mills', address: 'Plot No. 45, Industrial Estate, Coimbatore - 641021, Tamil Nadu' },
-  { id: '2', company_name: 'Thirumala Exports Pvt Ltd', address: 'Export House, Port Area, Chennai - 600001, Tamil Nadu' },
-  { id: '3', company_name: 'Thirumala Trading Corporation', address: 'Market Complex, Gandhi Road, Erode - 638001, Tamil Nadu' },
-  { id: '4', company_name: 'Thirumala Textiles', address: 'Textile Park, Tirupur - 641604, Tamil Nadu' },
+  {
+    id: '1',
+    company_name: 'Thirumala Cotton Mills',
+    address: 'Plot No. 45, Industrial Estate, Coimbatore - 641021, Tamil Nadu',
+  },
+  {
+    id: '2',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    address: 'Export House, Port Area, Chennai - 600001, Tamil Nadu',
+  },
+  {
+    id: '3',
+    company_name: 'Thirumala Trading Corporation',
+    address: 'Market Complex, Gandhi Road, Erode - 638001, Tamil Nadu',
+  },
+  {
+    id: '4',
+    company_name: 'Thirumala Textiles',
+    address: 'Textile Park, Tirupur - 641604, Tamil Nadu',
+  },
 ];
 
 // Mock Accounts
 export const mockAccounts: Account[] = [
-  { id: '1', company_name: 'Thirumala Cotton Mills', acc_name: 'Cotton Sales Account' },
-  { id: '2', company_name: 'Thirumala Cotton Mills', acc_name: 'Raw Material Purchase' },
-  { id: '3', company_name: 'Thirumala Cotton Mills', acc_name: 'Manufacturing Expenses' },
-  { id: '4', company_name: 'Thirumala Cotton Mills', acc_name: 'Cash & Bank Account' },
-  { id: '5', company_name: 'Thirumala Cotton Mills', acc_name: 'Machinery & Equipment' },
-  { id: '6', company_name: 'Thirumala Exports Pvt Ltd', acc_name: 'Export Sales Revenue' },
-  { id: '7', company_name: 'Thirumala Exports Pvt Ltd', acc_name: 'Shipping & Logistics' },
-  { id: '8', company_name: 'Thirumala Trading Corporation', acc_name: 'Trading Income' },
-  { id: '9', company_name: 'Thirumala Trading Corporation', acc_name: 'Commission & Brokerage' },
+  {
+    id: '1',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Cotton Sales Account',
+  },
+  {
+    id: '2',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Raw Material Purchase',
+  },
+  {
+    id: '3',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Manufacturing Expenses',
+  },
+  {
+    id: '4',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Cash & Bank Account',
+  },
+  {
+    id: '5',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Machinery & Equipment',
+  },
+  {
+    id: '6',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    acc_name: 'Export Sales Revenue',
+  },
+  {
+    id: '7',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    acc_name: 'Shipping & Logistics',
+  },
+  {
+    id: '8',
+    company_name: 'Thirumala Trading Corporation',
+    acc_name: 'Trading Income',
+  },
+  {
+    id: '9',
+    company_name: 'Thirumala Trading Corporation',
+    acc_name: 'Commission & Brokerage',
+  },
   { id: '10', company_name: 'Thirumala Textiles', acc_name: 'Fabric Sales' },
 ];
 
 // Mock Sub Accounts
 export const mockSubAccounts: SubAccount[] = [
-  { id: '1', company_name: 'Thirumala Cotton Mills', acc_name: 'Cotton Sales Account', sub_acc: 'Local Market Sales' },
-  { id: '2', company_name: 'Thirumala Cotton Mills', acc_name: 'Cotton Sales Account', sub_acc: 'Interstate Sales' },
-  { id: '3', company_name: 'Thirumala Cotton Mills', acc_name: 'Cotton Sales Account', sub_acc: 'Wholesale Distribution' },
-  { id: '4', company_name: 'Thirumala Cotton Mills', acc_name: 'Raw Material Purchase', sub_acc: 'Cotton Procurement' },
-  { id: '5', company_name: 'Thirumala Cotton Mills', acc_name: 'Raw Material Purchase', sub_acc: 'Chemical & Dyes' },
-  { id: '6', company_name: 'Thirumala Cotton Mills', acc_name: 'Manufacturing Expenses', sub_acc: 'Labor Charges' },
-  { id: '7', company_name: 'Thirumala Cotton Mills', acc_name: 'Manufacturing Expenses', sub_acc: 'Power & Electricity' },
-  { id: '8', company_name: 'Thirumala Cotton Mills', acc_name: 'Manufacturing Expenses', sub_acc: 'Maintenance & Repairs' },
-  { id: '9', company_name: 'Thirumala Exports Pvt Ltd', acc_name: 'Export Sales Revenue', sub_acc: 'USA Market' },
-  { id: '10', company_name: 'Thirumala Exports Pvt Ltd', acc_name: 'Export Sales Revenue', sub_acc: 'European Market' },
-  { id: '11', company_name: 'Thirumala Exports Pvt Ltd', acc_name: 'Shipping & Logistics', sub_acc: 'Sea Freight' },
-  { id: '12', company_name: 'Thirumala Trading Corporation', acc_name: 'Trading Income', sub_acc: 'Commodity Trading' },
+  {
+    id: '1',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Cotton Sales Account',
+    sub_acc: 'Local Market Sales',
+  },
+  {
+    id: '2',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Cotton Sales Account',
+    sub_acc: 'Interstate Sales',
+  },
+  {
+    id: '3',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Cotton Sales Account',
+    sub_acc: 'Wholesale Distribution',
+  },
+  {
+    id: '4',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Raw Material Purchase',
+    sub_acc: 'Cotton Procurement',
+  },
+  {
+    id: '5',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Raw Material Purchase',
+    sub_acc: 'Chemical & Dyes',
+  },
+  {
+    id: '6',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Manufacturing Expenses',
+    sub_acc: 'Labor Charges',
+  },
+  {
+    id: '7',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Manufacturing Expenses',
+    sub_acc: 'Power & Electricity',
+  },
+  {
+    id: '8',
+    company_name: 'Thirumala Cotton Mills',
+    acc_name: 'Manufacturing Expenses',
+    sub_acc: 'Maintenance & Repairs',
+  },
+  {
+    id: '9',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    acc_name: 'Export Sales Revenue',
+    sub_acc: 'USA Market',
+  },
+  {
+    id: '10',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    acc_name: 'Export Sales Revenue',
+    sub_acc: 'European Market',
+  },
+  {
+    id: '11',
+    company_name: 'Thirumala Exports Pvt Ltd',
+    acc_name: 'Shipping & Logistics',
+    sub_acc: 'Sea Freight',
+  },
+  {
+    id: '12',
+    company_name: 'Thirumala Trading Corporation',
+    acc_name: 'Trading Income',
+    sub_acc: 'Commodity Trading',
+  },
 ];
 
 // Mock Cash Book Entries
@@ -140,7 +282,8 @@ export const mockCashBookEntries: CashBookEntry[] = [
     sno: 1,
     acc_name: 'Cotton Sales Account',
     sub_acc_name: 'Local Market Sales',
-    particulars: 'Sale of premium cotton bales to ABC Textiles Ltd - Invoice #TH/2025/001',
+    particulars:
+      'Sale of premium cotton bales to ABC Textiles Ltd - Invoice #TH/2025/001',
     c_date: '2025-01-02',
     credit: 285000,
     debit: 0,
@@ -155,14 +298,15 @@ export const mockCashBookEntries: CashBookEntry[] = [
     approved: true,
     edited: false,
     e_count: 0,
-    cb: 'CB/2025/001'
+    cb: 'CB/2025/001',
   },
   {
     id: '2',
     sno: 2,
     acc_name: 'Raw Material Purchase',
     sub_acc_name: 'Cotton Procurement',
-    particulars: 'Purchase of raw cotton from farmers cooperative society - Bill #FC/2025/045',
+    particulars:
+      'Purchase of raw cotton from farmers cooperative society - Bill #FC/2025/045',
     c_date: '2025-01-02',
     credit: 0,
     debit: 165000,
@@ -177,14 +321,15 @@ export const mockCashBookEntries: CashBookEntry[] = [
     approved: false,
     edited: false,
     e_count: 0,
-    cb: 'CB/2025/002'
+    cb: 'CB/2025/002',
   },
   {
     id: '3',
     sno: 3,
     acc_name: 'Manufacturing Expenses',
     sub_acc_name: 'Power & Electricity',
-    particulars: 'Monthly electricity bill payment - TNEB Bill #EB/DEC/2024/789',
+    particulars:
+      'Monthly electricity bill payment - TNEB Bill #EB/DEC/2024/789',
     c_date: '2025-01-02',
     credit: 0,
     debit: 45000,
@@ -199,14 +344,15 @@ export const mockCashBookEntries: CashBookEntry[] = [
     approved: true,
     edited: false,
     e_count: 0,
-    cb: 'CB/2025/003'
+    cb: 'CB/2025/003',
   },
   {
     id: '4',
     sno: 4,
     acc_name: 'Export Sales Revenue',
     sub_acc_name: 'USA Market',
-    particulars: 'Export shipment to Global Cotton Inc, USA - LC #LC/USA/2025/012',
+    particulars:
+      'Export shipment to Global Cotton Inc, USA - LC #LC/USA/2025/012',
     c_date: '2025-01-03',
     credit: 850000,
     debit: 0,
@@ -221,14 +367,15 @@ export const mockCashBookEntries: CashBookEntry[] = [
     approved: true,
     edited: false,
     e_count: 0,
-    cb: 'CB/2025/004'
+    cb: 'CB/2025/004',
   },
   {
     id: '5',
     sno: 5,
     acc_name: 'Shipping & Logistics',
     sub_acc_name: 'Sea Freight',
-    particulars: 'Container shipping charges for USA export - Maersk Line Invoice #ML/2025/567',
+    particulars:
+      'Container shipping charges for USA export - Maersk Line Invoice #ML/2025/567',
     c_date: '2025-01-03',
     credit: 0,
     debit: 125000,
@@ -243,8 +390,8 @@ export const mockCashBookEntries: CashBookEntry[] = [
     approved: false,
     edited: true,
     e_count: 1,
-    cb: 'CB/2025/005'
-  }
+    cb: 'CB/2025/005',
+  },
 ];
 
 // Mock Vehicles
@@ -254,12 +401,13 @@ export const mockVehicles: Vehicle[] = [
     sno: 1,
     v_no: 'TN-38-AB-1234',
     v_type: 'Heavy Truck',
-    particulars: 'Tata Prima 4928.S - Cotton transport vehicle with hydraulic loading system',
+    particulars:
+      'Tata Prima 4928.S - Cotton transport vehicle with hydraulic loading system',
     tax_exp_date: '2025-03-15',
     insurance_exp_date: '2025-02-28',
     fitness_exp_date: '2025-04-10',
     permit_exp_date: '2025-05-20',
-    date_added: '2024-01-15'
+    date_added: '2024-01-15',
   },
   {
     id: '2',
@@ -271,7 +419,7 @@ export const mockVehicles: Vehicle[] = [
     insurance_exp_date: '2025-01-15',
     fitness_exp_date: '2025-07-25',
     permit_exp_date: '2025-08-10',
-    date_added: '2024-02-20'
+    date_added: '2024-02-20',
   },
   {
     id: '3',
@@ -283,8 +431,8 @@ export const mockVehicles: Vehicle[] = [
     insurance_exp_date: '2025-03-05',
     fitness_exp_date: '2025-01-20',
     permit_exp_date: '2025-04-15',
-    date_added: '2024-03-10'
-  }
+    date_added: '2024-03-10',
+  },
 ];
 
 // Mock Bank Guarantees
@@ -295,11 +443,12 @@ export const mockBankGuarantees: BankGuarantee[] = [
     bg_no: 'BG/SBI/2024/001',
     issue_date: '2024-06-01',
     exp_date: '2025-02-15',
-    work_name: 'Cotton Supply Contract - Reliance Textiles Ltd (Contract Value: ₹50 Lakhs)',
+    work_name:
+      'Cotton Supply Contract - Reliance Textiles Ltd (Contract Value: ₹50 Lakhs)',
     credit: 0,
     debit: 500000,
     department: 'Cotton Mills Division',
-    cancelled: false
+    cancelled: false,
   },
   {
     id: '2',
@@ -307,11 +456,12 @@ export const mockBankGuarantees: BankGuarantee[] = [
     bg_no: 'BG/HDFC/2024/002',
     issue_date: '2024-08-15',
     exp_date: '2025-01-30',
-    work_name: 'Export Performance Guarantee - Global Cotton Inc, USA (LC Value: $120,000)',
+    work_name:
+      'Export Performance Guarantee - Global Cotton Inc, USA (LC Value: $120,000)',
     credit: 0,
     debit: 1000000,
     department: 'Export Division',
-    cancelled: false
+    cancelled: false,
   },
   {
     id: '3',
@@ -323,8 +473,8 @@ export const mockBankGuarantees: BankGuarantee[] = [
     credit: 0,
     debit: 750000,
     department: 'Trading Division',
-    cancelled: false
-  }
+    cancelled: false,
+  },
 ];
 
 // Mock Drivers
@@ -335,9 +485,10 @@ export const mockDrivers: Driver[] = [
     driver_name: 'Rajesh Kumar Patel',
     license_no: 'TN-3820240001234',
     exp_date: '2025-03-20',
-    particulars: 'Heavy Vehicle License - 15 years experience in cotton transportation',
+    particulars:
+      'Heavy Vehicle License - 15 years experience in cotton transportation',
     phone: '+91-9876543210',
-    address: 'No. 45, Drivers Colony, Transport Nagar, Coimbatore - 641021'
+    address: 'No. 45, Drivers Colony, Transport Nagar, Coimbatore - 641021',
   },
   {
     id: '2',
@@ -345,9 +496,10 @@ export const mockDrivers: Driver[] = [
     driver_name: 'Suresh Babu Murugan',
     license_no: 'TN-3820240005678',
     exp_date: '2025-01-25',
-    particulars: 'Light & Heavy Vehicle License - Specialized in interstate transport',
+    particulars:
+      'Light & Heavy Vehicle License - Specialized in interstate transport',
     phone: '+91-9123456789',
-    address: 'Plot 12, Gandhi Street, Peelamedu, Coimbatore - 641004'
+    address: 'Plot 12, Gandhi Street, Peelamedu, Coimbatore - 641004',
   },
   {
     id: '3',
@@ -355,10 +507,11 @@ export const mockDrivers: Driver[] = [
     driver_name: 'Venkatesh Reddy',
     license_no: 'TN-3820240009012',
     exp_date: '2025-04-15',
-    particulars: 'Commercial Vehicle License - Expert in long distance cotton delivery',
+    particulars:
+      'Commercial Vehicle License - Expert in long distance cotton delivery',
     phone: '+91-9988776655',
-    address: 'Door No. 78, Textile Street, RS Puram, Coimbatore - 641002'
-  }
+    address: 'Door No. 78, Textile Street, RS Puram, Coimbatore - 641002',
+  },
 ];
 
 // Transaction Types
@@ -435,18 +588,18 @@ export const mockAuth = {
       { username: 'operator', password: 'op123' },
       { username: 'manager', password: 'manager123' },
       { username: 'rajesh.kumar', password: 'rajesh123' },
-      { username: 'priya.sharma', password: 'priya123' }
+      { username: 'priya.sharma', password: 'priya123' },
     ];
-    
+
     const credential = validCredentials.find(
       cred => cred.username === username && cred.password === password
     );
-    
+
     if (credential) {
       const user = mockUsers.find(u => u.username === username);
       return { success: true, user };
     }
-    
+
     return { success: false, error: 'Invalid credentials' };
-  }
+  },
 };

@@ -4,20 +4,24 @@ export interface ExcelData {
   [key: string]: any;
 }
 
-export const exportToExcel = (data: ExcelData[], filename: string, sheetName: string = 'Sheet1') => {
+export const exportToExcel = (
+  data: ExcelData[],
+  filename: string,
+  sheetName: string = 'Sheet1'
+) => {
   try {
     // Create a new workbook
     const workbook = XLSX.utils.book_new();
-    
+
     // Convert data to worksheet
     const worksheet = XLSX.utils.json_to_sheet(data);
-    
+
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-    
+
     // Save file
     XLSX.writeFile(workbook, `${filename}.xlsx`);
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error exporting to Excel:', error);
@@ -32,12 +36,12 @@ export const exportToExcelMultiSheet = (
 ) => {
   try {
     const workbook = XLSX.utils.book_new();
-    
+
     sheets.forEach(sheet => {
       const worksheet = XLSX.utils.json_to_sheet(sheet.data);
       XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
     });
-    
+
     XLSX.writeFile(workbook, `${filename}.xlsx`);
     return { success: true };
   } catch (error) {
@@ -56,14 +60,16 @@ export const exportToCSV = (data: ExcelData[], filename: string) => {
     const headers = Object.keys(data[0]);
     const csvContent = [
       headers.join(','),
-      ...data.map(row => 
-        headers.map(header => {
-          const value = row[header];
-          // Escape commas and quotes
-          const escapedValue = String(value).replace(/"/g, '""');
-          return `"${escapedValue}"`;
-        }).join(',')
-      )
+      ...data.map(row =>
+        headers
+          .map(header => {
+            const value = row[header];
+            // Escape commas and quotes
+            const escapedValue = String(value).replace(/"/g, '""');
+            return `"${escapedValue}"`;
+          })
+          .join(',')
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -85,11 +91,13 @@ export const exportToCSV = (data: ExcelData[], filename: string) => {
 };
 
 // Import from Excel/CSV
-export const importFromFile = (file: File): Promise<{ success: boolean; data?: ExcelData[]; error?: string }> => {
-  return new Promise((resolve) => {
+export const importFromFile = (
+  file: File
+): Promise<{ success: boolean; data?: ExcelData[]; error?: string }> => {
+  return new Promise(resolve => {
     const reader = new FileReader();
-    
-    reader.onload = (e) => {
+
+    reader.onload = e => {
       try {
         const data = e.target?.result;
         if (!data) {
@@ -98,7 +106,7 @@ export const importFromFile = (file: File): Promise<{ success: boolean; data?: E
         }
 
         let workbook: XLSX.WorkBook;
-        
+
         if (file.name.endsWith('.csv')) {
           // Handle CSV
           const csvData = new Uint8Array(data as ArrayBuffer);
@@ -133,7 +141,7 @@ export const importFromFile = (file: File): Promise<{ success: boolean; data?: E
 
 // Validate imported data
 export const validateImportedData = (
-  data: ExcelData[], 
+  data: ExcelData[],
   requiredFields: string[],
   optionalFields: string[] = []
 ): { isValid: boolean; errors: string[]; warnings: string[] } => {
@@ -148,7 +156,7 @@ export const validateImportedData = (
   // Check required fields
   const firstRow = data[0];
   const missingFields = requiredFields.filter(field => !(field in firstRow));
-  
+
   if (missingFields.length > 0) {
     errors.push(`Missing required fields: ${missingFields.join(', ')}`);
   }
@@ -158,7 +166,9 @@ export const validateImportedData = (
     // Check for empty required fields
     requiredFields.forEach(field => {
       if (!row[field] || String(row[field]).trim() === '') {
-        errors.push(`Row ${index + 1}: Missing value for required field '${field}'`);
+        errors.push(
+          `Row ${index + 1}: Missing value for required field '${field}'`
+        );
       }
     });
 
@@ -177,7 +187,9 @@ export const validateImportedData = (
       if (field in row && row[field] !== undefined && row[field] !== null) {
         const dateValue = new Date(String(row[field]));
         if (isNaN(dateValue.getTime())) {
-          warnings.push(`Row ${index + 1}: Field '${field}' should be a valid date`);
+          warnings.push(
+            `Row ${index + 1}: Field '${field}' should be a valid date`
+          );
         }
       }
     });
@@ -186,61 +198,71 @@ export const validateImportedData = (
   return {
     isValid: errors.length === 0,
     errors,
-    warnings
+    warnings,
   };
 };
 
-export const formatDataForExcel = (data: any[], type: 'cashbook' | 'ledger' | 'balancesheet' | 'vehicles' | 'bankguarantees' | 'drivers') => {
+export const formatDataForExcel = (
+  data: any[],
+  type:
+    | 'cashbook'
+    | 'ledger'
+    | 'balancesheet'
+    | 'vehicles'
+    | 'bankguarantees'
+    | 'drivers'
+) => {
   switch (type) {
     case 'cashbook':
       return data.map(item => ({
         'S.No': item.sno,
-        'Date': item.c_date,
-        'Company': item.company_name,
-        'Account': item.acc_name,
+        Date: item.c_date,
+        Company: item.company_name,
+        Account: item.acc_name,
         'Sub Account': item.sub_acc_name || '',
-        'Particulars': item.particulars,
-        'Credit': item.credit || 0,
-        'Debit': item.debit || 0,
+        Particulars: item.particulars,
+        Credit: item.credit || 0,
+        Debit: item.debit || 0,
         'Sale Qty': item.sale_qty || 0,
         'Purchase Qty': item.purchase_qty || 0,
-        'Staff': item.staff,
+        Staff: item.staff,
         'Entry Time': item.entry_time,
-        'Approved': item.approved ? 'Yes' : 'No',
-        'Locked': item.lock_record ? 'Yes' : 'No',
+        Approved: item.approved ? 'Yes' : 'No',
+        Locked: item.lock_record ? 'Yes' : 'No',
       }));
-      
+
     case 'ledger':
       return data.map(item => ({
         'Account Name': item.acc_name,
-        'Credit': item.credit || 0,
-        'Debit': item.debit || 0,
-        'Balance': item.balance || 0,
-        'Status': item.yes_no || '',
+        Credit: item.credit || 0,
+        Debit: item.debit || 0,
+        Balance: item.balance || 0,
+        Status: item.yes_no || '',
       }));
-      
+
     case 'balancesheet':
       return data.map(item => ({
         'Account Name': item.acc_name,
-        'Credit': item.credit || 0,
-        'Debit': item.debit || 0,
-        'Balance': item.balance || 0,
-        'Category': item.yes_no || '',
-        'Result': item.result || '',
+        Credit: item.credit || 0,
+        Debit: item.debit || 0,
+        Balance: item.balance || 0,
+        Category: item.yes_no || '',
+        Result: item.result || '',
       }));
-      
+
     case 'vehicles':
       return data.map(item => ({
         'S.No': item.sno,
         'Vehicle No': item.v_no,
-        'Type': item.v_type,
-        'Particulars': item.particulars,
+        Type: item.v_type,
+        Particulars: item.particulars,
         'Tax Expiry': item.tax_exp_date,
         'Insurance Expiry': item.insurance_exp_date,
         'Fitness Expiry': item.fitness_exp_date,
         'Permit Expiry': item.permit_exp_date,
-        'Date Added': item.date_added}));
-      
+        'Date Added': item.date_added,
+      }));
+
     case 'bankguarantees':
       return data.map(item => ({
         'S.No': item.sno,
@@ -248,22 +270,23 @@ export const formatDataForExcel = (data: any[], type: 'cashbook' | 'ledger' | 'b
         'Issue Date': item.issue_date,
         'Expiry Date': item.exp_date,
         'Work Name': item.work_name,
-        'Credit': item.credit || 0,
-        'Debit': item.debit || 0,
-        'Department': item.department,
-        'Status': item.cancelled ? 'Cancelled' : 'Active',
+        Credit: item.credit || 0,
+        Debit: item.debit || 0,
+        Department: item.department,
+        Status: item.cancelled ? 'Cancelled' : 'Active',
       }));
-      
+
     case 'drivers':
       return data.map(item => ({
         'S.No': item.sno,
         'Driver Name': item.driver_name,
         'License No': item.license_no,
         'License Expiry': item.exp_date,
-        'Phone': item.phone,
-        'Address': item.address,
-        'Particulars': item.particulars}));
-      
+        Phone: item.phone,
+        Address: item.address,
+        Particulars: item.particulars,
+      }));
+
     default:
       return data;
   }

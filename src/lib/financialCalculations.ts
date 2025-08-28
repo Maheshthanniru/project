@@ -42,49 +42,55 @@ export class FinancialCalculator {
   }
 
   // Calculate running balance
-  static calculateRunningBalance(entries: Array<{credit: number, debit: number}>): Array<{credit: number, debit: number, runningBalance: number}> {
+  static calculateRunningBalance(
+    entries: Array<{ credit: number; debit: number }>
+  ): Array<{ credit: number; debit: number; runningBalance: number }> {
     let runningBalance = 0;
-    
+
     return entries.map(entry => {
       const entryBalance = this.calculateBalance(entry.credit, entry.debit);
       runningBalance = this.add(runningBalance, entryBalance);
-      
+
       return {
         ...entry,
-        runningBalance
+        runningBalance,
       };
     });
   }
 
   // Validate financial entry
-  static validateEntry(credit: number, debit: number): {isValid: boolean, errors: string[]} {
+  static validateEntry(
+    credit: number,
+    debit: number,
+    allowBothZero: boolean = false
+  ): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
-    
+
     if (credit < 0) {
       errors.push('Credit amount cannot be negative');
     }
-    
+
     if (debit < 0) {
       errors.push('Debit amount cannot be negative');
     }
-    
+
     if (credit > 0 && debit > 0) {
       errors.push('Entry cannot have both credit and debit amounts');
     }
-    
-    if (credit === 0 && debit === 0) {
+
+    if (!allowBothZero && credit === 0 && debit === 0) {
       errors.push('Entry must have either credit or debit amount');
     }
-    
+
     // Check for reasonable limits (adjust as needed)
     const maxAmount = 999999999.99; // 999 crores
     if (credit > maxAmount || debit > maxAmount) {
       errors.push('Amount exceeds maximum limit');
     }
-    
+
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -99,7 +105,7 @@ export class FinancialCalculator {
     saleQ: number;
     purchaseQ: number;
     staff: string;
-  }): {isValid: boolean, errors: string[], warnings: string[]} {
+  }): { isValid: boolean; errors: string[]; warnings: string[] } {
     const errors: string[] = [];
     const warnings: string[] = [];
 
@@ -111,11 +117,11 @@ export class FinancialCalculator {
       const today = new Date();
       const futureDate = new Date();
       futureDate.setDate(today.getDate() + 30); // Allow entries up to 30 days in future
-      
+
       if (entryDate > futureDate) {
         errors.push('Entry date cannot be more than 30 days in the future');
       }
-      
+
       if (entryDate < new Date('2010-01-01')) {
         errors.push('Entry date cannot be before 2010');
       }
@@ -156,11 +162,15 @@ export class FinancialCalculator {
 
     // Business rule validations
     if (entry.credit > 0 && entry.saleQ === 0 && entry.purchaseQ === 0) {
-      warnings.push('Credit entry without quantities - verify if this is correct');
+      warnings.push(
+        'Credit entry without quantities - verify if this is correct'
+      );
     }
 
     if (entry.debit > 0 && entry.saleQ === 0 && entry.purchaseQ === 0) {
-      warnings.push('Debit entry without quantities - verify if this is correct');
+      warnings.push(
+        'Debit entry without quantities - verify if this is correct'
+      );
     }
 
     // Amount vs quantity validation
@@ -175,12 +185,16 @@ export class FinancialCalculator {
     return {
       isValid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 
   // Validate account structure
-  static validateAccountStructure(companyName: string, accountName: string, subAccount?: string): {isValid: boolean, errors: string[]} {
+  static validateAccountStructure(
+    companyName: string,
+    accountName: string,
+    subAccount?: string
+  ): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     if (!companyName?.trim()) {
@@ -212,12 +226,15 @@ export class FinancialCalculator {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
   // Validate date range for reports
-  static validateDateRange(fromDate: string, toDate: string): {isValid: boolean, errors: string[]} {
+  static validateDateRange(
+    fromDate: string,
+    toDate: string
+  ): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     if (!fromDate) {
@@ -252,7 +269,7 @@ export class FinancialCalculator {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -260,9 +277,9 @@ export class FinancialCalculator {
   static formatAmount(amount: number, showCurrency: boolean = true): string {
     const formatted = Math.abs(amount).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     });
-    
+
     const prefix = showCurrency ? '₹' : '';
     return `${prefix}${formatted}`;
   }
@@ -277,25 +294,29 @@ export class FinancialCalculator {
   // Calculate percentage
   static calculatePercentage(part: number, total: number): number {
     if (total === 0) return 0;
-    return this.fromCents(Math.round((this.toCents(part) / this.toCents(total)) * 10000)) / 100;
+    return (
+      this.fromCents(
+        Math.round((this.toCents(part) / this.toCents(total)) * 10000)
+      ) / 100
+    );
   }
 
   // Reconcile accounts (ensure debits equal credits)
-  static reconcileAccounts(entries: Array<{credit: number, debit: number}>): {
-    totalCredit: number,
-    totalDebit: number,
-    difference: number,
-    isBalanced: boolean
+  static reconcileAccounts(entries: Array<{ credit: number; debit: number }>): {
+    totalCredit: number;
+    totalDebit: number;
+    difference: number;
+    isBalanced: boolean;
   } {
     const totalCredit = this.sum(entries.map(e => e.credit));
     const totalDebit = this.sum(entries.map(e => e.debit));
     const difference = this.subtract(totalCredit, totalDebit);
-    
+
     return {
       totalCredit,
       totalDebit,
       difference,
-      isBalanced: Math.abs(difference) < 0.01 // Allow for minor rounding differences
+      isBalanced: Math.abs(difference) < 0.01, // Allow for minor rounding differences
     };
   }
 }

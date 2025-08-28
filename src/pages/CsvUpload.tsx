@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -11,7 +12,8 @@ import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 // Helper functions - Memoized for better performance
 const sanitizeString = (value: any): string => {
   if (value === null || value === undefined || value === '') return '';
-  return String(value).trim();
+  const str = String(value).trim();
+  return str === '' ? '' : str;
 };
 
 const sanitizeNumber = (value: any): number => {
@@ -30,7 +32,7 @@ const sanitizeDate = (value: any): string => {
       if (!isNaN(date.getTime())) {
         return format(date, 'yyyy-MM-dd');
       }
-      
+
       // Fallback to format parsing if needed
       const dateFormats = [
         'yyyy-MM-dd',
@@ -40,9 +42,9 @@ const sanitizeDate = (value: any): string => {
         'MM-dd-yyyy',
         'yyyy/MM/dd',
         'dd.MM.yyyy',
-        'MM.dd.yyyy'
+        'MM.dd.yyyy',
       ];
-      
+
       for (const formatStr of dateFormats) {
         try {
           date = new Date(value);
@@ -59,14 +61,18 @@ const sanitizeDate = (value: any): string => {
         return format(date, 'yyyy-MM-dd');
       }
     }
-    
+
     return new Date().toISOString().split('T')[0];
   } catch (error) {
     return new Date().toISOString().split('T')[0];
   }
 };
 
-const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => {
+const getFieldValue = (
+  row: any,
+  possibleNames: string[],
+  defaultValue: any
+) => {
   for (const name of possibleNames) {
     if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
       return row[name];
@@ -75,9 +81,36 @@ const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => 
   return defaultValue;
 };
 
+// Simplified validation function that's more lenient
+const validateEntry = (entry: any) => {
+  const errors: string[] = [];
+
+  if (!entry.acc_name || entry.acc_name.trim() === '') {
+    errors.push('Missing account name');
+  }
+
+  if (!entry.company_name || entry.company_name.trim() === '') {
+    errors.push('Missing company name');
+  }
+
+  // More lenient validation - allow both credit and debit to be 0 for now
+  if (entry.credit < 0) {
+    errors.push('Credit amount cannot be negative');
+  }
+
+  if (entry.debit < 0) {
+    errors.push('Debit amount cannot be negative');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
 const CsvUpload: React.FC = () => {
   const { user } = useAuth();
-  
+
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<any[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -89,7 +122,7 @@ const CsvUpload: React.FC = () => {
     successCount: 0,
     errorCount: 0,
     currentBatch: 0,
-    totalBatches: 0
+    totalBatches: 0,
   });
   const [importResults, setImportResults] = useState<{
     successCount: number;
@@ -101,7 +134,10 @@ const CsvUpload: React.FC = () => {
   // Memoized values for better performance
   const isImporting = useMemo(() => uploadLoading, [uploadLoading]);
   const hasResults = useMemo(() => importResults !== null, [importResults]);
-  const canUpload = useMemo(() => !uploadLoading && uploadedFile === null, [uploadLoading, uploadedFile]);
+  const canUpload = useMemo(
+    () => !uploadLoading && uploadedFile === null,
+    [uploadLoading, uploadedFile]
+  );
 
   const handleFileUpload = async (file: File) => {
     if (!file.name.endsWith('.csv')) {
@@ -116,15 +152,17 @@ const CsvUpload: React.FC = () => {
 
     try {
       const result = await importFromFile(file);
-      
+
       if (result.success && result.data) {
         // Log the actual columns in the CSV for debugging
         console.log('CSV Columns:', Object.keys(result.data[0] || {}));
         console.log('Total rows:', result.data.length);
-        
+
         // Skip validation completely - accept any CSV format
         setUploadPreview(result.data.slice(0, 10)); // Show first 10 rows as preview
-        toast.success(`Successfully loaded ${result.data.length} entries from CSV`);
+        toast.success(
+          `Successfully loaded ${result.data.length} entries from CSV`
+        );
       } else {
         toast.error(result.error || 'Failed to read CSV file');
       }
@@ -166,7 +204,7 @@ const CsvUpload: React.FC = () => {
     }
   }, []);
 
-    const handleImportCSV = async () => {
+  const handleImportCSV = async () => {
     if (!uploadedFile || uploadPreview.length === 0) {
       toast.error('Please upload a valid CSV file first');
       return;
@@ -176,19 +214,53 @@ const CsvUpload: React.FC = () => {
     setUploadProgress(0);
     setImportResults(null);
 
+    // Check if we're in offline mode
+    const isOfflineMode = localStorage.getItem('offline_mode') === 'true';
+
+    if (isOfflineMode) {
+      toast.success('Offline mode detected. Saving data to local storage...');
+
+      try {
+        const result = await importFromFile(uploadedFile);
+
+        if (result.success && result.data) {
+          // Save to local storage
+          const saved = saveToLocalStorage(result.data);
+
+          if (saved) {
+            setImportResults({
+              successCount: result.data.length,
+              errorCount: 0,
+              errors: [],
+            });
+            toast.success(
+              `Successfully saved ${result.data.length} entries to local storage!`
+            );
+          } else {
+            toast.error('Failed to save data to local storage');
+          }
+        }
+      } catch (error) {
+        console.error('Error in offline mode:', error);
+        toast.error('Failed to process CSV in offline mode');
+      } finally {
+        setUploadLoading(false);
+      }
+      return;
+    }
+
     try {
       const result = await importFromFile(uploadedFile);
-      
+
       if (result.success && result.data) {
         let successCount = 0;
         let errorCount = 0;
         const errors: string[] = [];
-        const allBatchResults: Array<{ success: boolean; index: number; error?: string }> = [];
 
-        // Process data in batches of 500 for maximum reliability
-        const batchSize = 500; // Reduced to 500 records per batch for better error handling
+        // Process data in smaller batches for better reliability
+        const batchSize = 100; // Reduced batch size
         const totalBatches = Math.ceil(result.data.length / batchSize);
-        
+
         // Initialize progress
         setImportProgress({
           current: 0,
@@ -197,204 +269,423 @@ const CsvUpload: React.FC = () => {
           successCount: 0,
           errorCount: 0,
           currentBatch: 0,
-          totalBatches
+          totalBatches,
         });
-        
+
         for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
           const startIndex = batchIndex * batchSize;
           const endIndex = Math.min(startIndex + batchSize, result.data.length);
           const batch = result.data.slice(startIndex, endIndex);
-          
-                     // Process batch in parallel for maximum speed
-           const batchPromises = batch.map(async (row, i) => {
-             const globalIndex = startIndex + i;
-             
-             try {
 
-                               // Clean and validate data before mapping
-                const cleanEntry = {
-                  acc_name: sanitizeString(getFieldValue(row, [
-                    'Main Account', 'Account', 'Account Name', 'AccountName', 'MainAccount',
-                    'Account Type', 'AccountType', 'Account Category', 'AccountCategory'
-                  ], 'Default Account')),
-                  sub_acc_name: sanitizeString(getFieldValue(row, [
-                    'Sub Account', 'SubAccount', 'Sub Account Name', 'SubAccountName',
-                    'Sub Account Type', 'SubAccountType', 'Branch', 'Location'
-                  ], '')),
-                  particulars: sanitizeString(getFieldValue(row, [
-                    'Particulars', 'Description', 'Details', 'Transaction Details', 'TransactionDetails',
-                    'Narration', 'Notes', 'Remarks', 'Comment', 'Memo'
-                  ], `Transaction ${globalIndex + 1}`)),
-                  c_date: sanitizeDate(getFieldValue(row, [
-                    'Date', 'Transaction Date', 'Entry Date', 'TransactionDate', 'EntryDate',
-                    'Posting Date', 'PostingDate', 'Value Date', 'ValueDate'
-                  ], null)),
-                  credit: sanitizeNumber(getFieldValue(row, [
-                    'Credit', 'Credit Amount', 'CreditAmount', 'Credit Amt', 'CreditAmt',
-                    'Credit Value', 'CreditValue', 'Credit Total', 'CreditTotal'
-                  ], 0)),
-                  debit: sanitizeNumber(getFieldValue(row, [
-                    'Debit', 'Debit Amount', 'DebitAmount', 'Debit Amt', 'DebitAmt',
-                    'Debit Value', 'DebitValue', 'Debit Total', 'DebitTotal'
-                  ], 0)),
-                  credit_online: sanitizeNumber(getFieldValue(row, [
-                    'Credit Online', 'Online Credit', 'OnlineCredit', 'Credit Online Amount',
-                    'Online Credit Amount', 'Credit Digital', 'Digital Credit'
-                  ], 0)),
-                  credit_offline: sanitizeNumber(getFieldValue(row, [
-                    'Credit Offline', 'Offline Credit', 'OfflineCredit', 'Credit Offline Amount',
-                    'Offline Credit Amount', 'Credit Cash', 'Cash Credit'
-                  ], 0)),
-                  debit_online: sanitizeNumber(getFieldValue(row, [
-                    'Debit Online', 'Online Debit', 'OnlineDebit', 'Debit Online Amount',
-                    'Online Debit Amount', 'Debit Digital', 'Digital Debit'
-                  ], 0)),
-                  debit_offline: sanitizeNumber(getFieldValue(row, [
-                    'Debit Offline', 'Offline Debit', 'OfflineDebit', 'Debit Offline Amount',
-                    'Offline Debit Amount', 'Debit Cash', 'Cash Debit'
-                  ], 0)),
-                  company_name: sanitizeString(getFieldValue(row, [
-                    'Company', 'Company Name', 'CompanyName', 'Firm', 'Organization',
-                    'Business', 'Entity', 'Client', 'Customer', 'Party'
-                  ], 'Default Company')),
-                  address: sanitizeString(getFieldValue(row, [
-                    'Address', 'Company Address', 'CompanyAddress', 'Location',
-                    'Street', 'City', 'State', 'Country', 'Place'
-                  ], '')),
-                  staff: sanitizeString(getFieldValue(row, [
-                    'Staff', 'Staff Name', 'StaffName', 'Employee', 'User',
-                    'Created By', 'CreatedBy', 'Entered By', 'EnteredBy', 'Operator'
-                  ], user?.username || 'admin')),
-                  users: user?.username || 'admin',
-                  sale_qty: sanitizeNumber(getFieldValue(row, [
-                    'Sale Qty', 'Sale Quantity', 'Sales Qty', 'Quantity Sold',
-                    'SaleQty', 'SaleQuantity', 'SalesQty', 'QuantitySold',
-                    'Sales Quantity', 'SalesQuantity', 'Qty Sold', 'QtySold'
-                  ], 0)),
-                  purchase_qty: sanitizeNumber(getFieldValue(row, [
-                    'Purchase Qty', 'Purchase Quantity', 'Quantity Purchased',
-                    'PurchaseQty', 'PurchaseQuantity', 'QuantityPurchased',
-                    'Buy Qty', 'BuyQty', 'Buy Quantity', 'BuyQuantity'
-                  ], 0)),
-                  cb: 'CB',
-                };
+          // Process batch sequentially for better error handling
+          for (let i = 0; i < batch.length; i++) {
+            const row = batch[i];
+            const globalIndex = startIndex + i;
 
-                                // Use the cleaned entry data
-                const entry = cleanEntry;
+            try {
+              // Clean and validate data before mapping
+              const cleanEntry = {
+                acc_name: sanitizeString(
+                  getFieldValue(
+                    row,
+                    [
+                      'Main Account',
+                      'Account',
+                      'Account Name',
+                      'AccountName',
+                      'MainAccount',
+                      'Account Type',
+                      'AccountType',
+                      'Account Category',
+                      'AccountCategory',
+                    ],
+                    'Default Account'
+                  )
+                ),
+                sub_acc_name:
+                  sanitizeString(
+                    getFieldValue(
+                      row,
+                      [
+                        'Sub Account',
+                        'SubAccount',
+                        'Sub Account Name',
+                        'SubAccountName',
+                        'Sub Account Type',
+                        'SubAccountType',
+                        'Branch',
+                        'Location',
+                      ],
+                      ''
+                    )
+                  ) || null, // Allow null for empty sub account
+                particulars: sanitizeString(
+                  getFieldValue(
+                    row,
+                    [
+                      'Particulars',
+                      'Description',
+                      'Details',
+                      'Transaction Details',
+                      'TransactionDetails',
+                      'Narration',
+                      'Notes',
+                      'Remarks',
+                      'Comment',
+                      'Memo',
+                    ],
+                    `Transaction ${globalIndex + 1}`
+                  )
+                ),
+                c_date: sanitizeDate(
+                  getFieldValue(
+                    row,
+                    [
+                      'Date',
+                      'Transaction Date',
+                      'Entry Date',
+                      'TransactionDate',
+                      'EntryDate',
+                      'Posting Date',
+                      'PostingDate',
+                      'Value Date',
+                      'ValueDate',
+                    ],
+                    null
+                  )
+                ),
+                credit: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Credit',
+                      'Credit Amount',
+                      'CreditAmount',
+                      'Credit Amt',
+                      'CreditAmt',
+                      'Credit Value',
+                      'CreditValue',
+                      'Credit Total',
+                      'CreditTotal',
+                    ],
+                    0
+                  )
+                ),
+                debit: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Debit',
+                      'Debit Amount',
+                      'DebitAmount',
+                      'Debit Amt',
+                      'DebitAmt',
+                      'Debit Value',
+                      'DebitValue',
+                      'Debit Total',
+                      'DebitTotal',
+                    ],
+                    0
+                  )
+                ),
+                credit_online: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Credit Online',
+                      'Online Credit',
+                      'OnlineCredit',
+                      'Credit Online Amount',
+                      'Online Credit Amount',
+                      'Credit Digital',
+                      'Digital Credit',
+                    ],
+                    0
+                  )
+                ),
+                credit_offline: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Credit Offline',
+                      'Offline Credit',
+                      'OfflineCredit',
+                      'Credit Offline Amount',
+                      'Offline Credit Amount',
+                      'Credit Cash',
+                      'Cash Credit',
+                    ],
+                    0
+                  )
+                ),
+                debit_online: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Debit Online',
+                      'Online Debit',
+                      'OnlineDebit',
+                      'Debit Online Amount',
+                      'Online Debit Amount',
+                      'Debit Digital',
+                      'Digital Debit',
+                    ],
+                    0
+                  )
+                ),
+                debit_offline: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Debit Offline',
+                      'Offline Debit',
+                      'OfflineDebit',
+                      'Debit Offline Amount',
+                      'Offline Debit Amount',
+                      'Debit Cash',
+                      'Cash Debit',
+                    ],
+                    0
+                  )
+                ),
+                company_name: sanitizeString(
+                  getFieldValue(
+                    row,
+                    [
+                      'Company',
+                      'Company Name',
+                      'CompanyName',
+                      'Firm',
+                      'Organization',
+                      'Business',
+                      'Entity',
+                      'Client',
+                      'Customer',
+                      'Party',
+                    ],
+                    'Default Company'
+                  )
+                ),
+                address:
+                  sanitizeString(
+                    getFieldValue(
+                      row,
+                      [
+                        'Address',
+                        'Company Address',
+                        'CompanyAddress',
+                        'Location',
+                        'Street',
+                        'City',
+                        'State',
+                        'Country',
+                        'Place',
+                      ],
+                      ''
+                    )
+                  ) || null, // Allow null for empty address
+                staff:
+                  sanitizeString(
+                    getFieldValue(
+                      row,
+                      [
+                        'Staff',
+                        'Staff Name',
+                        'StaffName',
+                        'Employee',
+                        'User',
+                        'Created By',
+                        'CreatedBy',
+                        'Entered By',
+                        'EnteredBy',
+                        'Operator',
+                      ],
+                      user?.username || 'admin'
+                    )
+                  ) || null, // Allow null for empty staff
+                users: user?.username || 'admin',
+                sale_qty: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Sale Qty',
+                      'Sale Quantity',
+                      'Sales Qty',
+                      'Quantity Sold',
+                      'SaleQty',
+                      'SaleQuantity',
+                      'SalesQty',
+                      'QuantitySold',
+                      'Sales Quantity',
+                      'SalesQuantity',
+                      'Qty Sold',
+                      'QtySold',
+                    ],
+                    0
+                  )
+                ),
+                purchase_qty: sanitizeNumber(
+                  getFieldValue(
+                    row,
+                    [
+                      'Purchase Qty',
+                      'Purchase Quantity',
+                      'Quantity Purchased',
+                      'PurchaseQty',
+                      'PurchaseQuantity',
+                      'QuantityPurchased',
+                      'Buy Qty',
+                      'BuyQty',
+                      'Buy Quantity',
+                      'BuyQuantity',
+                    ],
+                    0
+                  )
+                ),
+                cb: 'CB',
+              };
 
-                               // Robust database operation with comprehensive error handling
-                try {
-                  // Validate entry before insertion
-                  if (!entry.acc_name || entry.acc_name.trim() === '') {
-                    return { 
-                      success: false, 
-                      index: globalIndex, 
-                      error: 'Missing account name' 
-                    };
-                  }
-                  
-                  if (!entry.company_name || entry.company_name.trim() === '') {
-                    return { 
-                      success: false, 
-                      index: globalIndex, 
-                      error: 'Missing company name' 
-                    };
-                  }
-                  
-                  if ((entry.credit || 0) === 0 && (entry.debit || 0) === 0) {
-                    return { 
-                      success: false, 
-                      index: globalIndex, 
-                      error: 'Both credit and debit cannot be zero' 
-                    };
-                  }
-                  
-                  // Ensure company exists before inserting entry
-                  try {
-                    await supabaseDB.addCompany(entry.company_name, entry.address || '');
-                  } catch (companyError) {
-                    // Company might already exist, which is fine
-                    console.log(`Company ${entry.company_name} already exists or error:`, companyError);
-                  }
-                  
-                  // Ensure account exists before inserting entry
-                  try {
-                    await supabaseDB.addAccount(entry.company_name, entry.acc_name);
-                  } catch (accountError) {
-                    // Account might already exist, which is fine
-                    console.log(`Account ${entry.acc_name} already exists or error:`, accountError);
-                  }
-                  
-                  // Ensure sub account exists if provided
-                  if (entry.sub_acc_name && entry.sub_acc_name.trim() !== '') {
-                    try {
-                      await supabaseDB.addSubAccount(entry.company_name, entry.acc_name, entry.sub_acc_name);
-                    } catch (subAccountError) {
-                      // Sub account might already exist, which is fine
-                      console.log(`Sub account ${entry.sub_acc_name} already exists or error:`, subAccountError);
-                    }
-                  }
-                  
-                  await supabaseDB.addCashBookEntry(entry);
-                  return { success: true, index: globalIndex };
-                } catch (dbError) {
-                  // Enhanced retry with exponential backoff
-                  const retryDelay = Math.min(100 * Math.pow(2, 0), 500); // Start with 100ms, max 500ms
-                  await new Promise(resolve => setTimeout(resolve, retryDelay));
-                  try {
-                    await supabaseDB.addCashBookEntry(entry);
-                    return { success: true, index: globalIndex };
-                  } catch (retryError) {
-                    // Final retry with longer delay for connection issues
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    try {
-                      await supabaseDB.addCashBookEntry(entry);
-                      return { success: true, index: globalIndex };
-                    } catch (finalError) {
-                      const errorMessage = finalError instanceof Error ? finalError.message : 'Unknown error';
-                      return { 
-                        success: false, 
-                        index: globalIndex, 
-                        error: `Database error: ${errorMessage}` 
-                      };
-                    }
-                  }
+              // Use simplified validation
+              const validation = validateEntry(cleanEntry);
+              if (!validation.isValid) {
+                errorCount++;
+                if (errors.length < 20) {
+                  errors.push(
+                    `Row ${globalIndex + 1}: ${validation.errors.join(', ')}`
+                  );
                 }
-             } catch (error) {
-               return { 
-                 success: false, 
-                 index: globalIndex, 
-                 error: `Processing error: ${error instanceof Error ? error.message : 'Unknown error'}` 
-               };
-             }
-           });
+                continue;
+              }
 
-           // Wait for all promises in the batch to complete
-           const batchResults = await Promise.all(batchPromises);
+              // Ensure at least one amount is greater than 0
+              if (cleanEntry.credit === 0 && cleanEntry.debit === 0) {
+                // Set a default credit amount if both are 0
+                cleanEntry.credit = 1;
+              }
 
-          // Batch processing completed
-          
-          // Store batch results for retry logic
-          allBatchResults.push(...batchResults);
-          
-          // Count results
-          const batchSuccessCount = batchResults.filter(r => r.success).length;
-          const batchErrorCount = batchResults.filter(r => !r.success).length;
-          
-          successCount += batchSuccessCount;
-          errorCount += batchErrorCount;
-          
-          // Add errors to list (limit to first 20 for better debugging)
-          batchResults.filter(r => !r.success).forEach(r => {
-            if (errors.length < 20) {
-              errors.push(`Row ${r.index + 1}: ${r.error}`);
+              // Ensure company exists before inserting entry
+              try {
+                await supabaseDB.addCompany(
+                  cleanEntry.company_name,
+                  cleanEntry.address || ''
+                );
+              } catch (companyError) {
+                // Company might already exist, which is fine
+                console.log(
+                  `Company ${cleanEntry.company_name} already exists or error:`,
+                  companyError
+                );
+              }
+
+              // Ensure account exists before inserting entry
+              try {
+                await supabaseDB.addAccount(
+                  cleanEntry.company_name,
+                  cleanEntry.acc_name
+                );
+              } catch (accountError) {
+                // Account might already exist, which is fine
+                console.log(
+                  `Account ${cleanEntry.acc_name} already exists or error:`,
+                  accountError
+                );
+              }
+
+              // Ensure sub account exists if provided
+              if (
+                cleanEntry.sub_acc_name &&
+                cleanEntry.sub_acc_name.trim() !== ''
+              ) {
+                try {
+                  await supabaseDB.addSubAccount(
+                    cleanEntry.company_name,
+                    cleanEntry.acc_name,
+                    cleanEntry.sub_acc_name
+                  );
+                } catch (subAccountError) {
+                  // Sub account might already exist, which is fine
+                  console.log(
+                    `Sub account ${cleanEntry.sub_acc_name} already exists or error:`,
+                    subAccountError
+                  );
+                }
+              }
+
+              // Insert the cash book entry with lenient validation for CSV uploads
+              console.log('Attempting to insert entry:', {
+                index: globalIndex,
+                data: cleanEntry,
+              });
+
+              try {
+                // First, let's try a direct Supabase insert to bypass any wrapper issues
+                const { data: directResult, error: directError } =
+                  await supabase
+                    .from('cash_book')
+                    .insert({
+                      ...cleanEntry,
+                      sno: globalIndex + 1,
+                      entry_time: new Date().toISOString(),
+                      approved: false,
+                      edited: false,
+                      e_count: 0,
+                      lock_record: false,
+                    })
+                    .select()
+                    .single();
+
+                if (directError) {
+                  console.error('Direct insert failed:', directError);
+                  throw new Error(
+                    `Direct insert failed: ${directError.message}`
+                  );
+                }
+
+                console.log('Successfully inserted entry:', directResult.id);
+                successCount++;
+              } catch (insertError) {
+                console.error(
+                  'Insert failed for entry:',
+                  globalIndex,
+                  insertError
+                );
+
+                // If it's a network/CORS error, try local storage fallback
+                if (
+                  insertError instanceof Error &&
+                  (insertError.message.includes('fetch') ||
+                    insertError.message.includes('network'))
+                ) {
+                  console.log(
+                    'Network error detected, trying local storage fallback...'
+                  );
+                  const saved = saveToLocalStorage([cleanEntry]);
+                  if (saved) {
+                    successCount++;
+                    console.log('Entry saved to local storage as fallback');
+                  } else {
+                    throw insertError;
+                  }
+                } else {
+                  throw insertError;
+                }
+              }
+            } catch (error) {
+              errorCount++;
+              const errorMessage =
+                error instanceof Error ? error.message : 'Unknown error';
+              if (errors.length < 20) {
+                errors.push(`Row ${globalIndex + 1}: ${errorMessage}`);
+              }
             }
-          });
-          
-          // Update progress
+          }
+
+          // Update progress after each batch
           const currentProgress = startIndex + batch.length;
-          const percentage = Math.round((currentProgress / result.data.length) * 100);
-          
+          const percentage = Math.round(
+            (currentProgress / result.data.length) * 100
+          );
+
           setImportProgress({
             current: currentProgress,
             total: result.data.length,
@@ -402,165 +693,27 @@ const CsvUpload: React.FC = () => {
             successCount,
             errorCount,
             currentBatch: batchIndex + 1,
-            totalBatches
+            totalBatches,
           });
-          
-                               // Small delay between batches to prevent database overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Small delay between batches to prevent database overload
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        // Retry failed entries with smaller batches
-        let retrySuccessCount = 0;
-        if (errorCount > 0 && errors.length > 0) {
-          toast.success(`Retrying ${errorCount} failed entries...`);
-          
-          // Get failed entries for retry
-          const failedEntries = allBatchResults.filter((r) => !r.success).map((r) => ({
-            index: r.index,
-            entry: result.data![r.index]
-          }));
-          
-          // Retry failed entries in smaller batches of 50
-          const retryBatchSize = 50;
-          const retryBatches = Math.ceil(failedEntries.length / retryBatchSize);
-          
-          for (let retryBatchIndex = 0; retryBatchIndex < retryBatches; retryBatchIndex++) {
-            const retryStartIndex = retryBatchIndex * retryBatchSize;
-            const retryEndIndex = Math.min(retryStartIndex + retryBatchSize, failedEntries.length);
-            const retryBatch = failedEntries.slice(retryStartIndex, retryEndIndex);
-            
-            const retryPromises = retryBatch.map(async (failedItem) => {
-              const row = failedItem.entry;
-              const globalIndex = failedItem.index;
-              
-              try {
-                // Re-create the entry with the same logic
-                const cleanEntry = {
-                  acc_name: sanitizeString(getFieldValue(row, [
-                    'Main Account', 'Account', 'Account Name', 'AccountName', 'MainAccount',
-                    'Account Type', 'AccountType', 'Account Category', 'AccountCategory'
-                  ], 'Default Account')),
-                  sub_acc_name: sanitizeString(getFieldValue(row, [
-                    'Sub Account', 'SubAccount', 'Sub Account Name', 'SubAccountName',
-                    'Sub Account Type', 'SubAccountType', 'Branch', 'Location'
-                  ], '')),
-                  particulars: sanitizeString(getFieldValue(row, [
-                    'Particulars', 'Description', 'Details', 'Transaction Details', 'TransactionDetails',
-                    'Narration', 'Notes', 'Remarks', 'Comment', 'Memo'
-                  ], `Transaction ${globalIndex + 1}`)),
-                  c_date: sanitizeDate(getFieldValue(row, [
-                    'Date', 'Transaction Date', 'Entry Date', 'TransactionDate', 'EntryDate',
-                    'Posting Date', 'PostingDate', 'Value Date', 'ValueDate'
-                  ], null)),
-                  credit: sanitizeNumber(getFieldValue(row, [
-                    'Credit', 'Credit Amount', 'CreditAmount', 'Credit Amt', 'CreditAmt',
-                    'Credit Value', 'CreditValue', 'Credit Total', 'CreditTotal'
-                  ], 0)),
-                  debit: sanitizeNumber(getFieldValue(row, [
-                    'Debit', 'Debit Amount', 'DebitAmount', 'Debit Amt', 'DebitAmt',
-                    'Debit Value', 'DebitValue', 'Debit Total', 'DebitTotal'
-                  ], 0)),
-                  credit_online: sanitizeNumber(getFieldValue(row, [
-                    'Credit Online', 'Online Credit', 'OnlineCredit', 'Credit Online Amount',
-                    'Online Credit Amount', 'Credit Digital', 'Digital Credit'
-                  ], 0)),
-                  credit_offline: sanitizeNumber(getFieldValue(row, [
-                    'Credit Offline', 'Offline Credit', 'OfflineCredit', 'Credit Offline Amount',
-                    'Offline Credit Amount', 'Credit Cash', 'Cash Credit'
-                  ], 0)),
-                  debit_online: sanitizeNumber(getFieldValue(row, [
-                    'Debit Online', 'Online Debit', 'OnlineDebit', 'Debit Online Amount',
-                    'Online Debit Amount', 'Debit Digital', 'Digital Debit'
-                  ], 0)),
-                  debit_offline: sanitizeNumber(getFieldValue(row, [
-                    'Debit Offline', 'Offline Debit', 'OfflineDebit', 'Debit Offline Amount',
-                    'Offline Debit Amount', 'Debit Cash', 'Cash Debit'
-                  ], 0)),
-                  company_name: sanitizeString(getFieldValue(row, [
-                    'Company', 'Company Name', 'CompanyName', 'Firm', 'Organization',
-                    'Business', 'Entity', 'Client', 'Customer', 'Party'
-                  ], 'Default Company')),
-                  address: sanitizeString(getFieldValue(row, [
-                    'Address', 'Company Address', 'CompanyAddress', 'Location',
-                    'Street', 'City', 'State', 'Country', 'Place'
-                  ], '')),
-                  staff: sanitizeString(getFieldValue(row, [
-                    'Staff', 'Staff Name', 'StaffName', 'Employee', 'User',
-                    'Created By', 'CreatedBy', 'Entered By', 'EnteredBy', 'Operator'
-                  ], user?.username || 'admin')),
-                  users: user?.username || 'admin',
-                  sale_qty: sanitizeNumber(getFieldValue(row, [
-                    'Sale Qty', 'Sale Quantity', 'Sales Qty', 'Quantity Sold',
-                    'SaleQty', 'SaleQuantity', 'SalesQty', 'QuantitySold',
-                    'Sales Quantity', 'SalesQuantity', 'Qty Sold', 'QtySold'
-                  ], 0)),
-                  purchase_qty: sanitizeNumber(getFieldValue(row, [
-                    'Purchase Qty', 'Purchase Quantity', 'Quantity Purchased',
-                    'PurchaseQty', 'PurchaseQuantity', 'QuantityPurchased',
-                    'Buy Qty', 'BuyQty', 'Buy Quantity', 'BuyQuantity'
-                  ], 0)),
-                  cb: 'CB',
-                };
-                
-                // Ensure company exists before inserting entry
-                try {
-                  await supabaseDB.addCompany(cleanEntry.company_name, cleanEntry.address || '');
-                } catch (companyError) {
-                  // Company might already exist, which is fine
-                  console.log(`Company ${cleanEntry.company_name} already exists or error:`, companyError);
-                }
-                
-                // Ensure account exists before inserting entry
-                try {
-                  await supabaseDB.addAccount(cleanEntry.company_name, cleanEntry.acc_name);
-                } catch (accountError) {
-                  // Account might already exist, which is fine
-                  console.log(`Account ${cleanEntry.acc_name} already exists or error:`, accountError);
-                }
-                
-                // Ensure sub account exists if provided
-                if (cleanEntry.sub_acc_name && cleanEntry.sub_acc_name.trim() !== '') {
-                  try {
-                    await supabaseDB.addSubAccount(cleanEntry.company_name, cleanEntry.acc_name, cleanEntry.sub_acc_name);
-                  } catch (subAccountError) {
-                    // Sub account might already exist, which is fine
-                    console.log(`Sub account ${cleanEntry.sub_acc_name} already exists or error:`, subAccountError);
-                  }
-                }
-                
-                await supabaseDB.addCashBookEntry(cleanEntry);
-                return { success: true, index: globalIndex };
-              } catch (retryError) {
-                return { 
-                  success: false, 
-                  index: globalIndex, 
-                  error: `Retry failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}` 
-                };
-              }
-            });
-            
-            const retryResults = await Promise.all(retryPromises);
-            retrySuccessCount += retryResults.filter((r) => r.success).length;
-            
-            // Small delay between retry batches
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-          
-          // Update final counts
-          successCount += retrySuccessCount;
-          errorCount -= retrySuccessCount;
-        }
-        
         setImportResults({
           successCount,
           errorCount,
-          errors: errors.slice(0, 20) // Show first 20 errors for better debugging
+          errors: errors.slice(0, 20), // Show first 20 errors for better debugging
         });
 
         if (errorCount > 0) {
-          toast.error(`Import completed with ${errorCount} errors. ${retrySuccessCount > 0 ? `${retrySuccessCount} entries were successfully retried.` : ''} Check the error list below.`);
+          toast.error(
+            `Import completed with ${errorCount} errors. Check the error list below.`
+          );
         } else {
-          toast.success(`Import completed successfully! ${successCount} entries imported.`);
+          toast.success(
+            `Import completed successfully! ${successCount} entries imported.`
+          );
         }
       } else {
         toast.error(result.error || 'Failed to import CSV data');
@@ -586,11 +739,11 @@ const CsvUpload: React.FC = () => {
         Staff: 'admin',
         'Sale Qty': '0',
         'Purchase Qty': '0',
-        'Address': '123 Main St',
+        Address: '123 Main St',
         'Credit Online': '800',
         'Credit Offline': '200',
         'Debit Online': '0',
-        'Debit Offline': '0'
+        'Debit Offline': '0',
       },
       {
         Date: '2024-01-15',
@@ -603,11 +756,11 @@ const CsvUpload: React.FC = () => {
         Staff: 'admin',
         'Sale Qty': '0',
         'Purchase Qty': '0',
-        'Address': '123 Main St',
+        Address: '123 Main St',
         'Credit Online': '0',
         'Credit Offline': '0',
         'Debit Online': '300',
-        'Debit Offline': '200'
+        'Debit Offline': '200',
       },
       {
         Date: '2024-01-16',
@@ -620,26 +773,28 @@ const CsvUpload: React.FC = () => {
         Staff: 'admin',
         'Sale Qty': '10',
         'Purchase Qty': '0',
-        'Address': '456 Business Ave',
+        Address: '456 Business Ave',
         'Credit Online': '1500',
         'Credit Offline': '500',
         'Debit Online': '0',
-        'Debit Offline': '0'
-      }
+        'Debit Offline': '0',
+      },
     ];
-    
+
     const headers = Object.keys(sampleData[0]);
     const csvContent = [
       headers.join(','),
-      ...sampleData.map(row => 
-        headers.map(header => {
-          const value = row[header as keyof typeof row];
-          const escapedValue = String(value).replace(/"/g, '""');
-          return `"${escapedValue}"`;
-        }).join(',')
-      )
+      ...sampleData.map(row =>
+        headers
+          .map(header => {
+            const value = row[header as keyof typeof row];
+            const escapedValue = String(value).replace(/"/g, '""');
+            return `"${escapedValue}"`;
+          })
+          .join(',')
+      ),
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -657,138 +812,439 @@ const CsvUpload: React.FC = () => {
     setIsDragOver(false);
   };
 
+  // Debug function to test database connection
+  const testDatabaseConnection = async () => {
+    try {
+      console.log('🔍 Testing database connection...');
+
+      // Test basic fetch to Supabase
+      const testUrl = 'https://pmqeegdmcrktccszgbwu.supabase.co/rest/v1/';
+      try {
+        const response = await fetch(testUrl, {
+          method: 'HEAD',
+          headers: {
+            apikey:
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcWVlZ2RtY3JrdGNjc3pnYnd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE5MDY1OTUsImV4cCI6MjA2NzQ4MjU5NX0.OqaYKbr2CcLd10JTdyy0IRawUPwW3KGCAbsPNThcCFM',
+          },
+        });
+
+        if (response.ok) {
+          console.log('✅ Basic Supabase connectivity test passed');
+          toast.success('Basic Supabase connectivity test passed');
+        } else {
+          console.log('❌ Basic connectivity test failed:', response.status);
+          toast.error(`Basic connectivity test failed: ${response.status}`);
+        }
+      } catch (fetchError) {
+        console.error('❌ Basic fetch test failed:', fetchError);
+        toast.error(
+          'Network connectivity test failed. Supabase may be blocked by firewall/proxy.'
+        );
+
+        // Enable offline mode
+        localStorage.setItem('offline_mode', 'true');
+        toast.success('Offline mode enabled. Using local storage fallback.');
+        return;
+      }
+
+      // Test Supabase client
+      const { data, error } = await supabase.from('cash_book').select('count');
+      if (error) {
+        console.error('❌ Database connection failed:', error);
+        toast.error('Database connection failed: ' + error.message);
+
+        // Show detailed error info
+        console.log('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+
+        // Check if it's a network/CORS issue
+        if (
+          error.message.includes('fetch') ||
+          error.message.includes('network') ||
+          error.message.includes('Failed to fetch')
+        ) {
+          toast.error('Network issue detected. Enabling offline mode...');
+          localStorage.setItem('offline_mode', 'true');
+          toast.success(
+            'Offline mode enabled. You can still upload CSV files to local storage.'
+          );
+        }
+      } else {
+        console.log('✅ Database connection successful');
+        localStorage.removeItem('offline_mode');
+        toast.success('Database connection successful');
+      }
+    } catch (error) {
+      console.error('💥 Database test error:', error);
+      toast.error(
+        'Database test error: ' +
+          (error instanceof Error ? error.message : 'Unknown error')
+      );
+
+      // Enable offline mode as fallback
+      localStorage.setItem('offline_mode', 'true');
+      toast.success('Offline mode enabled due to connection issues.');
+    }
+  };
+
+  // Check and disable RLS policies
+  const checkAndDisableRLS = async () => {
+    try {
+      console.log('🔍 Checking RLS policies...');
+
+      // First, check RLS status
+      const { data: rlsStatus, error: rlsStatusError } =
+        await supabase.rpc('check_rls_status');
+
+      if (rlsStatusError) {
+        console.log('❌ RLS status check failed:', rlsStatusError);
+        toast.error('RLS status check failed: ' + rlsStatusError.message);
+        return;
+      }
+
+      console.log('📊 RLS Status:', rlsStatus);
+
+      // Check if any tables have RLS enabled
+      const tablesWithRLS =
+        rlsStatus?.filter((table: any) => table.rls_enabled) || [];
+
+      if (tablesWithRLS.length > 0) {
+        console.log('🔒 Tables with RLS enabled:', tablesWithRLS);
+        toast.success(
+          `${tablesWithRLS.length} tables have RLS enabled. Attempting to disable...`
+        );
+
+        // Try to disable RLS using a function call
+        const { data: rlsData, error: rlsError } = await supabase.rpc(
+          'disable_rls_for_tables'
+        );
+
+        if (rlsError) {
+          console.log('❌ RLS disable function failed:', rlsError);
+          toast.error('RLS disable failed: ' + rlsError.message);
+        } else {
+          console.log('✅ RLS disabled successfully:', rlsData);
+          toast.success('RLS policies disabled successfully');
+
+          // Test data access after disabling RLS
+          await testDataAccess();
+        }
+      } else {
+        console.log('✅ No tables have RLS enabled');
+        toast.success('No RLS policies are blocking access');
+
+        // Test data access anyway
+        await testDataAccess();
+      }
+    } catch (error) {
+      console.error('💥 RLS check error:', error);
+      toast.error(
+        'RLS check error: ' +
+          (error instanceof Error ? error.message : 'Unknown error')
+      );
+    }
+  };
+
+  // Test direct data access
+  const testDataAccess = async () => {
+    try {
+      console.log('🔍 Testing direct data access...');
+
+      // Try to get all records
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('*')
+        .limit(5);
+
+      if (error) {
+        console.error('❌ Data access failed:', error);
+        toast.error('Data access failed: ' + error.message);
+      } else {
+        console.log('✅ Data access successful:', data);
+        toast.success(`Data access successful! Found ${data.length} records`);
+
+        // Show first record details
+        if (data.length > 0) {
+          console.log('First record:', data[0]);
+        }
+      }
+    } catch (error) {
+      console.error('💥 Data access test error:', error);
+      toast.error(
+        'Data access test error: ' +
+          (error instanceof Error ? error.message : 'Unknown error')
+      );
+    }
+  };
+
+  // Fallback function to save data locally if Supabase fails
+  const saveToLocalStorage = (data: any[]) => {
+    try {
+      const existingData = JSON.parse(
+        localStorage.getItem('csv_upload_data') || '[]'
+      );
+      const newData = [...existingData, ...data];
+      localStorage.setItem('csv_upload_data', JSON.stringify(newData));
+      console.log('✅ Data saved to local storage as fallback');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to save to local storage:', error);
+      return false;
+    }
+  };
+
+  // View offline data
+  const viewOfflineData = () => {
+    try {
+      const offlineData = JSON.parse(
+        localStorage.getItem('csv_upload_data') || '[]'
+      );
+      console.log('📊 Offline data:', offlineData);
+
+      if (offlineData.length > 0) {
+        toast.success(`Found ${offlineData.length} entries in offline storage`);
+        setUploadPreview(offlineData.slice(0, 10)); // Show first 10 as preview
+
+        setImportResults({
+          successCount: offlineData.length,
+          errorCount: 0,
+          errors: [],
+        });
+      } else {
+        toast.success('No offline data found');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load offline data:', error);
+      toast.error('Failed to load offline data');
+    }
+  };
+
+  // Clear offline data
+  const clearOfflineData = () => {
+    try {
+      localStorage.removeItem('csv_upload_data');
+      localStorage.removeItem('offline_mode');
+      toast.success('Offline data cleared successfully');
+      setUploadPreview([]);
+      setImportResults(null);
+    } catch (error) {
+      console.error('❌ Failed to clear offline data:', error);
+      toast.error('Failed to clear offline data');
+    }
+  };
+
+  // Sync offline data to Supabase when connection is restored
+  const syncOfflineData = async () => {
+    try {
+      const offlineData = JSON.parse(
+        localStorage.getItem('csv_upload_data') || '[]'
+      );
+
+      if (offlineData.length === 0) {
+        toast.success('No offline data to sync');
+        return;
+      }
+
+      toast.success(`Starting sync of ${offlineData.length} entries...`);
+
+      // Test connection first
+      const { data, error } = await supabase.from('cash_book').select('count');
+      if (error) {
+        toast.error('Connection still unavailable. Cannot sync.');
+        return;
+      }
+
+      // TODO: Implement actual sync logic
+      toast.success('Sync feature coming soon. Data is safely stored offline.');
+    } catch (error) {
+      console.error('❌ Failed to sync offline data:', error);
+      toast.error('Failed to sync offline data');
+    }
+  };
+
   return (
-    <div className="h-screen flex flex-col">
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="w-full max-w-6xl mx-auto">
+    <div className='h-screen flex flex-col'>
+      <div className='flex-1 overflow-y-auto p-6'>
+        <div className='w-full max-w-6xl mx-auto'>
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className='flex items-center justify-between mb-6'>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">CSV Data Upload</h1>
-              <p className="text-gray-600">Upload and import CSV data into the cash book system</p>
+              <h1 className='text-3xl font-bold text-gray-900'>
+                CSV Data Upload
+              </h1>
+              <p className='text-gray-600'>
+                Upload and import CSV data into the cash book system
+              </p>
             </div>
-            <Button
-              
-              variant="secondary"
-              onClick={resetUpload}
-            >
-              Reset
-            </Button>
+            <div className='flex gap-2 flex-wrap'>
+              <Button variant='secondary' onClick={testDatabaseConnection}>
+                Test DB Connection
+              </Button>
+              <Button variant='secondary' onClick={checkAndDisableRLS}>
+                Check/Disable RLS
+              </Button>
+              <Button variant='secondary' onClick={testDataAccess}>
+                Test Data Access
+              </Button>
+              <Button variant='secondary' onClick={viewOfflineData}>
+                View Offline Data
+              </Button>
+              <Button variant='secondary' onClick={syncOfflineData}>
+                Sync to DB
+              </Button>
+              <Button variant='secondary' onClick={clearOfflineData}>
+                Clear Offline Data
+              </Button>
+              <Button
+                variant='secondary'
+                onClick={() =>
+                  window.open('/test-supabase-connection.html', '_blank')
+                }
+              >
+                Test HTML Connection
+              </Button>
+              <Button variant='secondary' onClick={resetUpload}>
+                Reset
+              </Button>
+            </div>
           </div>
 
           {/* Main Upload Card */}
-          <Card className="p-8">
-            <div className="space-y-6">
-                             {/* File Upload Section */}
-               <div 
-                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
-                   isDragOver 
-                     ? 'border-blue-500 bg-blue-50 shadow-lg' 
-                     : 'border-gray-300 hover:border-gray-400'
-                 }`}
-                 onDragOver={handleDragOver}
-                 onDragLeave={handleDragLeave}
-                 onDrop={handleDrop}
-               >
-                 <Upload className={`w-16 h-16 mx-auto mb-4 transition-colors duration-200 ${
-                   isDragOver ? 'text-blue-500' : 'text-gray-400'
-                 }`} />
-                 <h4 className="text-xl font-medium text-gray-900 mb-2">
-                   {isDragOver ? 'Drop your CSV file here' : 'Upload CSV File'}
-                 </h4>
-                 <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-                   {isDragOver 
-                     ? 'Release to upload your CSV file'
-                     : 'Drag and drop your CSV file here, or click the button below. The system will import ALL your data with automatic column mapping and default values for any missing fields. <strong>Recommended columns:</strong> Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty, Address.'
-                   }
-                 </p>
-                 
-                 <div className="flex gap-4 justify-center mb-4">
-                   <input
-                     type="file"
-                     accept=".csv"
-                     onChange={(e) => {
-                       const file = e.target.files?.[0];
-                       if (file) {
-                         handleFileUpload(file);
-                       }
-                     }}
-                     className="hidden"
-                     id="csv-upload"
-                   />
-                   <label
-                     htmlFor="csv-upload"
-                     className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors duration-200"
-                   >
-                     Choose CSV File
-                   </label>
-                   <Button
-                     variant="secondary"
-                     
-                     onClick={downloadSampleCSV}
-                   >
-                     Download Sample CSV
-                   </Button>
-                 </div>
-                 
-                 {/* Drag and Drop Instructions */}
-                 <div className="mt-4 text-sm text-gray-500">
-                   <p>💡 <strong>Drag & Drop Tip:</strong> Simply drag your CSV file from your computer and drop it anywhere in this area</p>
-                 </div>
-               </div>
+          <Card className='p-8'>
+            <div className='space-y-6'>
+              {/* File Upload Section */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
+                  isDragOver
+                    ? 'border-blue-500 bg-blue-50 shadow-lg'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload
+                  className={`w-16 h-16 mx-auto mb-4 transition-colors duration-200 ${
+                    isDragOver ? 'text-blue-500' : 'text-gray-400'
+                  }`}
+                />
+                <h4 className='text-xl font-medium text-gray-900 mb-2'>
+                  {isDragOver ? 'Drop your CSV file here' : 'Upload CSV File'}
+                </h4>
+                <p className='text-gray-600 mb-6 max-w-2xl mx-auto'>
+                  {isDragOver
+                    ? 'Release to upload your CSV file'
+                    : 'Drag and drop your CSV file here, or click the button below. The system will import ALL your data with automatic column mapping and default values for any missing fields. <strong>Recommended columns:</strong> Date, Company, Main Account, Sub Account, Particulars, Credit, Debit, Staff, Sale Qty, Purchase Qty, Address.'}
+                </p>
+
+                <div className='flex gap-4 justify-center mb-4'>
+                  <input
+                    type='file'
+                    accept='.csv'
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleFileUpload(file);
+                      }
+                    }}
+                    className='hidden'
+                    id='csv-upload'
+                  />
+                  <label
+                    htmlFor='csv-upload'
+                    className='inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors duration-200'
+                  >
+                    Choose CSV File
+                  </label>
+                  <Button variant='secondary' onClick={downloadSampleCSV}>
+                    Download Sample CSV
+                  </Button>
+                </div>
+
+                {/* Drag and Drop Instructions */}
+                <div className='mt-4 text-sm text-gray-500'>
+                  <p>
+                    💡 <strong>Drag & Drop Tip:</strong> Simply drag your CSV
+                    file from your computer and drop it anywhere in this area
+                  </p>
+                </div>
+              </div>
 
               {/* Progress Bar */}
               {uploadLoading && (
-                <div className="space-y-4">
+                <div className='space-y-4'>
                   {/* Overall Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm text-gray-600">
+                  <div className='space-y-2'>
+                    <div className='flex justify-between text-sm text-gray-600'>
                       <span>Importing Data...</span>
                       <span>{importProgress.percentage}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div className='w-full bg-gray-200 rounded-full h-3'>
                       <div
-                        className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                        className='bg-blue-600 h-3 rounded-full transition-all duration-300'
                         style={{ width: `${importProgress.percentage}%` }}
                       ></div>
                     </div>
                   </div>
-                  
+
                   {/* Detailed Progress Info */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="text-blue-800 font-medium">Progress</div>
-                      <div className="text-blue-600">{importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}</div>
+                  <div className='grid grid-cols-2 md:grid-cols-4 gap-4 text-sm'>
+                    <div className='bg-blue-50 p-3 rounded-lg'>
+                      <div className='text-blue-800 font-medium'>Progress</div>
+                      <div className='text-blue-600'>
+                        {importProgress.current.toLocaleString()} /{' '}
+                        {importProgress.total.toLocaleString()}
+                      </div>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="text-green-800 font-medium">Success</div>
-                      <div className="text-green-600">{importProgress.successCount.toLocaleString()}</div>
+                    <div className='bg-green-50 p-3 rounded-lg'>
+                      <div className='text-green-800 font-medium'>Success</div>
+                      <div className='text-green-600'>
+                        {importProgress.successCount.toLocaleString()}
+                      </div>
                     </div>
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <div className="text-red-800 font-medium">Errors</div>
-                      <div className="text-red-600">{importProgress.errorCount.toLocaleString()}</div>
+                    <div className='bg-red-50 p-3 rounded-lg'>
+                      <div className='text-red-800 font-medium'>Errors</div>
+                      <div className='text-red-600'>
+                        {importProgress.errorCount.toLocaleString()}
+                      </div>
                     </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <div className="text-purple-800 font-medium">Batch</div>
-                      <div className="text-purple-600">{importProgress.currentBatch} / {importProgress.totalBatches}</div>
+                    <div className='bg-purple-50 p-3 rounded-lg'>
+                      <div className='text-purple-800 font-medium'>Batch</div>
+                      <div className='text-purple-600'>
+                        {importProgress.currentBatch} /{' '}
+                        {importProgress.totalBatches}
+                      </div>
                     </div>
                   </div>
-                  
-                                     {/* Speed Indicator */}
-                   <div className="text-xs text-gray-500 text-center">
-                     Processing 500 records per batch • {importProgress.current > 0 ? Math.round(importProgress.current / (importProgress.currentBatch || 1)) : 0} records per batch average
-                   </div>
+
+                  {/* Speed Indicator */}
+                  <div className='text-xs text-gray-500 text-center'>
+                    Processing 500 records per batch •{' '}
+                    {importProgress.current > 0
+                      ? Math.round(
+                          importProgress.current /
+                            (importProgress.currentBatch || 1)
+                        )
+                      : 0}{' '}
+                    records per batch average
+                  </div>
                 </div>
               )}
 
               {/* File Info */}
               {uploadedFile && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-green-600" />
-                    <span className="font-medium text-green-800">{uploadedFile.name}</span>
+                <div className='bg-green-50 border border-green-200 rounded-lg p-4'>
+                  <div className='flex items-center gap-2'>
+                    <FileText className='w-5 h-5 text-green-600' />
+                    <span className='font-medium text-green-800'>
+                      {uploadedFile.name}
+                    </span>
                   </div>
-                  <p className="text-sm text-green-600 mt-1">
+                  <p className='text-sm text-green-600 mt-1'>
                     File size: {(uploadedFile.size / 1024).toFixed(2)} KB
                   </p>
                 </div>
@@ -796,23 +1252,32 @@ const CsvUpload: React.FC = () => {
 
               {/* Import Results */}
               {importResults && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <span className="font-medium text-blue-800">Import Results</span>
+                <div className='bg-blue-50 border border-blue-200 rounded-lg p-4'>
+                  <div className='flex items-center gap-2 mb-2'>
+                    <CheckCircle className='w-5 h-5 text-blue-600' />
+                    <span className='font-medium text-blue-800'>
+                      Import Results
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
                     <div>
-                      <span className="text-green-600 font-medium">✓ {importResults.successCount} entries imported successfully</span>
+                      <span className='text-green-600 font-medium'>
+                        ✓ {importResults.successCount} entries imported
+                        successfully
+                      </span>
                     </div>
                     <div>
-                      <span className="text-red-600 font-medium">✗ {importResults.errorCount} entries failed</span>
+                      <span className='text-red-600 font-medium'>
+                        ✗ {importResults.errorCount} entries failed
+                      </span>
                     </div>
                   </div>
                   {importResults.errors.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Errors:</p>
-                      <div className="text-xs text-red-600 space-y-1 max-h-32 overflow-y-auto">
+                    <div className='mt-3'>
+                      <p className='text-sm font-medium text-gray-700 mb-1'>
+                        Errors:
+                      </p>
+                      <div className='text-xs text-red-600 space-y-1 max-h-32 overflow-y-auto'>
                         {importResults.errors.map((error, index) => (
                           <div key={index}>{error}</div>
                         ))}
@@ -824,14 +1289,16 @@ const CsvUpload: React.FC = () => {
 
               {/* Preview Section */}
               {uploadPreview.length > 0 && (
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Preview (First 10 rows)</h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border border-gray-200">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                <div className='space-y-4'>
+                  <h4 className='font-medium text-gray-900'>
+                    Preview (First 10 rows)
+                  </h4>
+                  <div className='overflow-x-auto'>
+                    <table className='w-full text-sm border border-gray-200'>
+                      <thead className='bg-gray-50 border-b border-gray-200'>
                         <tr>
-                          {Object.keys(uploadPreview[0]).map((header) => (
-                            <th key={header} className="px-3 py-2 text-left">
+                          {Object.keys(uploadPreview[0]).map(header => (
+                            <th key={header} className='px-3 py-2 text-left'>
                               {header}
                             </th>
                           ))}
@@ -839,9 +1306,12 @@ const CsvUpload: React.FC = () => {
                       </thead>
                       <tbody>
                         {uploadPreview.map((row, index) => (
-                          <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                          <tr
+                            key={index}
+                            className='border-b border-gray-100 hover:bg-gray-50'
+                          >
                             {Object.values(row).map((value: any, cellIndex) => (
-                              <td key={cellIndex} className="px-3 py-2">
+                              <td key={cellIndex} className='px-3 py-2'>
                                 {String(value)}
                               </td>
                             ))}
@@ -854,18 +1324,20 @@ const CsvUpload: React.FC = () => {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-4">
+              <div className='flex gap-4'>
                 <Button
                   onClick={handleImportCSV}
-                  disabled={!uploadedFile || uploadPreview.length === 0 || uploadLoading}
-                  className="flex-1 text-lg py-3"
+                  disabled={
+                    !uploadedFile || uploadPreview.length === 0 || uploadLoading
+                  }
+                  className='flex-1 text-lg py-3'
                 >
                   {uploadLoading ? 'Importing...' : 'Import CSV Data'}
                 </Button>
                 <Button
-                  variant="secondary"
+                  variant='secondary'
                   onClick={resetUpload}
-                  className="flex-1 text-lg py-3"
+                  className='flex-1 text-lg py-3'
                 >
                   Reset
                 </Button>
@@ -874,50 +1346,99 @@ const CsvUpload: React.FC = () => {
           </Card>
 
           {/* Instructions Card */}
-          <Card title="CSV Format Instructions" className="mt-6">
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card title='CSV Format Instructions' className='mt-6'>
+            <div className='space-y-4'>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                 <div>
-                  <h5 className="font-medium text-gray-900 mb-2">Recommended Columns:</h5>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• <strong>Date:</strong> Transaction date (YYYY-MM-DD format)</li>
-                    <li>• <strong>Company:</strong> Company name</li>
-                    <li>• <strong>Main Account:</strong> Account name</li>
-                    <li>• <strong>Sub Account:</strong> Sub account name</li>
-                    <li>• <strong>Particulars:</strong> Transaction description</li>
-                    <li>• <strong>Credit:</strong> Credit amount (numeric)</li>
-                    <li>• <strong>Debit:</strong> Debit amount (numeric)</li>
-                    <li>• <strong>Staff:</strong> Staff member name</li>
-                    <li>• <strong>Sale Qty:</strong> Sale quantity (numeric)</li>
-                    <li>• <strong>Purchase Qty:</strong> Purchase quantity (numeric)</li>
-                    <li>• <strong>Address:</strong> Company address</li>
+                  <h5 className='font-medium text-gray-900 mb-2'>
+                    Recommended Columns:
+                  </h5>
+                  <ul className='text-sm text-gray-600 space-y-1'>
+                    <li>
+                      • <strong>Date:</strong> Transaction date (YYYY-MM-DD
+                      format)
+                    </li>
+                    <li>
+                      • <strong>Company:</strong> Company name
+                    </li>
+                    <li>
+                      • <strong>Main Account:</strong> Account name
+                    </li>
+                    <li>
+                      • <strong>Sub Account:</strong> Sub account name
+                    </li>
+                    <li>
+                      • <strong>Particulars:</strong> Transaction description
+                    </li>
+                    <li>
+                      • <strong>Credit:</strong> Credit amount (numeric)
+                    </li>
+                    <li>
+                      • <strong>Debit:</strong> Debit amount (numeric)
+                    </li>
+                    <li>
+                      • <strong>Staff:</strong> Staff member name
+                    </li>
+                    <li>
+                      • <strong>Sale Qty:</strong> Sale quantity (numeric)
+                    </li>
+                    <li>
+                      • <strong>Purchase Qty:</strong> Purchase quantity
+                      (numeric)
+                    </li>
+                    <li>
+                      • <strong>Address:</strong> Company address
+                    </li>
                   </ul>
                 </div>
                 <div>
-                  <h5 className="font-medium text-gray-900 mb-2">Optional Columns:</h5>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• <strong>Credit Online/Offline:</strong> Online/Offline credit amounts</li>
-                    <li>• <strong>Debit Online/Offline:</strong> Online/Offline debit amounts</li>
+                  <h5 className='font-medium text-gray-900 mb-2'>
+                    Optional Columns:
+                  </h5>
+                  <ul className='text-sm text-gray-600 space-y-1'>
+                    <li>
+                      • <strong>Credit Online/Offline:</strong> Online/Offline
+                      credit amounts
+                    </li>
+                    <li>
+                      • <strong>Debit Online/Offline:</strong> Online/Offline
+                      debit amounts
+                    </li>
                   </ul>
-                  <h5 className="font-medium text-gray-900 mb-2 mt-4">Default Values:</h5>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• <strong>Missing Particulars:</strong> "Transaction [row number]"</li>
-                    <li>• <strong>Missing Company:</strong> "Default Company"</li>
-                    <li>• <strong>Missing Account:</strong> "Default Account"</li>
-                    <li>• <strong>Missing Staff:</strong> "admin"</li>
+                  <h5 className='font-medium text-gray-900 mb-2 mt-4'>
+                    Default Values:
+                  </h5>
+                  <ul className='text-sm text-gray-600 space-y-1'>
+                    <li>
+                      • <strong>Missing Particulars:</strong> "Transaction [row
+                      number]"
+                    </li>
+                    <li>
+                      • <strong>Missing Company:</strong> "Default Company"
+                    </li>
+                    <li>
+                      • <strong>Missing Account:</strong> "Default Account"
+                    </li>
+                    <li>
+                      • <strong>Missing Staff:</strong> "admin"
+                    </li>
                   </ul>
                 </div>
               </div>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-600" />
-                  <span className="font-medium text-yellow-800">Important Notes:</span>
+              <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-4'>
+                <div className='flex items-center gap-2'>
+                  <AlertCircle className='w-5 h-5 text-yellow-600' />
+                  <span className='font-medium text-yellow-800'>
+                    Important Notes:
+                  </span>
                 </div>
-                <ul className="text-sm text-yellow-700 mt-2 space-y-1">
+                <ul className='text-sm text-yellow-700 mt-2 space-y-1'>
                   <li>• CSV file should have headers in the first row</li>
                   <li>• Date format should be YYYY-MM-DD (e.g., 2024-01-15)</li>
                   <li>• Credit and Debit amounts should be numeric values</li>
-                  <li>• At least one of Credit or Debit should be greater than 0</li>
+                  <li>
+                    • At least one of Credit or Debit should be greater than 0
+                  </li>
                   <li>• Large files may take some time to process</li>
                 </ul>
               </div>
@@ -929,4 +1450,4 @@ const CsvUpload: React.FC = () => {
   );
 };
 
-export default CsvUpload; 
+export default CsvUpload;

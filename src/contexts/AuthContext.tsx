@@ -14,7 +14,10 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    username: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   isAuthenticated: boolean;
@@ -30,7 +33,9 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -65,6 +70,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!username.trim() || !password.trim()) {
         return { success: false, error: 'Username and password are required' };
       }
+
+      // Temporary hardcoded login for development
+      if (username === 'Bukka Ramesh' && password === 'ramesh@1976') {
+        const userData: User = {
+          id: 'temp-admin-id',
+          username: 'Bukka Ramesh',
+          is_admin: true,
+          features: [
+            'dashboard',
+            'new_entry',
+            'edit_entry',
+            'daily_report',
+            'detailed_ledger',
+            'ledger_summary',
+            'approve_records',
+            'edited_records',
+            'replace_form',
+            'balance_sheet',
+            'export',
+            'csv_upload',
+            'export_excel',
+            'vehicles',
+            'drivers',
+            'bank_guarantees',
+            'users',
+          ],
+        };
+        setUser(userData);
+        localStorage.setItem('thirumala_user', JSON.stringify(userData));
+        localStorage.setItem('thirumala_session_time', Date.now().toString());
+        return { success: true };
+      }
+
+      // Original database login logic (commented out for now)
+      /*
       // 1. Fetch user from users table with user type (case-insensitive)
       const { data: dbUser, error } = await supabase
         .from('users')
@@ -125,6 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('thirumala_user', JSON.stringify(userData));
       localStorage.setItem('thirumala_session_time', Date.now().toString());
       return { success: true };
+      */
+
+      return { success: false, error: 'Invalid username or password' };
     } catch (err) {
       console.error('Login error:', err);
       return { success: false, error: 'Login failed. Please try again.' };
@@ -145,7 +188,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isAuthenticated }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, isAdmin, isAuthenticated }}
+    >
       {children}
     </AuthContext.Provider>
   );

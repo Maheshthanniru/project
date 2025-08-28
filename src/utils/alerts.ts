@@ -29,7 +29,14 @@ export interface AlertRule {
 
 export interface AlertCondition {
   field: string;
-  operator: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains' | 'not_contains' | 'expires_in_days';
+  operator:
+    | 'equals'
+    | 'not_equals'
+    | 'greater_than'
+    | 'less_than'
+    | 'contains'
+    | 'not_contains'
+    | 'expires_in_days';
   value: any;
 }
 
@@ -53,7 +60,7 @@ class AlertManager {
       this.alerts = JSON.parse(savedAlerts).map((alert: any) => ({
         ...alert,
         createdAt: new Date(alert.createdAt),
-        expiresAt: alert.expiresAt ? new Date(alert.expiresAt) : undefined
+        expiresAt: alert.expiresAt ? new Date(alert.expiresAt) : undefined,
       }));
     }
   }
@@ -73,11 +80,17 @@ class AlertManager {
         priority: 'high',
         isActive: true,
         conditions: [
-          { field: 'tax_exp_date', operator: 'expires_in_days', value: 30 }
+          { field: 'tax_exp_date', operator: 'expires_in_days', value: 30 },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Vehicle Tax Expiring', message: 'Vehicle tax for {v_no} expires in {days} days' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Vehicle Tax Expiring',
+              message: 'Vehicle tax for {v_no} expires in {days} days',
+            },
+          },
+        ],
       },
       {
         id: 'vehicle_insurance_expiry',
@@ -87,11 +100,21 @@ class AlertManager {
         priority: 'high',
         isActive: true,
         conditions: [
-          { field: 'insurance_exp_date', operator: 'expires_in_days', value: 30 }
+          {
+            field: 'insurance_exp_date',
+            operator: 'expires_in_days',
+            value: 30,
+          },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Vehicle Insurance Expiring', message: 'Vehicle insurance for {v_no} expires in {days} days' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Vehicle Insurance Expiring',
+              message: 'Vehicle insurance for {v_no} expires in {days} days',
+            },
+          },
+        ],
       },
       {
         id: 'vehicle_fitness_expiry',
@@ -101,11 +124,17 @@ class AlertManager {
         priority: 'medium',
         isActive: true,
         conditions: [
-          { field: 'fitness_exp_date', operator: 'expires_in_days', value: 30 }
+          { field: 'fitness_exp_date', operator: 'expires_in_days', value: 30 },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Vehicle Fitness Expiring', message: 'Vehicle fitness for {v_no} expires in {days} days' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Vehicle Fitness Expiring',
+              message: 'Vehicle fitness for {v_no} expires in {days} days',
+            },
+          },
+        ],
       },
       // Driver license expiry alerts
       {
@@ -116,11 +145,18 @@ class AlertManager {
         priority: 'high',
         isActive: true,
         conditions: [
-          { field: 'exp_date', operator: 'expires_in_days', value: 30 }
+          { field: 'exp_date', operator: 'expires_in_days', value: 30 },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Driver License Expiring', message: 'Driver license for {driver_name} expires in {days} days' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Driver License Expiring',
+              message:
+                'Driver license for {driver_name} expires in {days} days',
+            },
+          },
+        ],
       },
       // Bank guarantee expiry alerts
       {
@@ -131,11 +167,17 @@ class AlertManager {
         priority: 'high',
         isActive: true,
         conditions: [
-          { field: 'exp_date', operator: 'expires_in_days', value: 60 }
+          { field: 'exp_date', operator: 'expires_in_days', value: 60 },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Bank Guarantee Expiring', message: 'Bank guarantee {bg_no} expires in {days} days' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Bank Guarantee Expiring',
+              message: 'Bank guarantee {bg_no} expires in {days} days',
+            },
+          },
+        ],
       },
       // Pending approval alerts
       {
@@ -145,12 +187,16 @@ class AlertManager {
         category: 'approval',
         priority: 'medium',
         isActive: true,
-        conditions: [
-          { field: 'approved', operator: 'equals', value: false }
-        ],
+        conditions: [{ field: 'approved', operator: 'equals', value: false }],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Pending Approvals', message: 'There are {count} entries pending approval' } }
-        ]
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Pending Approvals',
+              message: 'There are {count} entries pending approval',
+            },
+          },
+        ],
       },
       // Data backup alerts
       {
@@ -161,23 +207,31 @@ class AlertManager {
         priority: 'low',
         isActive: true,
         conditions: [
-          { field: 'last_backup', operator: 'greater_than', value: 7 }
+          { field: 'last_backup', operator: 'greater_than', value: 7 },
         ],
         actions: [
-          { type: 'create_alert', parameters: { title: 'Data Backup Reminder', message: 'Consider backing up your data' } }
-        ]
-      }
+          {
+            type: 'create_alert',
+            parameters: {
+              title: 'Data Backup Reminder',
+              message: 'Consider backing up your data',
+            },
+          },
+        ],
+      },
     ];
   }
 
   // Create a new alert
-  createAlert(alert: Omit<Alert, 'id' | 'createdAt' | 'isRead' | 'isDismissed'>): Alert {
+  createAlert(
+    alert: Omit<Alert, 'id' | 'createdAt' | 'isRead' | 'isDismissed'>
+  ): Alert {
     const newAlert: Alert = {
       ...alert,
       id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date(),
       isRead: false,
-      isDismissed: false
+      isDismissed: false,
     };
 
     this.alerts.push(newAlert);
@@ -197,33 +251,46 @@ class AlertManager {
 
     if (filters) {
       if (filters.type) {
-        filteredAlerts = filteredAlerts.filter(alert => alert.type === filters.type);
+        filteredAlerts = filteredAlerts.filter(
+          alert => alert.type === filters.type
+        );
       }
       if (filters.category) {
-        filteredAlerts = filteredAlerts.filter(alert => alert.category === filters.category);
+        filteredAlerts = filteredAlerts.filter(
+          alert => alert.category === filters.category
+        );
       }
       if (filters.priority) {
-        filteredAlerts = filteredAlerts.filter(alert => alert.priority === filters.priority);
+        filteredAlerts = filteredAlerts.filter(
+          alert => alert.priority === filters.priority
+        );
       }
       if (filters.isRead !== undefined) {
-        filteredAlerts = filteredAlerts.filter(alert => alert.isRead === filters.isRead);
+        filteredAlerts = filteredAlerts.filter(
+          alert => alert.isRead === filters.isRead
+        );
       }
       if (filters.isDismissed !== undefined) {
-        filteredAlerts = filteredAlerts.filter(alert => alert.isDismissed === filters.isDismissed);
+        filteredAlerts = filteredAlerts.filter(
+          alert => alert.isDismissed === filters.isDismissed
+        );
       }
     }
 
     // Remove expired alerts
-    filteredAlerts = filteredAlerts.filter(alert => 
-      !alert.expiresAt || alert.expiresAt > new Date()
+    filteredAlerts = filteredAlerts.filter(
+      alert => !alert.expiresAt || alert.expiresAt > new Date()
     );
 
-    return filteredAlerts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return filteredAlerts.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
   }
 
   // Get unread alerts count
   getUnreadCount(): number {
-    return this.alerts.filter(alert => !alert.isRead && !alert.isDismissed).length;
+    return this.alerts.filter(alert => !alert.isRead && !alert.isDismissed)
+      .length;
   }
 
   // Mark alert as read
@@ -263,7 +330,7 @@ class AlertManager {
 
     data.forEach(item => {
       const expiryFields = this.getExpiryFields(documentType);
-      
+
       expiryFields.forEach(field => {
         if (item[field]) {
           const expiryDate = new Date(item[field]);
@@ -273,17 +340,27 @@ class AlertManager {
             const alert = this.createAlert({
               type: daysUntilExpiry <= 7 ? 'error' : 'warning',
               title: `${this.getDocumentTypeName(documentType)} Expiring`,
-              message: this.formatExpiryMessage(documentType, item, field, daysUntilExpiry),
+              message: this.formatExpiryMessage(
+                documentType,
+                item,
+                field,
+                daysUntilExpiry
+              ),
               category: 'document',
-              priority: daysUntilExpiry <= 7 ? 'critical' : daysUntilExpiry <= 15 ? 'high' : 'medium',
+              priority:
+                daysUntilExpiry <= 7
+                  ? 'critical'
+                  : daysUntilExpiry <= 15
+                    ? 'high'
+                    : 'medium',
               actionUrl: `/vehicles`,
               actionText: 'View Details',
               metadata: {
                 documentType,
                 itemId: item.id,
                 expiryField: field,
-                daysUntilExpiry
-              }
+                daysUntilExpiry,
+              },
             });
             alerts.push(alert);
           }
@@ -297,7 +374,7 @@ class AlertManager {
   // Check for pending approvals
   checkPendingApprovals(entries: any[]): Alert[] {
     const pendingCount = entries.filter(entry => !entry.approved).length;
-    
+
     if (pendingCount > 0) {
       const alert = this.createAlert({
         type: 'warning',
@@ -309,8 +386,8 @@ class AlertManager {
         actionText: 'Review Approvals',
         metadata: {
           pendingCount,
-          lastChecked: new Date()
-        }
+          lastChecked: new Date(),
+        },
       });
       return [alert];
     }
@@ -323,8 +400,8 @@ class AlertManager {
     const alerts: Alert[] = [];
 
     // Check for entries with very high amounts
-    const highAmountEntries = entries.filter(entry => 
-      entry.credit > 1000000 || entry.debit > 1000000
+    const highAmountEntries = entries.filter(
+      entry => entry.credit > 1000000 || entry.debit > 1000000
     );
 
     if (highAmountEntries.length > 0) {
@@ -338,15 +415,18 @@ class AlertManager {
         actionText: 'Review Entries',
         metadata: {
           highAmountCount: highAmountEntries.length,
-          entries: highAmountEntries.map(e => ({ id: e.id, amount: e.credit || e.debit }))
-        }
+          entries: highAmountEntries.map(e => ({
+            id: e.id,
+            amount: e.credit || e.debit,
+          })),
+        },
       });
       alerts.push(alert);
     }
 
     // Check for entries without particulars
-    const emptyParticulars = entries.filter(entry => 
-      !entry.particulars || entry.particulars.trim().length < 3
+    const emptyParticulars = entries.filter(
+      entry => !entry.particulars || entry.particulars.trim().length < 3
     );
 
     if (emptyParticulars.length > 0) {
@@ -359,8 +439,8 @@ class AlertManager {
         actionUrl: '/edit-entry',
         actionText: 'Review Entries',
         metadata: {
-          incompleteCount: emptyParticulars.length
-        }
+          incompleteCount: emptyParticulars.length,
+        },
       });
       alerts.push(alert);
     }
@@ -372,7 +452,12 @@ class AlertManager {
   private getExpiryFields(documentType: string): string[] {
     switch (documentType) {
       case 'vehicle':
-        return ['tax_exp_date', 'insurance_exp_date', 'fitness_exp_date', 'permit_exp_date'];
+        return [
+          'tax_exp_date',
+          'insurance_exp_date',
+          'fitness_exp_date',
+          'permit_exp_date',
+        ];
       case 'driver':
         return ['exp_date'];
       case 'bankguarantee':
@@ -397,9 +482,16 @@ class AlertManager {
   }
 
   // Format expiry message
-  private formatExpiryMessage(documentType: string, item: any, field: string, days: number): string {
-    const fieldName = field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-    
+  private formatExpiryMessage(
+    documentType: string,
+    item: any,
+    field: string,
+    days: number
+  ): string {
+    const fieldName = field
+      .replace('_', ' ')
+      .replace(/\b\w/g, l => l.toUpperCase());
+
     switch (documentType) {
       case 'vehicle':
         return `Vehicle ${item.v_no} ${fieldName} expires in ${days} days`;
@@ -429,7 +521,9 @@ class AlertManager {
       newAlerts.push(...this.checkDocumentExpiry(data.drivers, 'driver'));
     }
     if (data.bankGuarantees) {
-      newAlerts.push(...this.checkDocumentExpiry(data.bankGuarantees, 'bankguarantee'));
+      newAlerts.push(
+        ...this.checkDocumentExpiry(data.bankGuarantees, 'bankguarantee')
+      );
     }
 
     // Check pending approvals
@@ -458,7 +552,7 @@ export const createDocumentExpiryAlert = (
     message: `${documentType} expires in ${daysUntilExpiry} days`,
     category: 'document',
     priority: daysUntilExpiry <= 7 ? 'critical' : 'medium',
-    metadata: { documentType, itemId: item.id, daysUntilExpiry }
+    metadata: { documentType, itemId: item.id, daysUntilExpiry },
   });
 };
 
@@ -472,6 +566,6 @@ export const createSystemAlert = (
     title,
     message,
     category: 'system',
-    priority
+    priority,
   });
-}; 
+};

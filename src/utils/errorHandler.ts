@@ -2,7 +2,13 @@ import toast from 'react-hot-toast';
 
 export interface AppError {
   id: string;
-  type: 'validation' | 'network' | 'database' | 'auth' | 'permission' | 'system';
+  type:
+    | 'validation'
+    | 'network'
+    | 'database'
+    | 'auth'
+    | 'permission'
+    | 'system';
   message: string;
   details?: string;
   timestamp: Date;
@@ -35,7 +41,7 @@ class ErrorHandler {
     if (savedErrors) {
       this.errors = JSON.parse(savedErrors).map((error: any) => ({
         ...error,
-        timestamp: new Date(error.timestamp)
+        timestamp: new Date(error.timestamp),
       }));
     }
   }
@@ -56,7 +62,7 @@ class ErrorHandler {
       retryable = false,
       maxRetries = 3,
       retryDelay = 1000,
-      fallbackMessage = 'An unexpected error occurred'
+      fallbackMessage = 'An unexpected error occurred',
     } = config;
 
     // Determine error type and message
@@ -69,17 +75,32 @@ class ErrorHandler {
     } else if (error instanceof Error) {
       message = error.message;
       details = error.stack || '';
-      
+
       // Determine error type based on message or name
-      if (error.message.includes('validation') || error.message.includes('Validation')) {
+      if (
+        error.message.includes('validation') ||
+        error.message.includes('Validation')
+      ) {
         errorType = 'validation';
-      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      } else if (
+        error.message.includes('network') ||
+        error.message.includes('fetch')
+      ) {
         errorType = 'network';
-      } else if (error.message.includes('database') || error.message.includes('db')) {
+      } else if (
+        error.message.includes('database') ||
+        error.message.includes('db')
+      ) {
         errorType = 'database';
-      } else if (error.message.includes('auth') || error.message.includes('unauthorized')) {
+      } else if (
+        error.message.includes('auth') ||
+        error.message.includes('unauthorized')
+      ) {
         errorType = 'auth';
-      } else if (error.message.includes('permission') || error.message.includes('forbidden')) {
+      } else if (
+        error.message.includes('permission') ||
+        error.message.includes('forbidden')
+      ) {
         errorType = 'permission';
       }
     } else if (error && typeof error === 'object') {
@@ -98,7 +119,7 @@ class ErrorHandler {
       context,
       isHandled: false,
       retryCount: 0,
-      maxRetries: retryable ? maxRetries : 0
+      maxRetries: retryable ? maxRetries : 0,
     };
 
     // Add to errors list
@@ -109,7 +130,7 @@ class ErrorHandler {
     if (logToConsole) {
       console.error('Application Error:', {
         ...appError,
-        originalError: error
+        originalError: error,
       });
     }
 
@@ -141,10 +162,12 @@ class ErrorHandler {
       case 'auth':
         return 'Authentication error. Please log in again.';
       case 'permission':
-        return 'You don\'t have permission to perform this action.';
+        return "You don't have permission to perform this action.";
       case 'system':
       default:
-        return error.message || 'An unexpected error occurred. Please try again.';
+        return (
+          error.message || 'An unexpected error occurred. Please try again.'
+        );
     }
   }
 
@@ -152,7 +175,7 @@ class ErrorHandler {
   private getToastOptions(error: AppError): any {
     const baseOptions = {
       duration: 5000,
-      position: 'top-right' as const
+      position: 'top-right' as const,
     };
 
     switch (error.type) {
@@ -183,18 +206,22 @@ class ErrorHandler {
         return await operation();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         if (attempt === maxRetries) {
           // Final attempt failed
-          this.handleError(lastError, {
-            operation: operationName,
-            attempt,
-            maxRetries
-          }, {
-            showToast: true,
-            logToConsole: true,
-            retryable: false
-          });
+          this.handleError(
+            lastError,
+            {
+              operation: operationName,
+              attempt,
+              maxRetries,
+            },
+            {
+              showToast: true,
+              logToConsole: true,
+              retryable: false,
+            }
+          );
           throw lastError;
         }
 
@@ -247,58 +274,74 @@ class ErrorHandler {
         message = `HTTP ${response.status}: ${response.statusText}`;
     }
 
-    return this.handleError(new Error(message), {
-      ...context,
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url
-    }, {
-      showToast: true,
-      logToConsole: true,
-      retryable: response.status >= 500
-    });
+    return this.handleError(
+      new Error(message),
+      {
+        ...context,
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+      },
+      {
+        showToast: true,
+        logToConsole: true,
+        retryable: response.status >= 500,
+      }
+    );
   }
 
   // Handle validation errors
   handleValidationError(errors: string[], field?: string): AppError {
-    const message = field 
+    const message = field
       ? `Validation error in ${field}: ${errors.join(', ')}`
       : `Validation errors: ${errors.join(', ')}`;
 
-    return this.handleError(new Error(message), {
-      validationErrors: errors,
-      field
-    }, {
-      showToast: true,
-      logToConsole: false,
-      retryable: false
-    });
+    return this.handleError(
+      new Error(message),
+      {
+        validationErrors: errors,
+        field,
+      },
+      {
+        showToast: true,
+        logToConsole: false,
+        retryable: false,
+      }
+    );
   }
 
   // Handle database errors
   handleDatabaseError(error: any, operation: string): AppError {
-    return this.handleError(error, {
-      operation,
-      database: true
-    }, {
-      showToast: true,
-      logToConsole: true,
-      retryable: true,
-      maxRetries: 3
-    });
+    return this.handleError(
+      error,
+      {
+        operation,
+        database: true,
+      },
+      {
+        showToast: true,
+        logToConsole: true,
+        retryable: true,
+        maxRetries: 3,
+      }
+    );
   }
 
   // Handle network errors
   handleNetworkError(error: any, url?: string): AppError {
-    return this.handleError(error, {
-      url,
-      network: true
-    }, {
-      showToast: true,
-      logToConsole: true,
-      retryable: true,
-      maxRetries: 2
-    });
+    return this.handleError(
+      error,
+      {
+        url,
+        network: true,
+      },
+      {
+        showToast: true,
+        logToConsole: true,
+        retryable: true,
+        maxRetries: 2,
+      }
+    );
   }
 
   // Get all errors
@@ -312,20 +355,30 @@ class ErrorHandler {
 
     if (filters) {
       if (filters.type) {
-        filteredErrors = filteredErrors.filter(error => error.type === filters.type);
+        filteredErrors = filteredErrors.filter(
+          error => error.type === filters.type
+        );
       }
       if (filters.isHandled !== undefined) {
-        filteredErrors = filteredErrors.filter(error => error.isHandled === filters.isHandled);
+        filteredErrors = filteredErrors.filter(
+          error => error.isHandled === filters.isHandled
+        );
       }
       if (filters.fromDate) {
-        filteredErrors = filteredErrors.filter(error => error.timestamp >= filters.fromDate!);
+        filteredErrors = filteredErrors.filter(
+          error => error.timestamp >= filters.fromDate!
+        );
       }
       if (filters.toDate) {
-        filteredErrors = filteredErrors.filter(error => error.timestamp <= filters.toDate!);
+        filteredErrors = filteredErrors.filter(
+          error => error.timestamp <= filters.toDate!
+        );
       }
     }
 
-    return filteredErrors.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return filteredErrors.sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+    );
   }
 
   // Mark error as handled
@@ -365,11 +418,11 @@ class ErrorHandler {
         database: 0,
         auth: 0,
         permission: 0,
-        system: 0
+        system: 0,
       },
       handled: 0,
       unhandled: 0,
-      today: 0
+      today: 0,
     };
 
     this.errors.forEach(error => {
@@ -420,7 +473,10 @@ class ErrorHandler {
 export const errorHandler = new ErrorHandler();
 
 // Export utility functions
-export const handleApiError = (response: Response, context?: Record<string, any>) => {
+export const handleApiError = (
+  response: Response,
+  context?: Record<string, any>
+) => {
   return errorHandler.handleApiError(response, context);
 };
 
@@ -442,4 +498,4 @@ export const withErrorHandlingSync = <T>(
   config: ErrorConfig = {}
 ) => {
   return errorHandler.withErrorHandlingSync(operation, context, config);
-}; 
+};

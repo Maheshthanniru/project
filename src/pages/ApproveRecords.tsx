@@ -8,6 +8,19 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import {
+  FileText,
+  Users,
+  CheckCircle,
+  X,
+  Eye,
+  Download,
+  Edit,
+  Trash2,
+  Search,
+  Filter,
+  Clock,
+} from 'lucide-react';
 
 interface ApprovalFilters {
   date: string;
@@ -18,16 +31,19 @@ interface ApprovalFilters {
 
 const ApproveRecords: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  
+
   const [filters, setFilters] = useState<ApprovalFilters>({
     date: format(new Date(), 'yyyy-MM-dd'),
     company: '',
     staff: '',
-    showUnfiltered: false});
+    showUnfiltered: false,
+  });
 
   const [entries, setEntries] = useState<any[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
-  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(
+    new Set()
+  );
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
@@ -37,15 +53,20 @@ const ApproveRecords: React.FC = () => {
   const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
 
   // Dropdown data
-  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
-  const [staffList, setStaffList] = useState<{ value: string; label: string }[]>([]);
+  const [companies, setCompanies] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [staffList, setStaffList] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // Summary data
   const [summary, setSummary] = useState({
     totalRecords: 0,
     approvedRecords: 0,
     pendingRecords: 0,
-    selectedCount: 0});
+    selectedCount: 0,
+  });
 
   useEffect(() => {
     if (!isAdmin) {
@@ -71,16 +92,18 @@ const ApproveRecords: React.FC = () => {
       const companies = await supabaseDB.getCompanies();
       const companiesData = companies.map(company => ({
         value: company.company_name,
-        label: company.company_name
+        label: company.company_name,
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
 
       // Load staff
       const users = await supabaseDB.getUsers();
-      const usersData = users.filter(u => u.is_active).map(user => ({
-        value: user.username,
-        label: user.username
-      }));
+      const usersData = users
+        .filter(u => u.is_active)
+        .map(user => ({
+          value: user.username,
+          label: user.username,
+        }));
       setStaffList([{ value: '', label: 'All Staff' }, ...usersData]);
     } catch (error) {
       setFetchError('Failed to load dropdown data');
@@ -95,17 +118,18 @@ const ApproveRecords: React.FC = () => {
     try {
       const allEntries = await supabaseDB.getCashBookEntries();
       console.log('[ApproveRecords] Fetched entries:', allEntries);
-      
+
       // Debug: Check approval status of entries
-      const pendingEntries = allEntries.filter(entry => 
-        entry.approved === false || 
-        entry.approved === null || 
-        entry.approved === undefined || 
-        entry.approved === '' || 
-        entry.approved === 'false'
+      const pendingEntries = allEntries.filter(
+        entry =>
+          entry.approved === false ||
+          entry.approved === null ||
+          entry.approved === undefined ||
+          entry.approved === '' ||
+          entry.approved === 'false'
       );
       console.log('[ApproveRecords] Pending entries:', pendingEntries);
-      
+
       setEntries(allEntries);
       if (!allEntries || allEntries.length === 0) {
         setFetchError('No entries found in the database.');
@@ -121,7 +145,12 @@ const ApproveRecords: React.FC = () => {
 
   const applyFilters = () => {
     let filtered = [...entries];
-    console.log('[ApproveRecords] Applying filters:', filters, 'Entries:', entries);
+    console.log(
+      '[ApproveRecords] Applying filters:',
+      filters,
+      'Entries:',
+      entries
+    );
 
     // Date filter
     if (filters.date) {
@@ -130,7 +159,9 @@ const ApproveRecords: React.FC = () => {
 
     // Company filter
     if (filters.company) {
-      filtered = filtered.filter(entry => entry.company_name === filters.company);
+      filtered = filtered.filter(
+        entry => entry.company_name === filters.company
+      );
     }
 
     // Staff filter
@@ -141,13 +172,15 @@ const ApproveRecords: React.FC = () => {
     // Only show pending records (not approved)
     filtered = filtered.filter(entry => {
       // Check if entry is not approved (false, null, undefined, or empty string)
-      return entry.approved === false || 
-             entry.approved === null || 
-             entry.approved === undefined || 
-             entry.approved === '' || 
-             entry.approved === 'false';
+      return (
+        entry.approved === false ||
+        entry.approved === null ||
+        entry.approved === undefined ||
+        entry.approved === '' ||
+        entry.approved === 'false'
+      );
     });
-    
+
     setFilteredEntries(filtered);
     setCurrentPage(1);
     if (filtered.length === 0) {
@@ -159,8 +192,8 @@ const ApproveRecords: React.FC = () => {
 
   const updateSummary = () => {
     const totalRecords = filteredEntries.length;
-    const approvedRecords = filteredEntries.filter(entry => 
-      entry.approved === true || entry.approved === 'true'
+    const approvedRecords = filteredEntries.filter(
+      entry => entry.approved === true || entry.approved === 'true'
     ).length;
     const pendingRecords = totalRecords - approvedRecords;
     const selectedCount = selectedEntries.size;
@@ -169,13 +202,14 @@ const ApproveRecords: React.FC = () => {
       totalRecords,
       approvedRecords,
       pendingRecords,
-      selectedCount});
+      selectedCount,
+    });
   };
 
   const handleFilterChange = (field: keyof ApprovalFilters, value: any) => {
     setFilters(prev => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -185,7 +219,7 @@ const ApproveRecords: React.FC = () => {
     newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
     setFilters(prev => ({
       ...prev,
-      date: format(newDate, 'yyyy-MM-dd')
+      date: format(newDate, 'yyyy-MM-dd'),
     }));
   };
 
@@ -201,10 +235,12 @@ const ApproveRecords: React.FC = () => {
 
   const handleSelectAll = () => {
     const currentPageEntries = getCurrentPageEntries();
-    const allSelected = currentPageEntries.every(entry => selectedEntries.has(entry.id));
-    
+    const allSelected = currentPageEntries.every(entry =>
+      selectedEntries.has(entry.id)
+    );
+
     const newSelected = new Set(selectedEntries);
-    
+
     if (allSelected) {
       // Deselect all on current page
       currentPageEntries.forEach(entry => newSelected.delete(entry.id));
@@ -212,7 +248,7 @@ const ApproveRecords: React.FC = () => {
       // Select all on current page
       currentPageEntries.forEach(entry => newSelected.add(entry.id));
     }
-    
+
     setSelectedEntries(newSelected);
   };
 
@@ -242,11 +278,11 @@ const ApproveRecords: React.FC = () => {
         .from('cash_book')
         .update({ approved: false })
         .eq('id', entryId);
-      
+
       if (error) {
         throw error;
       }
-      
+
       toast.success('Record rejected successfully!');
       await loadEntries(); // Reload to get updated data
     } catch (error) {
@@ -266,7 +302,7 @@ const ApproveRecords: React.FC = () => {
     setLoading(true);
     try {
       let approvedCount = 0;
-      
+
       for (const entryId of selectedEntries) {
         const result = await supabaseDB.toggleApproval(entryId);
         if (result) {
@@ -294,8 +330,9 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    const companyEntries = filteredEntries.filter(entry => 
-      entry.company_name === filters.company && entry.approved !== 'true'
+    const companyEntries = filteredEntries.filter(
+      entry =>
+        entry.company_name === filters.company && entry.approved !== 'true'
     );
 
     if (companyEntries.length === 0) {
@@ -303,11 +340,15 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    if (window.confirm(`Approve all ${companyEntries.length} pending entries for ${filters.company}?`)) {
+    if (
+      window.confirm(
+        `Approve all ${companyEntries.length} pending entries for ${filters.company}?`
+      )
+    ) {
       setLoading(true);
       try {
         let approvedCount = 0;
-        
+
         for (const entry of companyEntries) {
           const result = await supabaseDB.toggleApproval(entry.id);
           if (result) {
@@ -318,7 +359,9 @@ const ApproveRecords: React.FC = () => {
         if (approvedCount > 0) {
           await loadEntries();
           setSelectedEntries(new Set());
-          toast.success(`${approvedCount} entries approved for ${filters.company}!`);
+          toast.success(
+            `${approvedCount} entries approved for ${filters.company}!`
+          );
         }
       } catch (error) {
         toast.error('Failed to approve company entries');
@@ -334,8 +377,8 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    const staffEntries = filteredEntries.filter(entry => 
-      entry.staff === filters.staff && entry.approved !== 'true'
+    const staffEntries = filteredEntries.filter(
+      entry => entry.staff === filters.staff && entry.approved !== 'true'
     );
 
     if (staffEntries.length === 0) {
@@ -343,11 +386,15 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    if (window.confirm(`Approve all ${staffEntries.length} pending entries for ${filters.staff}?`)) {
+    if (
+      window.confirm(
+        `Approve all ${staffEntries.length} pending entries for ${filters.staff}?`
+      )
+    ) {
       setLoading(true);
       try {
         let approvedCount = 0;
-        
+
         for (const entry of staffEntries) {
           const result = await supabaseDB.toggleApproval(entry.id);
           if (result) {
@@ -358,7 +405,9 @@ const ApproveRecords: React.FC = () => {
         if (approvedCount > 0) {
           await loadEntries();
           setSelectedEntries(new Set());
-          toast.success(`${approvedCount} entries approved for ${filters.staff}!`);
+          toast.success(
+            `${approvedCount} entries approved for ${filters.staff}!`
+          );
         }
       } catch (error) {
         toast.error('Failed to approve staff entries');
@@ -369,7 +418,9 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithoutConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(entry => entry.approved !== 'true');
+    const pendingEntries = filteredEntries.filter(
+      entry => entry.approved !== 'true'
+    );
 
     if (pendingEntries.length === 0) {
       toast.error('No pending entries to approve');
@@ -379,19 +430,21 @@ const ApproveRecords: React.FC = () => {
     setLoading(true);
     try {
       let approvedCount = 0;
-      
-              for (const entry of pendingEntries) {
-          const result = await supabaseDB.toggleApproval(entry.id);
-          if (result) {
-            approvedCount++;
-          }
-        }
 
-        if (approvedCount > 0) {
-          await loadEntries();
-          setSelectedEntries(new Set());
-          toast.success(`${approvedCount} entries approved without confirmation!`);
+      for (const entry of pendingEntries) {
+        const result = await supabaseDB.toggleApproval(entry.id);
+        if (result) {
+          approvedCount++;
         }
+      }
+
+      if (approvedCount > 0) {
+        await loadEntries();
+        setSelectedEntries(new Set());
+        toast.success(
+          `${approvedCount} entries approved without confirmation!`
+        );
+      }
     } catch (error) {
       toast.error('Failed to approve entries');
     } finally {
@@ -400,18 +453,24 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(entry => entry.approved !== 'true');
+    const pendingEntries = filteredEntries.filter(
+      entry => entry.approved !== 'true'
+    );
 
     if (pendingEntries.length === 0) {
       toast.error('No pending entries to approve');
       return;
     }
 
-    if (window.confirm(`Are you sure you want to approve all ${pendingEntries.length} pending entries?`)) {
+    if (
+      window.confirm(
+        `Are you sure you want to approve all ${pendingEntries.length} pending entries?`
+      )
+    ) {
       setLoading(true);
       try {
         let approvedCount = 0;
-        
+
         for (const entry of pendingEntries) {
           const result = await supabaseDB.toggleApproval(entry.id);
           if (result) {
@@ -477,7 +536,7 @@ const ApproveRecords: React.FC = () => {
 
       const currentPageEntries = getCurrentPageEntries();
       const title = `Approve Records - ${filters.date}`;
-      
+
       const printContent = `
         <!DOCTYPE html>
         <html>
@@ -527,7 +586,9 @@ const ApproveRecords: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                ${currentPageEntries.map((entry, index) => `
+                ${currentPageEntries
+                  .map(
+                    (entry, index) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${entry.sno}</td>
                     <td>${entry.c_date}</td>
@@ -539,7 +600,9 @@ const ApproveRecords: React.FC = () => {
                     <td>${entry.staff || ''}</td>
                     <td>${entry.approved ? 'Approved' : 'Pending'}</td>
                   </tr>
-                `).join('')}
+                `
+                  )
+                  .join('')}
               </tbody>
             </table>
 
@@ -554,13 +617,13 @@ const ApproveRecords: React.FC = () => {
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.focus();
-      
+
       // Wait for content to load then print
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
       }, 500);
-      
+
       toast.success('Print dialog opened');
     } catch (error) {
       console.error('Print error:', error);
@@ -578,7 +641,7 @@ const ApproveRecords: React.FC = () => {
       }
 
       const title = `All Approve Records - ${filters.date}`;
-      
+
       const printContent = `
         <!DOCTYPE html>
         <html>
@@ -629,7 +692,9 @@ const ApproveRecords: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                ${filteredEntries.map((entry, index) => `
+                ${filteredEntries
+                  .map(
+                    (entry, index) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${entry.sno}</td>
                     <td>${entry.c_date}</td>
@@ -641,7 +706,9 @@ const ApproveRecords: React.FC = () => {
                     <td>${entry.staff || ''}</td>
                     <td>${entry.approved ? 'Approved' : 'Pending'}</td>
                   </tr>
-                `).join('')}
+                `
+                  )
+                  .join('')}
               </tbody>
             </table>
 
@@ -656,13 +723,13 @@ const ApproveRecords: React.FC = () => {
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.focus();
-      
+
       // Wait for content to load then print
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
       }, 500);
-      
+
       toast.success('Print all dialog opened');
     } catch (error) {
       console.error('Print all error:', error);
@@ -682,124 +749,119 @@ const ApproveRecords: React.FC = () => {
   };
 
   const getRowColor = (entry: any) => {
-    if (entry.approved === true || entry.approved === 'true') return 'bg-green-50 border-green-200';
+    if (entry.approved === true || entry.approved === 'true')
+      return 'bg-green-50 border-green-200';
     return 'bg-yellow-50 border-yellow-300';
   };
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">Only administrators can access the approval system.</p>
+      <div className='flex items-center justify-center min-h-96'>
+        <div className='text-center'>
+          <AlertCircle className='w-16 h-16 text-red-500 mx-auto mb-4' />
+          <h2 className='text-xl font-semibold text-gray-900 mb-2'>
+            Access Denied
+          </h2>
+          <p className='text-gray-600'>
+            Only administrators can access the approval system.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className='space-y-6'>
       {loading && (
-        <div className="text-center py-8 text-blue-600 font-semibold">Loading records...</div>
+        <div className='text-center py-8 text-blue-600 font-semibold'>
+          Loading records...
+        </div>
       )}
       {fetchError && !loading && (
-        <div className="text-center py-8 text-red-600 font-semibold">{fetchError}</div>
+        <div className='text-center py-8 text-red-600 font-semibold'>
+          {fetchError}
+        </div>
       )}
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className='flex items-center justify-between'>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Approve Records</h1>
-          <p className="text-gray-600">Review and approve pending cash book entries</p>
+          <h1 className='text-3xl font-bold text-gray-900'>Approve Records</h1>
+          <p className='text-gray-600'>
+            Review and approve pending cash book entries
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            
-            variant="secondary"
-            onClick={loadEntries}
-          >
+        <div className='flex items-center gap-3'>
+          <Button variant='secondary' onClick={loadEntries}>
             Refresh
           </Button>
-          <Button
-            
-            variant="secondary"
-            onClick={printReport}
-          >
+          <Button variant='secondary' onClick={printReport}>
             Print
           </Button>
-          <Button
-            
-            variant="secondary"
-            onClick={printAll}
-          >
+          <Button variant='secondary' onClick={printAll}>
             Print All
           </Button>
-          <Button
-            
-            variant="secondary"
-            onClick={closeWindow}
-          >
+          <Button variant='secondary' onClick={closeWindow}>
             Close
           </Button>
         </div>
       </div>
 
       {/* Controls */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 gap-y-4">
+      <Card className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 gap-y-4'>
           {/* Date Navigation */}
-          <div className="md:col-span-2 w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-            <div className="flex items-center gap-2 w-full">
+          <div className='md:col-span-2 w-full'>
+            <label className='block text-sm font-medium text-gray-700 mb-2'>
+              Date
+            </label>
+            <div className='flex items-center gap-2 w-full'>
               <Button
-                size="sm"
-                variant="secondary"
-                
+                size='sm'
+                variant='secondary'
                 onClick={() => navigateDate('prev')}
-                className="px-3"
+                className='px-3'
               >
                 Previous
               </Button>
               <Input
-                type="date"
+                type='date'
                 value={filters.date}
-                onChange={(value) => handleFilterChange('date', value)}
-                className="flex-1 w-full"
+                onChange={value => handleFilterChange('date', value)}
+                className='flex-1 w-full'
               />
               <Button
-                size="sm"
-                variant="secondary"
-                
+                size='sm'
+                variant='secondary'
                 onClick={() => navigateDate('next')}
-                className="px-3"
+                className='px-3'
               >
                 Next
               </Button>
             </div>
           </div>
           {/* Company Filter */}
-          <div className="w-full">
+          <div className='w-full'>
             <Select
-              label="Company"
+              label='Company'
               value={filters.company}
-              onChange={(value) => handleFilterChange('company', value)}
+              onChange={value => handleFilterChange('company', value)}
               options={companies}
-              className="w-full"
+              className='w-full'
             />
           </div>
           {/* Staff Filter */}
-          <div className="w-full">
+          <div className='w-full'>
             <Select
-              label="Staff"
+              label='Staff'
               value={filters.staff}
-              onChange={(value) => handleFilterChange('staff', value)}
+              onChange={value => handleFilterChange('staff', value)}
               options={staffList}
-              className="w-full"
+              className='w-full'
             />
           </div>
           {/* Record Count */}
-          <div className="flex items-end w-full">
-            <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center">
+          <div className='flex items-end w-full'>
+            <div className='text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center'>
               <strong>{summary.totalRecords}</strong> records
             </div>
           </div>
@@ -807,11 +869,11 @@ const ApproveRecords: React.FC = () => {
       </Card>
 
       {/* Approval Actions */}
-      <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+      <Card className='bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'>
+        <div className='grid grid-cols-1 md:grid-cols-6 gap-3'>
           <Button
             onClick={approveAllCompanywise}
-            className="bg-blue-600 hover:bg-blue-700 text-sm"
+            className='bg-blue-600 hover:bg-blue-700 text-sm'
             disabled={!filters.company || loading}
           >
             Approve All Companywise
@@ -819,7 +881,7 @@ const ApproveRecords: React.FC = () => {
 
           <Button
             onClick={approveAllStaffwise}
-            className="bg-purple-600 hover:bg-purple-700 text-sm"
+            className='bg-purple-600 hover:bg-purple-700 text-sm'
             disabled={!filters.staff || loading}
           >
             Approve All Staffwise
@@ -827,7 +889,7 @@ const ApproveRecords: React.FC = () => {
 
           <Button
             onClick={approveAllWithoutConfirmation}
-            className="bg-orange-600 hover:bg-orange-700 text-sm"
+            className='bg-orange-600 hover:bg-orange-700 text-sm'
             disabled={loading}
           >
             Approve All Without Confirmation
@@ -835,7 +897,7 @@ const ApproveRecords: React.FC = () => {
 
           <Button
             onClick={approveAllWithConfirmation}
-            className="bg-green-600 hover:bg-green-700 text-sm"
+            className='bg-green-600 hover:bg-green-700 text-sm'
             disabled={loading}
           >
             Approve All With Confirmation
@@ -843,15 +905,15 @@ const ApproveRecords: React.FC = () => {
 
           <Button
             onClick={cancelApprove}
-            variant="secondary"
-            className="text-sm"
+            variant='secondary'
+            className='text-sm'
           >
             Cancel Approve
           </Button>
 
           <Button
             onClick={approveSelected}
-            className="bg-indigo-600 hover:bg-indigo-700 text-sm"
+            className='bg-indigo-600 hover:bg-indigo-700 text-sm'
             disabled={selectedEntries.size === 0 || loading}
           >
             Approve Selected ({selectedEntries.size})
@@ -860,152 +922,181 @@ const ApproveRecords: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-          <div className="flex items-center justify-between">
+      <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
+        <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-blue-100 text-sm font-medium">Total Records</p>
-              <p className="text-2xl font-bold">{summary.totalRecords}</p>
+              <p className='text-blue-100 text-sm font-medium'>Total Records</p>
+              <p className='text-2xl font-bold'>{summary.totalRecords}</p>
             </div>
-            <FileText className="w-8 h-8 text-blue-200" />
+            <FileText className='w-8 h-8 text-blue-200' />
           </div>
         </Card>
 
-        <Card className="bg-white text-gray-900">
-          <div className="flex items-center justify-between">
+        <Card className='bg-white text-gray-900'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-green-700 text-sm font-medium">Approved</p>
-              <p className="text-2xl font-bold">{summary.approvedRecords}</p>
+              <p className='text-green-700 text-sm font-medium'>Approved</p>
+              <p className='text-2xl font-bold'>{summary.approvedRecords}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-500" />
+            <CheckCircle className='w-8 h-8 text-green-500' />
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-          <div className="flex items-center justify-between">
+        <Card className='bg-gradient-to-r from-orange-500 to-orange-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-orange-100 text-sm font-medium">Pending</p>
-              <p className="text-2xl font-bold">{summary.pendingRecords}</p>
+              <p className='text-orange-100 text-sm font-medium'>Pending</p>
+              <p className='text-2xl font-bold'>{summary.pendingRecords}</p>
             </div>
-            <Clock className="w-8 h-8 text-orange-200" />
+            <Clock className='w-8 h-8 text-orange-200' />
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-          <div className="flex items-center justify-between">
+        <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white'>
+          <div className='flex items-center justify-between'>
             <div>
-              <p className="text-purple-100 text-sm font-medium">Selected</p>
-              <p className="text-2xl font-bold">{summary.selectedCount}</p>
+              <p className='text-purple-100 text-sm font-medium'>Selected</p>
+              <p className='text-2xl font-bold'>{summary.selectedCount}</p>
             </div>
-            <Users className="w-8 h-8 text-purple-200" />
+            <Users className='w-8 h-8 text-purple-200' />
           </div>
         </Card>
       </div>
 
       {/* Records Table */}
       {!loading && !fetchError && (
-        <Card title="Records for Approval" subtitle={`Showing ${getCurrentPageEntries().length} of ${filteredEntries.length} records`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+        <Card
+          title='Records for Approval'
+          subtitle={`Showing ${getCurrentPageEntries().length} of ${filteredEntries.length} records`}
+        >
+          <div className='overflow-x-auto'>
+            <table className='min-w-full divide-y divide-gray-200'>
+              <thead className='bg-gray-50'>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                     <input
-                      type="checkbox"
-                      checked={selectedEntries.size === filteredEntries.length && filteredEntries.length > 0}
+                      type='checkbox'
+                      checked={
+                        selectedEntries.size === filteredEntries.length &&
+                        filteredEntries.length > 0
+                      }
                       onChange={handleSelectAll}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
                     />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Staff</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Date
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Company
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Staff
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Amount
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Type
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Status
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {getCurrentPageEntries().map((entry) => (
-                  <tr 
-                    key={entry.id} 
+              <tbody className='bg-white divide-y divide-gray-200'>
+                {getCurrentPageEntries().map(entry => (
+                  <tr
+                    key={entry.id}
                     className={`${getRowColor(entry)} cursor-pointer hover:bg-gray-50 transition-colors`}
-                    onClick={(e) => {
+                    onClick={e => {
                       // Don't trigger row click if clicking on checkbox or buttons
-                      if ((e.target as HTMLElement).closest('input[type="checkbox"]') || 
-                          (e.target as HTMLElement).closest('button')) {
+                      if (
+                        (e.target as HTMLElement).closest(
+                          'input[type="checkbox"]'
+                        ) ||
+                        (e.target as HTMLElement).closest('button')
+                      ) {
                         return;
                       }
                       handleSelectEntry(entry.id);
                     }}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                       <input
-                        type="checkbox"
+                        type='checkbox'
                         checked={selectedEntries.has(entry.id)}
-                        onChange={(e) => {
+                        onChange={e => {
                           e.stopPropagation(); // Prevent row click
                           handleSelectEntry(entry.id);
                         }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{entry.c_date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.company_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{entry.staff}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : `₹${entry.debit.toLocaleString()}`}
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {entry.c_date}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.company_name}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.staff}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.credit > 0
+                        ? `₹${entry.credit.toLocaleString()}`
+                        : `₹${entry.debit.toLocaleString()}`}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                       {entry.credit > 0 ? 'Credit' : 'Debit'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                       {entry.approved === true ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
                           Approved
                         </span>
                       ) : entry.approved === false ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
                           Rejected
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
                           Pending
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                       <Button
-                        
-                        variant="secondary"
+                        variant='secondary'
                         onClick={() => {
                           handleDirectApprove(entry.id);
                         }}
-                        className="mr-2"
+                        className='mr-2'
                         disabled={entry.approved === true}
                       >
                         Approve
                       </Button>
                       <Button
-                        
-                        variant="secondary"
+                        variant='secondary'
                         onClick={() => {
                           handleDirectReject(entry.id);
                         }}
-                        className="mr-2"
+                        className='mr-2'
                         disabled={entry.approved === false}
                       >
                         Reject
                       </Button>
                       <Button
-                        
-                        variant="secondary"
+                        variant='secondary'
                         onClick={() => {
                           // TODO: Implement view functionality
                           toast.success('View functionality coming soon');
                         }}
-                        className="mr-2"
+                        className='mr-2'
                       >
                         View
                       </Button>
@@ -1017,50 +1108,68 @@ const ApproveRecords: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-4 px-2 py-3 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
+          <div className='flex items-center justify-between mt-4 px-2 py-3 sm:px-6'>
+            <div className='flex-1 flex justify-between sm:hidden'>
               <Button
-                
-                variant="secondary"
+                variant='secondary'
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
               >
                 Previous
               </Button>
               <Button
-                
-                variant="secondary"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                variant='secondary'
+                onClick={() =>
+                  setCurrentPage(prev => Math.min(totalPages, prev + 1))
+                }
                 disabled={currentPage === totalPages}
               >
                 Next
               </Button>
             </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div className="flex-1 text-sm text-center">
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-semibold">{currentPage * recordsPerPage - recordsPerPage + 1}</span> to{' '}
-                  <span className="font-semibold">{Math.min(currentPage * recordsPerPage, filteredEntries.length)}</span> of{' '}
-                  <span className="font-semibold">{filteredEntries.length}</span> results
+            <div className='hidden sm:flex-1 sm:flex sm:items-center sm:justify-between'>
+              <div className='flex-1 text-sm text-center'>
+                <p className='text-sm text-gray-700'>
+                  Showing{' '}
+                  <span className='font-semibold'>
+                    {currentPage * recordsPerPage - recordsPerPage + 1}
+                  </span>{' '}
+                  to{' '}
+                  <span className='font-semibold'>
+                    {Math.min(
+                      currentPage * recordsPerPage,
+                      filteredEntries.length
+                    )}
+                  </span>{' '}
+                  of{' '}
+                  <span className='font-semibold'>
+                    {filteredEntries.length}
+                  </span>{' '}
+                  results
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav
+                  className='relative z-0 inline-flex rounded-md shadow-sm -space-x-px'
+                  aria-label='Pagination'
+                >
                   <Button
-                    
-                    variant="secondary"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    variant='secondary'
+                    onClick={() =>
+                      setCurrentPage(prev => Math.max(1, prev - 1))
+                    }
                     disabled={currentPage === 1}
-                    className="rounded-l-md"
+                    className='rounded-l-md'
                   >
                     Previous
                   </Button>
                   <Button
-                    
-                    variant="secondary"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    variant='secondary'
+                    onClick={() =>
+                      setCurrentPage(prev => Math.min(totalPages, prev + 1))
+                    }
                     disabled={currentPage === totalPages}
-                    className="rounded-r-md"
+                    className='rounded-r-md'
                   >
                     Next
                   </Button>
