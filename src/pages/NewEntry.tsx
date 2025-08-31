@@ -1146,473 +1146,493 @@ const NewEntry: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Form */}
-          <Card className='p-8 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'>
-            <form onSubmit={handleSubmit} className='space-y-6'>
-              {/* Dual Entry Toggle */}
-              <div className='flex items-center mb-4'>
-                <input
-                  type='checkbox'
-                  id='dualEntryEnabled'
-                  checked={dualEntryEnabled}
-                  onChange={e => setDualEntryEnabled(e.target.checked)}
-                  className='mr-2'
-                />
-                <label
-                  htmlFor='dualEntryEnabled'
-                  className='text-sm font-medium'
-                >
-                  Enable Dual Entry
-                </label>
-              </div>
-              {/* Basic Information */}
-              <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
-                <Input
-                  label='Date'
-                  type='date'
-                  value={entry.date}
-                  onChange={value => handleInputChange('date', value)}
-                  required
-                />
-
-                <div className='space-y-2'>
-                  <Select
-                    label='Company Name'
-                    value={entry.companyName}
-                    onChange={value => handleInputChange('companyName', value)}
-                    options={companies}
-                    placeholder='Select company...'
-                    required
-                  />
-                  <div className='flex gap-2'>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='secondary'
-                      onClick={() => setShowNewCompany(true)}
-                      className='flex-1'
-                    >
-                      <Building className='w-4 h-4 mr-1' />
-                      Add Company
-                    </Button>
-                    {entry.companyName && (
-                      <Button
-                        type='button'
-                        size='sm'
-                        variant='danger'
-                        onClick={() => handleDelete('company')}
-                        className='flex-1'
-                      >
-                        <Trash2 className='w-4 h-4 mr-1' />
-                        Delete
-                      </Button>
-                    )}
-                  </div>
+          {/* Main Content - Vertical Layout */}
+          <div className='space-y-6'>
+            {/* Recent Entries Card - Moved to Top */}
+            <Card title='Recent Entries'>
+              {recentEntries.length === 0 ? (
+                <div className='text-center text-gray-500 py-4'>
+                  No recent entries found.
                 </div>
-
-                <Select
-                  label='Staff'
-                  value={entry.staff}
-                  onChange={value => handleInputChange('staff', value)}
-                  options={users}
-                  placeholder='Select staff...'
-                  required
-                />
-              </div>
-
-              {/* Account Information */}
-              <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                <div className='space-y-2'>
-                  <Select
-                    label='Main Account'
-                    value={entry.accountName}
-                    onChange={value => handleInputChange('accountName', value)}
-                    options={accounts}
-                    placeholder='Select account...'
-                    required
-                    disabled={!entry.companyName}
-                  />
-                  <div className='flex gap-2'>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='secondary'
-                      onClick={() => setShowNewAccount(true)}
-                      className='flex-1'
-                      disabled={!entry.companyName}
-                    >
-                      <FileText className='w-4 h-4 mr-1' />
-                      Add Account
-                    </Button>
-                    {entry.accountName && (
-                      <Button
-                        type='button'
-                        size='sm'
-                        variant='danger'
-                        onClick={() => handleDelete('account')}
-                        className='flex-1'
-                      >
-                        <Trash2 className='w-4 h-4 mr-1' />
-                        Delete
-                      </Button>
-                    )}
-                  </div>
+              ) : (
+                <div className='overflow-x-auto'>
+                  <table className='w-full text-sm border border-gray-200'>
+                    <thead className='bg-gray-50 border-b border-gray-200'>
+                      <tr>
+                        <th className='px-3 py-2 text-left'>S.No</th>
+                        <th className='px-3 py-2 text-left'>Date</th>
+                        <th className='px-3 py-2 text-left'>Company</th>
+                        <th className='px-3 py-2 text-left'>Account</th>
+                        <th className='px-3 py-2 text-left'>Particulars</th>
+                        <th className='px-3 py-2 text-left'>Credit</th>
+                        <th className='px-3 py-2 text-left'>Debit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentEntries.map((entry, idx) => (
+                        <tr
+                          key={entry.id}
+                          className='border-b border-gray-100 hover:bg-gray-50'
+                        >
+                          <td className='px-3 py-2 text-center'>{entry.sno}</td>
+                          <td className='px-3 py-2'>{entry.c_date}</td>
+                          <td className='px-3 py-2'>{entry.company_name}</td>
+                          <td className='px-3 py-2'>{entry.acc_name}</td>
+                          <td className='px-3 py-2'>{entry.particulars}</td>
+                          <td className='px-3 py-2 text-right'>
+                            {parseFloat(entry.credit || '0').toLocaleString()}
+                          </td>
+                          <td className='px-3 py-2 text-right'>
+                            {parseFloat(entry.debit || '0').toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+              )}
+            </Card>
 
-                <div className='space-y-2'>
-                  <Select
-                    label='Sub Account'
-                    value={entry.subAccount}
-                    onChange={value => handleInputChange('subAccount', value)}
-                    options={subAccounts}
-                    placeholder='Select sub account...'
-                    disabled={!entry.accountName}
-                  />
-                  <div className='flex gap-2'>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='secondary'
-                      onClick={() => setShowNewSubAccount(true)}
-                      className='flex-1'
-                      disabled={!entry.accountName}
-                    >
-                      <FileText className='w-4 h-4 mr-1' />
-                      Add Sub Account
-                    </Button>
-                    {entry.subAccount && (
-                      <Button
-                        type='button'
-                        size='sm'
-                        variant='danger'
-                        onClick={() => handleDelete('subAccount')}
-                        className='flex-1'
-                      >
-                        <Trash2 className='w-4 h-4 mr-1' />
-                        Delete
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Particulars */}
-              <Input
-                label='Particulars'
-                value={entry.particulars}
-                onChange={value => handleInputChange('particulars', value)}
-                placeholder='Enter transaction details...'
-                required
-              />
-
-              {/* Amounts */}
-              <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                <Input
-                  label='Credit'
-                  value={entry.credit}
-                  onChange={val => setEntry(prev => ({ ...prev, credit: val }))}
-                  placeholder='Enter credit amount'
-                  type='number'
-                  min='0'
-                />
-                <Input
-                  label='Debit'
-                  value={entry.debit}
-                  onChange={val => setEntry(prev => ({ ...prev, debit: val }))}
-                  placeholder='Enter debit amount'
-                  type='number'
-                  min='0'
-                />
-              </div>
-
-              {/* Combined Quantity Checkbox and Inputs */}
-              <div className='space-y-4'>
-                <div className='flex items-center gap-2'>
+            {/* Entry Form - Moved Below Recent Entries */}
+            <Card
+              title='New Entry Form'
+              className='p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+            >
+              <form onSubmit={handleSubmit} className='space-y-4'>
+                {/* Dual Entry Toggle */}
+                <div className='flex items-center mb-4'>
                   <input
                     type='checkbox'
-                    checked={entry.quantityChecked}
-                    onChange={e =>
-                      setEntry(prev => ({
-                        ...prev,
-                        quantityChecked: e.target.checked,
-                        saleQ: e.target.checked ? prev.saleQ : '',
-                        purchaseQ: e.target.checked ? prev.purchaseQ : '',
-                      }))
-                    }
-                    id='quantityChecked'
+                    id='dualEntryEnabled'
+                    checked={dualEntryEnabled}
+                    onChange={e => setDualEntryEnabled(e.target.checked)}
+                    className='mr-2'
                   />
                   <label
-                    htmlFor='quantityChecked'
+                    htmlFor='dualEntryEnabled'
                     className='text-sm font-medium'
                   >
-                    Quantity Details
+                    Enable Dual Entry
                   </label>
                 </div>
 
-                {entry.quantityChecked && (
-                  <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                    <Input
-                      label='Sale Quantity'
-                      value={entry.saleQ}
-                      onChange={val =>
-                        setEntry(prev => ({ ...prev, saleQ: val }))
-                      }
-                      placeholder='0'
-                      type='number'
-                      min='0'
-                    />
-                    <Input
-                      label='Purchase Quantity'
-                      value={entry.purchaseQ}
-                      onChange={val =>
-                        setEntry(prev => ({ ...prev, purchaseQ: val }))
-                      }
-                      placeholder='0'
-                      type='number'
-                      min='0'
-                    />
-                  </div>
-                )}
-              </div>
+                {/* Basic Information */}
+                <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+                  <Input
+                    label='Date'
+                    type='date'
+                    value={entry.date}
+                    onChange={value => handleInputChange('date', value)}
+                    required
+                  />
 
-              {/* Dual Entry Section */}
-              {dualEntryEnabled && (
-                <div className='border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50'>
-                  <h3 className='text-lg font-bold mb-4 text-blue-700'>
-                    Dual Entry
-                  </h3>
-                  {/* Basic Information */}
-                  <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
-                    <Input
-                      label='Date'
-                      type='date'
-                      value={dualEntry.date}
-                      onChange={value =>
-                        setDualEntry(prev => ({ ...prev, date: value }))
-                      }
-                      required
-                    />
+                  <div className='space-y-2'>
                     <Select
                       label='Company Name'
-                      value={dualEntry.companyName}
+                      value={entry.companyName}
                       onChange={value =>
-                        setDualEntry(prev => ({ ...prev, companyName: value }))
+                        handleInputChange('companyName', value)
                       }
                       options={companies}
                       placeholder='Select company...'
                       required
                     />
-                    <Select
-                      label='Staff'
-                      value={dualEntry.staff}
-                      onChange={value =>
-                        setDualEntry(prev => ({ ...prev, staff: value }))
-                      }
-                      options={users}
-                      placeholder='Select staff...'
-                      required
-                    />
+                    <div className='flex gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='secondary'
+                        onClick={() => setShowNewCompany(true)}
+                        className='flex-1'
+                      >
+                        <Building className='w-4 h-4 mr-1' />
+                        Add Company
+                      </Button>
+                      {entry.companyName && (
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='danger'
+                          onClick={() => handleDelete('company')}
+                          className='flex-1'
+                        >
+                          <Trash2 className='w-4 h-4 mr-1' />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  {/* Account Information */}
-                  <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
+
+                  <Select
+                    label='Staff'
+                    value={entry.staff}
+                    onChange={value => handleInputChange('staff', value)}
+                    options={users}
+                    placeholder='Select staff...'
+                    required
+                  />
+                </div>
+
+                {/* Account Information */}
+                <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                  <div className='space-y-2'>
                     <Select
                       label='Main Account'
-                      value={dualEntry.accountName}
+                      value={entry.accountName}
                       onChange={value =>
-                        setDualEntry(prev => ({ ...prev, accountName: value }))
+                        handleInputChange('accountName', value)
                       }
                       options={accounts}
                       placeholder='Select account...'
                       required
-                      disabled={!dualEntry.companyName}
+                      disabled={!entry.companyName}
                     />
+                    <div className='flex gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='secondary'
+                        onClick={() => setShowNewAccount(true)}
+                        className='flex-1'
+                        disabled={!entry.companyName}
+                      >
+                        <FileText className='w-4 h-4 mr-1' />
+                        Add Account
+                      </Button>
+                      {entry.accountName && (
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='danger'
+                          onClick={() => handleDelete('account')}
+                          className='flex-1'
+                        >
+                          <Trash2 className='w-4 h-4 mr-1' />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className='space-y-2'>
                     <Select
                       label='Sub Account'
-                      value={dualEntry.subAccount}
-                      onChange={value =>
-                        setDualEntry(prev => ({ ...prev, subAccount: value }))
-                      }
+                      value={entry.subAccount}
+                      onChange={value => handleInputChange('subAccount', value)}
                       options={subAccounts}
                       placeholder='Select sub account...'
-                      disabled={!dualEntry.accountName}
+                      disabled={!entry.accountName}
                     />
-                  </div>
-                  {/* Particulars */}
-                  <Input
-                    label='Particulars'
-                    value={dualEntry.particulars}
-                    onChange={value =>
-                      setDualEntry(prev => ({ ...prev, particulars: value }))
-                    }
-                    placeholder='Enter transaction details...'
-                    required
-                    className='mt-2'
-                  />
-                  {/* Amounts */}
-                  <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
-                    <Input
-                      label='Credit'
-                      value={dualEntry.credit}
-                      onChange={val =>
-                        setDualEntry(prev => ({ ...prev, credit: val }))
-                      }
-                      placeholder='Enter credit amount'
-                      type='number'
-                      min='0'
-                    />
-                    <Input
-                      label='Debit'
-                      value={dualEntry.debit}
-                      onChange={val =>
-                        setDualEntry(prev => ({ ...prev, debit: val }))
-                      }
-                      placeholder='Enter debit amount'
-                      type='number'
-                      min='0'
-                    />
-                  </div>
-                  {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
-                  <div className='space-y-4 mt-2'>
-                    <div className='flex items-center gap-2'>
-                      <input
-                        type='checkbox'
-                        checked={dualEntry.quantityChecked}
-                        onChange={e =>
-                          setDualEntry(prev => ({
-                            ...prev,
-                            quantityChecked: e.target.checked,
-                            saleQ: e.target.checked ? prev.saleQ : '',
-                            purchaseQ: e.target.checked ? prev.purchaseQ : '',
-                          }))
-                        }
-                        id='dualQuantityChecked'
-                      />
-                      <label
-                        htmlFor='dualQuantityChecked'
-                        className='text-sm font-medium'
+                    <div className='flex gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='secondary'
+                        onClick={() => setShowNewSubAccount(true)}
+                        className='flex-1'
+                        disabled={!entry.accountName}
                       >
-                        Quantity Details
-                      </label>
+                        <FileText className='w-4 h-4 mr-1' />
+                        Add Sub Account
+                      </Button>
+                      {entry.subAccount && (
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='danger'
+                          onClick={() => handleDelete('subAccount')}
+                          className='flex-1'
+                        >
+                          <Trash2 className='w-4 h-4 mr-1' />
+                          Delete
+                        </Button>
+                      )}
                     </div>
-
-                    {dualEntry.quantityChecked && (
-                      <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                        <Input
-                          label='Sale Quantity'
-                          value={dualEntry.saleQ}
-                          onChange={val =>
-                            setDualEntry(prev => ({ ...prev, saleQ: val }))
-                          }
-                          placeholder='0'
-                          type='number'
-                          min='0'
-                        />
-                        <Input
-                          label='Purchase Quantity'
-                          value={dualEntry.purchaseQ}
-                          onChange={val =>
-                            setDualEntry(prev => ({ ...prev, purchaseQ: val }))
-                          }
-                          placeholder='0'
-                          type='number'
-                          min='0'
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
-              )}
 
-              {/* Action Buttons */}
-              <div className='flex gap-4 pt-4'>
-                <Button
-                  type='submit'
-                  disabled={loading}
-                  className='flex-1 lg:flex-none text-lg py-3'
-                >
-                  {loading ? 'Saving...' : 'Save Entry'}
-                </Button>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => {
-                    setEntry({
-                      date: entry.date,
-                      companyName: '',
-                      accountName: '',
-                      subAccount: '',
-                      particulars: '',
-                      saleQ: '',
-                      purchaseQ: '',
-                      credit: '',
-                      debit: '',
-                      creditOnline: '',
-                      creditOffline: '',
-                      debitOnline: '',
-                      debitOffline: '',
-                      staff: user?.username || '',
-                      quantityChecked: false,
-                    });
-                    setAccounts([]);
-                    setSubAccounts([]);
-                  }}
-                  className='flex-1 lg:flex-none text-lg py-3'
-                >
-                  Reset Form
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
+                {/* Particulars */}
+                <Input
+                  label='Particulars'
+                  value={entry.particulars}
+                  onChange={value => handleInputChange('particulars', value)}
+                  placeholder='Enter transaction details...'
+                  required
+                />
 
-        {/* Recent Entries Card */}
-        <Card title='Recent Entries' className='mt-8 w-full max-w-6xl mx-auto'>
-          {recentEntries.length === 0 ? (
-            <div className='text-center text-gray-500 py-4'>
-              No recent entries found.
-            </div>
-          ) : (
-            <div className='overflow-x-auto'>
-              <table className='w-full text-sm border border-gray-200'>
-                <thead className='bg-gray-50 border-b border-gray-200'>
-                  <tr>
-                    <th className='px-3 py-2 text-left'>S.No</th>
-                    <th className='px-3 py-2 text-left'>Date</th>
-                    <th className='px-3 py-2 text-left'>Company</th>
-                    <th className='px-3 py-2 text-left'>Account</th>
-                    <th className='px-3 py-2 text-left'>Particulars</th>
-                    <th className='px-3 py-2 text-left'>Credit</th>
-                    <th className='px-3 py-2 text-left'>Debit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentEntries.map((entry, idx) => (
-                    <tr
-                      key={entry.id}
-                      className='border-b border-gray-100 hover:bg-gray-50'
+                {/* Amounts */}
+                <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                  <Input
+                    label='Credit'
+                    value={entry.credit}
+                    onChange={val =>
+                      setEntry(prev => ({ ...prev, credit: val }))
+                    }
+                    placeholder='Enter credit amount'
+                    type='number'
+                    min='0'
+                  />
+                  <Input
+                    label='Debit'
+                    value={entry.debit}
+                    onChange={val =>
+                      setEntry(prev => ({ ...prev, debit: val }))
+                    }
+                    placeholder='Enter debit amount'
+                    type='number'
+                    min='0'
+                  />
+                </div>
+
+                {/* Combined Quantity Checkbox and Inputs */}
+                <div className='space-y-4'>
+                  <div className='flex items-center gap-2'>
+                    <input
+                      type='checkbox'
+                      checked={entry.quantityChecked}
+                      onChange={e =>
+                        setEntry(prev => ({
+                          ...prev,
+                          quantityChecked: e.target.checked,
+                          saleQ: e.target.checked ? prev.saleQ : '',
+                          purchaseQ: e.target.checked ? prev.purchaseQ : '',
+                        }))
+                      }
+                      id='quantityChecked'
+                    />
+                    <label
+                      htmlFor='quantityChecked'
+                      className='text-sm font-medium'
                     >
-                      <td className='px-3 py-2 text-center'>{entry.sno}</td>
-                      <td className='px-3 py-2'>{entry.c_date}</td>
-                      <td className='px-3 py-2'>{entry.company_name}</td>
-                      <td className='px-3 py-2'>{entry.acc_name}</td>
-                      <td className='px-3 py-2'>{entry.particulars}</td>
-                      <td className='px-3 py-2 text-green-700 font-medium'>
-                        {entry.credit > 0
-                          ? `₹${entry.credit.toLocaleString()}`
-                          : '-'}
-                      </td>
-                      <td className='px-3 py-2 text-red-700 font-medium'>
-                        {entry.debit > 0
-                          ? `₹${entry.debit.toLocaleString()}`
-                          : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+                      Quantity Details
+                    </label>
+                  </div>
+
+                  {entry.quantityChecked && (
+                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                      <Input
+                        label='Sale Quantity'
+                        value={entry.saleQ}
+                        onChange={val =>
+                          setEntry(prev => ({ ...prev, saleQ: val }))
+                        }
+                        placeholder='0'
+                        type='number'
+                        min='0'
+                      />
+                      <Input
+                        label='Purchase Quantity'
+                        value={entry.purchaseQ}
+                        onChange={val =>
+                          setEntry(prev => ({ ...prev, purchaseQ: val }))
+                        }
+                        placeholder='0'
+                        type='number'
+                        min='0'
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Dual Entry Section */}
+                {dualEntryEnabled && (
+                  <div className='border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50'>
+                    <h3 className='text-lg font-bold mb-4 text-blue-700'>
+                      Dual Entry
+                    </h3>
+                    {/* Basic Information */}
+                    <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+                      <Input
+                        label='Date'
+                        type='date'
+                        value={dualEntry.date}
+                        onChange={value =>
+                          setDualEntry(prev => ({ ...prev, date: value }))
+                        }
+                        required
+                      />
+                      <Select
+                        label='Company Name'
+                        value={dualEntry.companyName}
+                        onChange={value =>
+                          setDualEntry(prev => ({
+                            ...prev,
+                            companyName: value,
+                          }))
+                        }
+                        options={companies}
+                        placeholder='Select company...'
+                        required
+                      />
+                      <Select
+                        label='Staff'
+                        value={dualEntry.staff}
+                        onChange={value =>
+                          setDualEntry(prev => ({ ...prev, staff: value }))
+                        }
+                        options={users}
+                        placeholder='Select staff...'
+                        required
+                      />
+                    </div>
+                    {/* Account Information */}
+                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
+                      <Select
+                        label='Main Account'
+                        value={dualEntry.accountName}
+                        onChange={value =>
+                          setDualEntry(prev => ({
+                            ...prev,
+                            accountName: value,
+                          }))
+                        }
+                        options={accounts}
+                        placeholder='Select account...'
+                        required
+                        disabled={!dualEntry.companyName}
+                      />
+                      <Select
+                        label='Sub Account'
+                        value={dualEntry.subAccount}
+                        onChange={value =>
+                          setDualEntry(prev => ({ ...prev, subAccount: value }))
+                        }
+                        options={subAccounts}
+                        placeholder='Select sub account...'
+                        disabled={!dualEntry.accountName}
+                      />
+                    </div>
+                    {/* Particulars */}
+                    <Input
+                      label='Particulars'
+                      value={dualEntry.particulars}
+                      onChange={value =>
+                        setDualEntry(prev => ({ ...prev, particulars: value }))
+                      }
+                      placeholder='Enter transaction details...'
+                      required
+                      className='mt-2'
+                    />
+                    {/* Amounts */}
+                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
+                      <Input
+                        label='Credit'
+                        value={dualEntry.credit}
+                        onChange={val =>
+                          setDualEntry(prev => ({ ...prev, credit: val }))
+                        }
+                        placeholder='Enter credit amount'
+                        type='number'
+                        min='0'
+                      />
+                      <Input
+                        label='Debit'
+                        value={dualEntry.debit}
+                        onChange={val =>
+                          setDualEntry(prev => ({ ...prev, debit: val }))
+                        }
+                        placeholder='Enter debit amount'
+                        type='number'
+                        min='0'
+                      />
+                    </div>
+                    {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
+                    <div className='space-y-4 mt-2'>
+                      <div className='flex items-center gap-2'>
+                        <input
+                          type='checkbox'
+                          checked={dualEntry.quantityChecked}
+                          onChange={e =>
+                            setDualEntry(prev => ({
+                              ...prev,
+                              quantityChecked: e.target.checked,
+                              saleQ: e.target.checked ? prev.saleQ : '',
+                              purchaseQ: e.target.checked ? prev.purchaseQ : '',
+                            }))
+                          }
+                          id='dualQuantityChecked'
+                        />
+                        <label
+                          htmlFor='dualQuantityChecked'
+                          className='text-sm font-medium'
+                        >
+                          Quantity Details
+                        </label>
+                      </div>
+
+                      {dualEntry.quantityChecked && (
+                        <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                          <Input
+                            label='Sale Quantity'
+                            value={dualEntry.saleQ}
+                            onChange={val =>
+                              setDualEntry(prev => ({ ...prev, saleQ: val }))
+                            }
+                            placeholder='0'
+                            type='number'
+                            min='0'
+                          />
+                          <Input
+                            label='Purchase Quantity'
+                            value={dualEntry.purchaseQ}
+                            onChange={val =>
+                              setDualEntry(prev => ({
+                                ...prev,
+                                purchaseQ: val,
+                              }))
+                            }
+                            placeholder='0'
+                            type='number'
+                            min='0'
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className='flex gap-4 pt-4'>
+                  <Button
+                    type='submit'
+                    disabled={loading}
+                    className='flex-1 lg:flex-none text-lg py-3'
+                  >
+                    {loading ? 'Saving...' : 'Save Entry'}
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={() => {
+                      setEntry({
+                        date: entry.date,
+                        companyName: '',
+                        accountName: '',
+                        subAccount: '',
+                        particulars: '',
+                        saleQ: '',
+                        purchaseQ: '',
+                        credit: '',
+                        debit: '',
+                        creditOnline: '',
+                        creditOffline: '',
+                        debitOnline: '',
+                        debitOffline: '',
+                        staff: user?.username || '',
+                        quantityChecked: false,
+                      });
+                      setAccounts([]);
+                      setSubAccounts([]);
+                    }}
+                    className='flex-1 lg:flex-none text-lg py-3'
+                  >
+                    Reset Form
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          </div>
+        </div>
       </div>
 
       {/* Create Company Modal */}

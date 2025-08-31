@@ -94,6 +94,50 @@ const DetailedLedger: React.FC = () => {
     applyFilters();
   }, [ledgerEntries, filters, searchTerm]);
 
+  // Filter accounts when company changes
+  useEffect(() => {
+    console.log('Company filter changed:', filters.companyName);
+    if (filters.companyName) {
+      console.log('Loading accounts for company:', filters.companyName);
+      loadAccountsByCompany(filters.companyName);
+      // Reset main account and sub account when company changes
+      setFilters(prev => ({
+        ...prev,
+        mainAccount: '',
+        subAccount: '',
+      }));
+    } else {
+      console.log('No company selected - clearing accounts and sub-accounts');
+      // If no company selected, clear accounts and sub-accounts
+      setAccounts([{ value: '', label: 'Select a company first' }]);
+      setSubAccounts([{ value: '', label: 'Select a company first' }]);
+      // Reset main account and sub account when company is cleared
+      setFilters(prev => ({
+        ...prev,
+        mainAccount: '',
+        subAccount: '',
+      }));
+    }
+  }, [filters.companyName]);
+
+  // Filter sub accounts when main account changes
+  useEffect(() => {
+    if (filters.companyName && filters.mainAccount) {
+      loadSubAccountsByAccount(filters.companyName, filters.mainAccount);
+      // Reset sub account when main account changes
+      setFilters(prev => ({
+        ...prev,
+        subAccount: '',
+      }));
+    } else if (filters.companyName) {
+      // If company is selected but no main account, show all sub accounts for the company
+      loadAllSubAccountsForCompany(filters.companyName);
+    } else {
+      // If no company selected, clear sub accounts
+      setSubAccounts([{ value: '', label: 'Select a company first' }]);
+    }
+  }, [filters.companyName, filters.mainAccount]);
+
   const loadDropdownData = async () => {
     try {
       // Load companies
@@ -104,24 +148,9 @@ const DetailedLedger: React.FC = () => {
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
 
-      // Load all accounts independently
-      const allAccounts = await supabaseDB.getAccounts();
-      const accountsData = allAccounts.map((account: any) => ({
-        value: account.acc_name,
-        label: account.acc_name,
-      }));
-      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
-
-      // Load all sub accounts independently
-      const allSubAccounts = await supabaseDB.getSubAccounts();
-      const subAccountsData = allSubAccounts.map((subAcc: any) => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
-      }));
-      setSubAccounts([
-        { value: '', label: 'All Sub Accounts' },
-        ...subAccountsData,
-      ]);
+      // Initialize accounts and sub-accounts as empty - they will be loaded when company is selected
+      setAccounts([{ value: '', label: 'Select a company first' }]);
+      setSubAccounts([{ value: '', label: 'Select a company first' }]);
 
       // Load staff
       const users = await supabaseDB.getUsers();
@@ -135,6 +164,104 @@ const DetailedLedger: React.FC = () => {
     } catch (error) {
       console.error('Error loading dropdown data:', error);
       toast.error('Failed to load dropdown data');
+    }
+  };
+
+  const loadAllAccounts = async () => {
+    try {
+      const allAccounts = await supabaseDB.getAccounts();
+      const accountsData = allAccounts.map((account: any) => ({
+        value: account.acc_name,
+        label: account.acc_name,
+      }));
+      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
+    } catch (error) {
+      console.error('Error loading all accounts:', error);
+      // Fallback to empty state
+      setAccounts([{ value: '', label: 'Select a company first' }]);
+    }
+  };
+
+  const loadAllSubAccounts = async () => {
+    try {
+      const allSubAccounts = await supabaseDB.getSubAccounts();
+      const subAccountsData = allSubAccounts.map((subAcc: any) => ({
+        value: subAcc.sub_acc,
+        label: subAcc.sub_acc,
+      }));
+      setSubAccounts([
+        { value: '', label: 'All Sub Accounts' },
+        ...subAccountsData,
+      ]);
+    } catch (error) {
+      console.error('Error loading all sub accounts:', error);
+      // Fallback to empty state
+      setSubAccounts([{ value: '', label: 'Select a company first' }]);
+    }
+  };
+
+  const loadAccountsByCompany = async (companyName: string) => {
+    try {
+      console.log('Fetching accounts for company:', companyName);
+      const accounts = await supabaseDB.getAccountsByCompany(companyName);
+      console.log('Fetched accounts:', accounts);
+      const accountsData = accounts.map((account: any) => ({
+        value: account.acc_name,
+        label: account.acc_name,
+      }));
+      console.log('Setting accounts data:', accountsData);
+      setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
+    } catch (error) {
+      console.error('Error loading accounts by company:', error);
+      // Fallback to all accounts if there's an error
+      await loadAllAccounts();
+    }
+  };
+
+  const loadSubAccountsByAccount = async (
+    companyName: string,
+    accountName: string
+  ) => {
+    try {
+      const subAccounts = await supabaseDB.getSubAccountsByAccount(
+        companyName,
+        accountName
+      );
+      const subAccountsData = subAccounts.map((subAcc: any) => ({
+        value: subAcc.sub_acc,
+        label: subAcc.sub_acc,
+      }));
+      setSubAccounts([
+        { value: '', label: 'All Sub Accounts' },
+        ...subAccountsData,
+      ]);
+    } catch (error) {
+      console.error('Error loading sub accounts by account:', error);
+      // Fallback to all sub accounts for the company if there's an error
+      await loadAllSubAccountsForCompany(companyName);
+    }
+  };
+
+  const loadAllSubAccountsForCompany = async (companyName: string) => {
+    try {
+      // Get all sub accounts that belong to the company
+      const allSubAccounts = await supabaseDB.getSubAccounts();
+      const companySubAccounts = allSubAccounts.filter(
+        (subAcc: any) => subAcc.company_name === companyName
+      );
+
+      const subAccountsData = companySubAccounts.map((subAcc: any) => ({
+        value: subAcc.sub_acc,
+        label: subAcc.sub_acc,
+      }));
+      setSubAccounts([
+        { value: '', label: 'All Sub Accounts' },
+        ...subAccountsData,
+      ]);
+    } catch (error) {
+      console.error('Error loading sub accounts for company:', error);
+      // Fallback to all sub accounts if there's an error
+      await loadAllSubAccounts();
     }
   };
 
@@ -259,18 +386,24 @@ const DetailedLedger: React.FC = () => {
     field: keyof DetailedLedgerFilters,
     value: any
   ) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value,
-    }));
+    console.log('Filter change:', field, value);
+    setFilters(prev => {
+      const newFilters = { ...prev, [field]: value };
 
-    // Reset dependent filters
-    if (field === 'companyName') {
-      setFilters(prev => ({ ...prev, mainAccount: '', subAccount: '' }));
-    }
-    if (field === 'mainAccount') {
-      setFilters(prev => ({ ...prev, subAccount: '' }));
-    }
+      // Reset dependent filters
+      if (field === 'companyName') {
+        newFilters.mainAccount = '';
+        newFilters.subAccount = '';
+        console.log('Reset main account and sub account');
+      }
+      if (field === 'mainAccount') {
+        newFilters.subAccount = '';
+        console.log('Reset sub account');
+      }
+
+      console.log('New filters:', newFilters);
+      return newFilters;
+    });
   };
 
   const getRecords = () => {
@@ -291,6 +424,9 @@ const DetailedLedger: React.FC = () => {
       betweenDates: true,
     });
     setSearchTerm('');
+    // Reset accounts and sub-accounts to initial state
+    setAccounts([{ value: '', label: 'Select a company first' }]);
+    setSubAccounts([{ value: '', label: 'Select a company first' }]);
     toast.success('Filters reset');
   };
 
@@ -435,6 +571,11 @@ const DetailedLedger: React.FC = () => {
                 onChange={value => handleFilterChange('mainAccount', value)}
                 options={accounts}
                 disabled={!filters.companyName}
+                placeholder={
+                  !filters.companyName
+                    ? 'Select a company first'
+                    : 'Select main account...'
+                }
               />
 
               <Select
@@ -443,6 +584,11 @@ const DetailedLedger: React.FC = () => {
                 onChange={value => handleFilterChange('subAccount', value)}
                 options={subAccounts}
                 disabled={!filters.mainAccount}
+                placeholder={
+                  !filters.mainAccount
+                    ? 'Select a main account first'
+                    : 'Select sub account...'
+                }
               />
 
               <Select
@@ -452,6 +598,23 @@ const DetailedLedger: React.FC = () => {
                 options={staffList}
               />
             </div>
+
+            {/* Filtering Guidance */}
+            {!filters.companyName && (
+              <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
+                <div className='flex items-center gap-2'>
+                  <div className='w-2 h-2 bg-blue-500 rounded-full'></div>
+                  <span className='text-sm text-blue-800 font-medium'>
+                    Filtering Tip
+                  </span>
+                </div>
+                <p className='text-sm text-blue-700 mt-1'>
+                  Select a company first to see its specific main accounts and
+                  sub-accounts. This ensures you only see relevant accounts for
+                  the selected company.
+                </p>
+              </div>
+            )}
 
             {/* Amount Filters */}
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
