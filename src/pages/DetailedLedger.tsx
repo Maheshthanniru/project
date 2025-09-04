@@ -203,11 +203,11 @@ const DetailedLedger: React.FC = () => {
   const loadAccountsByCompany = async (companyName: string) => {
     try {
       console.log('Fetching accounts for company:', companyName);
-      const accounts = await supabaseDB.getAccountsByCompany(companyName);
+      const accounts = await supabaseDB.getDistinctAccountNamesByCompany(companyName);
       console.log('Fetched accounts:', accounts);
-      const accountsData = accounts.map((account: any) => ({
-        value: account.acc_name,
-        label: account.acc_name,
+      const accountsData = accounts.map((account: string) => ({
+        value: account,
+        label: account,
       }));
       console.log('Setting accounts data:', accountsData);
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
@@ -223,13 +223,13 @@ const DetailedLedger: React.FC = () => {
     accountName: string
   ) => {
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(
-        companyName,
-        accountName
+      const subAccounts = await supabaseDB.getSubAccountsByAccountAndCompany(
+        accountName,
+        companyName
       );
-      const subAccountsData = subAccounts.map((subAcc: any) => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+      const subAccountsData = subAccounts.map((subAcc: string) => ({
+        value: subAcc,
+        label: subAcc,
       }));
       setSubAccounts([
         { value: '', label: 'All Sub Accounts' },

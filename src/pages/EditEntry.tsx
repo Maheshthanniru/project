@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -18,6 +18,9 @@ import {
   Unlock,
   Edit,
   History,
+  RefreshCw,
+  Plus,
+  Database,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -48,6 +51,63 @@ const EditEntry: React.FC = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Performance optimization states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(1000); // Show 1000 entries per page for better data visibility
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: '' });
+  
+  // Add filter state variables (moved before memoized filtering)
+  const [filterCompanyName, setFilterCompanyName] = useState('');
+  const [filterAccountName, setFilterAccountName] = useState('');
+  const [filterSubAccountName, setFilterSubAccountName] = useState('');
+  const [filterParticulars, setFilterParticulars] = useState('');
+  const [filterSaleQ, setFilterSaleQ] = useState('');
+  const [filterPurchaseQ, setFilterPurchaseQ] = useState('');
+  
+  // Memoized filtered entries for better performance
+  // Note: Company/Account filters are handled in loadFilteredEntries, not here
+  const filteredEntries = useMemo(() => {
+    let filtered = entries;
+    
+    if (searchTerm) {
+      filtered = filtered.filter(
+        entry =>
+          entry.particulars?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.acc_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (dateFilter) {
+      const filterDate = new Date(dateFilter);
+      filtered = filtered.filter(entry => {
+        const entryDate = new Date(entry.c_date);
+        return entryDate.toDateString() === filterDate.toDateString();
+      });
+    }
+    
+    if (statusFilter) {
+      if (statusFilter === 'locked') {
+        filtered = filtered.filter(entry => entry.lock_record);
+      } else if (statusFilter === 'unlocked') {
+        filtered = filtered.filter(entry => !entry.lock_record);
+      } else if (statusFilter === 'approved') {
+        filtered = filtered.filter(entry => entry.approved);
+      } else if (statusFilter === 'pending') {
+        filtered = filtered.filter(entry => !entry.approved);
+      }
+    }
+    
+    // Company/Account filters are handled in loadFilteredEntries function
+    // to ensure we load from all 67k records, not just the initially loaded subset
+    
+    return filtered;
+  }, [entries, searchTerm, dateFilter, statusFilter]);
+  
   const [showHistory, setShowHistory] = useState(false);
   const [entryHistory, setEntryHistory] = useState<EditHistory[]>([]);
   const [allHistory, setAllHistory] = useState<EditHistory[]>([]);
@@ -83,13 +143,17 @@ const EditEntry: React.FC = () => {
     { value: string; label: string }[]
   >([]);
 
-  // Add filter state variables
-  const [filterCompanyName, setFilterCompanyName] = useState('');
-  const [filterAccountName, setFilterAccountName] = useState('');
-  const [filterSubAccount, setFilterSubAccount] = useState('');
-  const [filterParticulars, setFilterParticulars] = useState('');
-  const [filterSaleQ, setFilterSaleQ] = useState('');
-  const [filterPurchaseQ, setFilterPurchaseQ] = useState('');
+  // New state for dependent dropdowns
+  const [distinctAccountNames, setDistinctAccountNames] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [dependentSubAccounts, setDependentSubAccounts] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [dependentParticulars, setDependentParticulars] = useState<
+    { value: string; label: string }[]
+  >([]);
+
   const [filterCredit, setFilterCredit] = useState('');
   const [filterDebit, setFilterDebit] = useState('');
   const [filterStaff, setFilterStaff] = useState('');
@@ -101,42 +165,79 @@ const EditEntry: React.FC = () => {
 
   useEffect(() => {
     const initializeData = async () => {
+      console.log('🔄 Initializing EditEntry data...');
       await loadEntries();
       await loadDropdownData();
       await loadAllHistory();
     };
 
     initializeData();
+  }, []); // Remove dependencies to prevent re-initialization on filter changes
+
+  // Separate useEffect for filter changes
+  useEffect(() => {
+    console.log('🔄 Filters changed, reloading entries...');
+    loadEntries();
   }, [searchTerm, dateFilter, statusFilter]);
 
-  // Load accounts when company filter changes
+  // Separate useEffect for company/account filters - these need to load filtered data
   useEffect(() => {
-    if (filterCompanyName) {
-      loadAccountsByCompany(filterCompanyName);
+    if (filterCompanyName || filterAccountName || filterSubAccountName) {
+      console.log('🔄 Company/Account filters changed, loading filtered data...');
+      loadFilteredEntries();
     } else {
-      setAccounts([]);
+      console.log('🔄 No company/account filters, loading all entries...');
+      loadEntries();
     }
-  }, [filterCompanyName]);
+  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
 
-  // Load sub accounts when account filter changes
-  useEffect(() => {
-    if (filterCompanyName && filterAccountName) {
-      loadSubAccountsByAccount(filterCompanyName, filterAccountName);
-    } else {
-      setSubAccounts([]);
-    }
-  }, [filterCompanyName, filterAccountName]);
+  // Note: Removed useEffect hooks for company-based account loading
+  // Now using global cash_book data for dependent dropdowns
+
 
   const loadDropdownData = async () => {
     try {
+      console.log('🔄 Loading dropdown data...');
+      
+      // Load ALL companies from companies table (primary source)
+      console.log('🏢 Loading ALL companies from companies table...');
+      
+      // Get count first
+      const companiesCount = await supabaseDB.getCompaniesCount();
+      console.log('📊 Total companies in companies table:', companiesCount);
+      
       const companies = await supabaseDB.getCompanies();
+      console.log('🏢 Raw companies from companies table:', companies.length);
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name,
       }));
+      console.log('🏢 Companies loaded from companies table:', companiesData.length);
+      console.log('🏢 Company names from companies table:', companiesData.map(c => c.label));
+      
+      // Verify we got all companies
+      if (companiesData.length !== companiesCount) {
+        console.warn(`⚠️ Warning: Expected ${companiesCount} companies but got ${companiesData.length}`);
+      }
+      
       setCompanies(companiesData);
+      
+      // Also log cash_book companies for comparison
+      const { data: cashBookCompanyData, error: cashBookError } = await supabase
+        .from('cash_book')
+        .select('company_name')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '')
+        .limit(10000);
+      
+      if (!cashBookError && cashBookCompanyData) {
+        const uniqueCashBookCompanies = [...new Set(cashBookCompanyData.map(item => item.company_name).filter(name => name && name.trim() !== ''))];
+        console.log('📊 Companies with data in cash_book:', uniqueCashBookCompanies.length);
+        console.log('📊 Cash_book company names:', uniqueCashBookCompanies);
+      }
 
       const users = await supabaseDB.getUsers();
+      console.log('👥 Users loaded:', users.length);
       const usersData = users
         .filter(u => u.is_active)
         .map(user => ({
@@ -145,8 +246,12 @@ const EditEntry: React.FC = () => {
         }));
       setUsers(usersData);
 
+      // Load all account names initially for display
+      await loadDistinctAccountNames();
+
       // Load unique values for dropdowns
       const uniqueParticulars = await supabaseDB.getUniqueParticulars();
+      console.log('📝 Particulars loaded:', uniqueParticulars.length);
       const particularsData = uniqueParticulars.map(particular => ({
         value: particular,
         label: particular,
@@ -154,6 +259,7 @@ const EditEntry: React.FC = () => {
       setParticularsOptions(particularsData);
 
       const uniqueSaleQuantities = await supabaseDB.getUniqueSaleQuantities();
+      console.log('📊 Sale quantities loaded:', uniqueSaleQuantities.length);
       const saleQuantityData = uniqueSaleQuantities.map(qty => ({
         value: qty.toString(),
         label: qty.toString(),
@@ -162,6 +268,7 @@ const EditEntry: React.FC = () => {
 
       const uniquePurchaseQuantities =
         await supabaseDB.getUniquePurchaseQuantities();
+      console.log('📦 Purchase quantities loaded:', uniquePurchaseQuantities.length);
       const purchaseQuantityData = uniquePurchaseQuantities.map(qty => ({
         value: qty.toString(),
         label: qty.toString(),
@@ -169,6 +276,7 @@ const EditEntry: React.FC = () => {
       setPurchaseQuantityOptions(purchaseQuantityData);
 
       const uniqueCreditAmounts = await supabaseDB.getUniqueCreditAmounts();
+      console.log('💰 Credit amounts loaded:', uniqueCreditAmounts.length);
       const creditAmountData = uniqueCreditAmounts.map(amount => ({
         value: amount.toString(),
         label: `₹${amount.toLocaleString()}`,
@@ -176,48 +284,92 @@ const EditEntry: React.FC = () => {
       setCreditAmountOptions(creditAmountData);
 
       const uniqueDebitAmounts = await supabaseDB.getUniqueDebitAmounts();
+      console.log('💸 Debit amounts loaded:', uniqueDebitAmounts.length);
       const debitAmountData = uniqueDebitAmounts.map(amount => ({
         value: amount.toString(),
         label: `₹${amount.toLocaleString()}`,
       }));
       setDebitAmountOptions(debitAmountData);
+      
+      console.log('✅ All dropdown data loaded successfully');
     } catch (error) {
-      console.error('Error loading dropdown data:', error);
+      console.error('❌ Error loading dropdown data:', error);
       toast.error('Failed to load dropdown data');
     }
   };
 
-  const loadAccountsByCompany = async (companyName: string) => {
+  // Note: Removed loadAccountsByCompany and loadSubAccountsByAccount functions
+  // Now using loadDistinctAccountNames and loadDependentSubAccounts for real cash_book data
+
+  // New functions for dependent dropdowns
+  const loadDistinctAccountNames = async () => {
     try {
-      const accounts = await supabaseDB.getAccountsByCompany(companyName);
-      const accountsData = accounts.map(account => ({
-        value: account.acc_name,
-        label: account.acc_name,
+      const accountNames = await supabaseDB.getDistinctAccountNames();
+      const accountNamesData = accountNames.map(name => ({
+        value: name,
+        label: name,
       }));
-      setAccounts(accountsData);
+      setDistinctAccountNames(accountNamesData);
     } catch (error) {
-      console.error('Error loading accounts:', error);
-      toast.error('Failed to load accounts');
+      console.error('Error loading distinct account names:', error);
+      toast.error('Failed to load account names');
     }
   };
 
-  const loadSubAccountsByAccount = async (
-    companyName: string,
-    accountName: string
-  ) => {
+  // Company-based filtering functions
+  const loadAccountNamesByCompany = async (companyName: string) => {
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(
-        companyName,
-        accountName
-      );
-      const subAccountsData = subAccounts.map(subAcc => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+      const accountNames = await supabaseDB.getDistinctAccountNamesByCompany(companyName);
+      const accountNamesData = accountNames.map(name => ({
+        value: name,
+        label: name,
       }));
-      setSubAccounts(subAccountsData);
+      setDistinctAccountNames(accountNamesData);
     } catch (error) {
-      console.error('Error loading sub accounts:', error);
+      console.error('Error loading account names by company:', error);
+      toast.error('Failed to load account names');
+    }
+  };
+
+  const loadDependentSubAccounts = async (accountName: string) => {
+    try {
+      const subAccountNames = await supabaseDB.getSubAccountsByAccountName(accountName);
+      const subAccountNamesData = subAccountNames.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDependentSubAccounts(subAccountNamesData);
+    } catch (error) {
+      console.error('Error loading dependent sub accounts:', error);
       toast.error('Failed to load sub accounts');
+    }
+  };
+
+  const loadSubAccountsByAccountAndCompany = async (accountName: string, companyName: string) => {
+    try {
+      const subAccountNames = await supabaseDB.getSubAccountsByAccountAndCompany(accountName, companyName);
+      const subAccountNamesData = subAccountNames.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDependentSubAccounts(subAccountNamesData);
+    } catch (error) {
+      console.error('Error loading sub accounts by account and company:', error);
+      toast.error('Failed to load sub accounts');
+    }
+  };
+
+  const loadDependentParticulars = async (accountName: string, subAccountName: string) => {
+    try {
+      const particulars = await supabaseDB.getParticularsBySubAccount(accountName, subAccountName);
+      const particularsData = particulars.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDependentParticulars(particularsData);
+    } catch (error) {
+      console.error('Error loading dependent particulars:', error);
+      toast.error('Failed to load particulars');
     }
   };
 
@@ -254,9 +406,15 @@ const EditEntry: React.FC = () => {
         'entries'
       );
 
-      // Use the wrapper function
-      let allEntries = await supabaseDB.getCashBookEntries();
-      console.log('✅ Wrapper function returned', allEntries.length, 'entries');
+      // Load first page (1000 entries) for better data visibility
+      let allEntries = await supabaseDB.getCashBookEntries(pageSize, 0);
+      console.log('✅ Initial entries fetched:', allEntries.length);
+      
+      // Get total count for pagination info
+      const { count } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact', head: true });
+      setTotalEntries(count || 0);
 
       // Apply search filter
       if (searchTerm) {
@@ -313,13 +471,13 @@ const EditEntry: React.FC = () => {
               .includes(filterAccountName.toLowerCase())
         );
       }
-      if (filterSubAccount) {
+      if (filterSubAccountName) {
         allEntries = allEntries.filter(
           entry =>
             entry.sub_acc_name &&
             entry.sub_acc_name
               .toLowerCase()
-              .includes(filterSubAccount.toLowerCase())
+              .includes(filterSubAccountName.toLowerCase())
         );
       }
       if (filterParticulars) {
@@ -366,11 +524,9 @@ const EditEntry: React.FC = () => {
       setEntries(allEntries);
 
       if (allEntries.length === 0) {
-        toast.success(
-          'No entries found. This might be due to RLS policies or no data in the database.'
-        );
+        toast.success('No entries found in database');
       } else {
-        toast.success(`Loaded ${allEntries.length} entries successfully`);
+        toast.success(`Loaded ${allEntries.length} entries (showing first ${pageSize} of ${count || 0})`);
       }
     } catch (error) {
       console.error('Error loading entries:', error);
@@ -380,6 +536,100 @@ const EditEntry: React.FC = () => {
       );
     }
   };
+
+  const loadMoreEntries = useCallback(async () => {
+    if (isLoadingMore || entries.length >= totalEntries) return;
+    
+    try {
+      setIsLoadingMore(true);
+      const nextPage = Math.floor(entries.length / pageSize) + 1;
+      const offset = entries.length;
+      
+      console.log(`🔄 Loading more entries - Page: ${nextPage}, Offset: ${offset}`);
+      
+      const moreEntries = await supabaseDB.getCashBookEntries(pageSize, offset);
+      console.log(`✅ Loaded ${moreEntries.length} more entries`);
+      
+      setEntries(prev => [...prev, ...moreEntries]);
+      
+      if (moreEntries.length === 0) {
+        toast.success('No more entries to load');
+      }
+    } catch (error) {
+      console.error('Error loading more entries:', error);
+      toast.error('Failed to load more entries');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [entries.length, totalEntries, pageSize, isLoadingMore]);
+
+  const loadAllEntries = useCallback(async () => {
+    try {
+      setIsLoadingAll(true);
+      setLoadingProgress({ current: 0, total: 0, message: 'Starting to load all entries...' });
+      console.log('🔄 Loading ALL entries from database...');
+      
+      // First get the total count
+      const totalCount = await supabaseDB.getCashBookEntriesCount();
+      setLoadingProgress({ current: 0, total: totalCount, message: `Found ${totalCount} total records, starting to load...` });
+      
+      if (totalCount === 0) {
+        toast.error('No records found in database');
+        return;
+      }
+      
+      // Load all entries using the pagination helper
+      const allEntries = await supabaseDB.getAllCashBookEntries();
+      console.log(`✅ Loaded ALL ${allEntries.length} entries`);
+      
+      setEntries(allEntries);
+      setTotalEntries(allEntries.length);
+      setLoadingProgress({ current: allEntries.length, total: totalCount, message: 'Loading complete!' });
+      
+      toast.success(`Loaded ALL ${allEntries.length} entries successfully`);
+    } catch (error) {
+      console.error('Error loading all entries:', error);
+      toast.error('Failed to load all entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setLoadingProgress({ current: 0, total: 0, message: 'Loading failed' });
+    } finally {
+      setIsLoadingAll(false);
+      // Clear progress after a delay
+      setTimeout(() => {
+        setLoadingProgress({ current: 0, total: 0, message: '' });
+      }, 3000);
+    }
+  }, []);
+
+  const loadFilteredEntries = useCallback(async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 Loading filtered entries with server-side filtering...');
+      console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
+      
+      // Use optimized server-side filtering instead of loading all data
+      const filteredEntries = await supabaseDB.getAllFilteredCashBookEntries({
+        companyName: filterCompanyName || undefined,
+        accountName: filterAccountName || undefined,
+        subAccountName: filterSubAccountName || undefined,
+      });
+      
+      console.log(`📊 Filtered entries loaded: ${filteredEntries.length}`);
+      
+      setEntries(filteredEntries);
+      setTotalEntries(filteredEntries.length);
+      
+      if (filteredEntries.length === 0) {
+        toast.info(`No entries found for the selected filters`);
+      } else {
+        toast.success(`Found ${filteredEntries.length} entries matching your filters`);
+      }
+    } catch (error) {
+      console.error('Error loading filtered entries:', error);
+      toast.error('Failed to load filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
 
   const loadAllHistory = async () => {
     try {
@@ -448,12 +698,25 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
     setSelectedEntry({ ...entry });
     setEditMode(true);
-    // Load accounts and sub accounts for the selected entry
+    
+    // Set filter values to match the selected entry to prevent useEffect from clearing data
+    setFilterCompanyName(entry.company_name || '');
+    setFilterAccountName(entry.acc_name || '');
+    
+    // Load company-specific account names
     if (entry.company_name) {
-      await loadAccountsByCompany(entry.company_name);
+      await loadAccountNamesByCompany(entry.company_name);
     }
-    if (entry.company_name && entry.acc_name) {
-      await loadSubAccountsByAccount(entry.company_name, entry.acc_name);
+    
+    // Load dependent dropdown data for the selected entry
+    if (entry.acc_name && entry.company_name) {
+      await loadSubAccountsByAccountAndCompany(entry.acc_name, entry.company_name);
+    } else if (entry.acc_name) {
+      await loadDependentSubAccounts(entry.acc_name);
+    }
+    
+    if (entry.acc_name && entry.sub_acc_name) {
+      await loadDependentParticulars(entry.acc_name, entry.sub_acc_name);
     }
   };
 
@@ -536,6 +799,12 @@ const EditEntry: React.FC = () => {
     setSelectedEntry(null);
     setAccounts([]);
     setSubAccounts([]);
+    // Clear dependent dropdowns
+    setDependentSubAccounts([]);
+    setDependentParticulars([]);
+    // Reset filter values
+    setFilterCompanyName('');
+    setFilterAccountName('');
   };
 
   const handleInputChange = async (field: string, value: any) => {
@@ -546,16 +815,50 @@ const EditEntry: React.FC = () => {
 
     // Load dependent dropdowns
     if (field === 'company_name') {
-      await loadAccountsByCompany(value);
+      setFilterCompanyName(value);
+      setFilterAccountName('');
       setSelectedEntry((prev: any) => ({
         ...prev,
         acc_name: '',
         sub_acc_name: '',
+        particulars: '',
       }));
+      // Load account names for the selected company
+      if (value) {
+        await loadAccountNamesByCompany(value);
+      } else {
+        // If no company selected, load all account names
+        await loadDistinctAccountNames();
+      }
+      // Clear dependent dropdowns
+      setDependentSubAccounts([]);
+      setDependentParticulars([]);
     }
     if (field === 'acc_name') {
-      await loadSubAccountsByAccount(selectedEntry.company_name, value);
-      setSelectedEntry((prev: any) => ({ ...prev, sub_acc_name: '' }));
+      setFilterAccountName(value);
+      setSelectedEntry((prev: any) => ({ 
+        ...prev, 
+        sub_acc_name: '',
+        particulars: '',
+      }));
+      // Load sub accounts for the selected account and company
+      if (value && selectedEntry.company_name) {
+        await loadSubAccountsByAccountAndCompany(value, selectedEntry.company_name);
+      } else {
+        // Fallback to global sub accounts if no company
+        await loadDependentSubAccounts(value);
+      }
+      setDependentParticulars([]);
+    }
+    if (field === 'sub_acc_name') {
+      setSelectedEntry((prev: any) => ({ 
+        ...prev, 
+        particulars: '',
+      }));
+      // Load dependent particulars
+      if (selectedEntry.acc_name && value) {
+        await loadDependentParticulars(selectedEntry.acc_name, value);
+      }
     }
   };
 
@@ -621,7 +924,7 @@ const EditEntry: React.FC = () => {
       if (exportFormat === 'excel' || exportFormat === 'csv') {
         // Export to Excel/CSV - use the current filtered entries instead of all data
         const currentEntries =
-          entries.length > 0 ? entries : await supabaseDB.getCashBookEntries();
+          entries.length > 0 ? entries : await supabaseDB.getAllCashBookEntries();
 
         // Debug: Log first entry to see date format
         if (currentEntries.length > 0) {
@@ -752,7 +1055,7 @@ const EditEntry: React.FC = () => {
       } else if (exportFormat === 'pdf') {
         // Export to PDF - use the current filtered entries
         const currentEntries =
-          entries.length > 0 ? entries : await supabaseDB.getCashBookEntries();
+          entries.length > 0 ? entries : await supabaseDB.getAllCashBookEntries();
 
         if (currentEntries.length === 0) {
           toast.error('No data to export');
@@ -992,7 +1295,7 @@ const EditEntry: React.FC = () => {
   }
 
   return (
-    <div className='min-h-screen flex flex-col'>
+    <div className='min-h-screen flex flex-col w-full max-w-full overflow-x-auto'>
       <div className='flex items-center justify-between'>
         <div>
           <h1 className='text-3xl font-bold text-gray-900'>Edit Form</h1>
@@ -1033,33 +1336,88 @@ const EditEntry: React.FC = () => {
         </div>
       </div>
 
+
       {/* Search and Filter */}
       <Card className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6'>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full'>
           <div className='col-span-1'>
-            <Select
-              label='Company Name'
-              value={filterCompanyName}
-              onChange={setFilterCompanyName}
-              options={companies}
-              placeholder='Select company...'
-            />
+            <div className='flex items-end gap-2'>
+              <div className='flex-1'>
+                <Select
+                  label='Company Name'
+                  value={filterCompanyName}
+                  onChange={async (value) => {
+                    setFilterCompanyName(value);
+                    setFilterAccountName('');
+                    setFilterSubAccountName('');
+                    // Load account names for the selected company
+                    if (value) {
+                      await loadAccountNamesByCompany(value);
+                    } else {
+                      // If no company selected, load all account names
+                      await loadDistinctAccountNames();
+                    }
+                    // Clear dependent dropdowns
+                    setDependentSubAccounts([]);
+                    setDependentParticulars([]);
+                  }}
+                  options={companies}
+                  placeholder='Select company...'
+                />
+              </div>
+              <Button
+                size='sm'
+                variant='secondary'
+                icon={RefreshCw}
+                onClick={async () => {
+                  console.log('🔄 Refreshing company names...');
+                  await loadDropdownData();
+                  toast.success('Company names refreshed');
+                }}
+                title='Refresh Company Names'
+              >
+                <span className='sr-only'>Refresh</span>
+              </Button>
+            </div>
           </div>
           <div className='col-span-1'>
             <Select
               label='Account Name'
               value={filterAccountName}
-              onChange={setFilterAccountName}
-              options={accounts}
+              onChange={async (value) => {
+                setFilterAccountName(value);
+                setFilterSubAccountName('');
+                // Load sub accounts for the selected account and company
+                if (value && filterCompanyName) {
+                  await loadSubAccountsByAccountAndCompany(value, filterCompanyName);
+                } else if (value) {
+                  // Fallback to global sub accounts if no company
+                  await loadDependentSubAccounts(value);
+                } else {
+                  // Clear sub accounts if no account selected
+                  setDependentSubAccounts([]);
+                }
+                setDependentParticulars([]);
+              }}
+              options={distinctAccountNames}
               placeholder='Select account...'
             />
           </div>
           <div className='col-span-1'>
             <Select
               label='Sub Account'
-              value={filterSubAccount}
-              onChange={setFilterSubAccount}
-              options={subAccounts}
+              value={filterSubAccountName}
+              onChange={async (value) => {
+                setFilterSubAccountName(value);
+                // Load particulars for the selected account and sub account
+                if (value && filterAccountName) {
+                  await loadDependentParticulars(filterAccountName, value);
+                } else {
+                  // Clear particulars if no sub account selected
+                  setDependentParticulars([]);
+                }
+              }}
+              options={dependentSubAccounts}
               placeholder='Select sub account...'
             />
           </div>
@@ -1143,13 +1501,13 @@ const EditEntry: React.FC = () => {
           </div>
           <div className='col-span-1 flex items-end'>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 setSearchTerm('');
                 setDateFilter('');
                 setStatusFilter('');
                 setFilterCompanyName('');
                 setFilterAccountName('');
-                setFilterSubAccount('');
+                setFilterSubAccountName('');
                 setFilterParticulars('');
                 setFilterSaleQ('');
                 setFilterPurchaseQ('');
@@ -1157,6 +1515,12 @@ const EditEntry: React.FC = () => {
                 setFilterDebit('');
                 setFilterStaff('');
                 setFilterDate('');
+                // Clear dependent dropdowns and reload all account names
+                setDependentSubAccounts([]);
+                setDependentParticulars([]);
+                await loadDistinctAccountNames();
+                // Reload all entries since filters are cleared
+                await loadEntries();
               }}
               variant='secondary'
               className='w-full'
@@ -1172,130 +1536,231 @@ const EditEntry: React.FC = () => {
         </div>
       </Card>
 
-      {/* Entries List - Flex Row Card Layout */}
+      {/* Entries List - Improved Card Layout */}
       <Card
         title='Cash Book Entries'
         subtitle={`Manage and edit your transaction records`}
-        className='p-6 mb-6'
+        className='p-6 mb-6 w-full'
       >
-        <div className='space-y-4'>
-          {entries.length === 0 ? (
+        <div className='space-y-4 w-full overflow-x-auto'>
+          {loading ? (
+            // Loading skeleton
+            <div className='space-y-4'>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className='border rounded-xl shadow-md px-4 py-3 bg-gray-50 animate-pulse'>
+                  <div className='flex flex-wrap items-center gap-4'>
+                    <div className='h-4 bg-gray-300 rounded w-16'></div>
+                    <div className='h-4 bg-gray-300 rounded w-24'></div>
+                    <div className='h-4 bg-gray-300 rounded w-32'></div>
+                    <div className='h-4 bg-gray-300 rounded w-28'></div>
+                    <div className='h-4 bg-gray-300 rounded w-36'></div>
+                    <div className='h-4 bg-gray-300 rounded w-40'></div>
+                    <div className='h-4 bg-gray-300 rounded w-20'></div>
+                    <div className='h-4 bg-gray-300 rounded w-20'></div>
+                    <div className='h-4 bg-gray-300 rounded w-24'></div>
+                    <div className='h-4 bg-gray-300 rounded w-32'></div>
+                    <div className='h-4 bg-gray-300 rounded w-24'></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredEntries.length === 0 ? (
             <div className='text-center py-8 text-gray-500'>
               No entries found matching your criteria.
             </div>
           ) : (
-            entries.map(entry => (
+            filteredEntries.map(entry => (
               <div
                 key={entry.id}
-                className={`group border rounded-xl shadow-md px-4 py-2 transition-shadow hover:shadow-lg bg-white relative flex flex-row items-center gap-3 ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
+                className={`group border rounded-xl shadow-md px-4 py-3 transition-shadow hover:shadow-lg bg-white relative min-w-full ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
                 style={{ cursor: 'pointer' }}
               >
-                <span className='font-bold text-blue-700 min-w-[40px]'>
-                  #{entry.sno}
-                </span>
-                <span className='text-sm text-gray-600 min-w-[140px]'>
-                  <Calendar className='w-4 h-4 inline mr-1' />{' '}
-                  {format(new Date(entry.c_date), 'MMM dd, yyyy')}
-                </span>
-                <span
-                  className='font-bold text-blue-900 bg-blue-50 rounded px-2 py-1'
-                  title={entry.company_name}
-                >
-                  <Building className='w-4 h-4 mr-1 inline' />
-                  {entry.company_name}
-                </span>
-                <span
-                  className='font-semibold text-indigo-900 bg-indigo-50 rounded px-2 py-1'
-                  title={entry.acc_name}
-                >
-                  <FileText className='w-4 h-4 mr-1 inline' />
-                  {entry.acc_name}
-                </span>
-                <span
-                  className='font-semibold text-purple-900 bg-purple-50 rounded px-2 py-1'
-                  title={entry.sub_acc_name}
-                >
-                  <User className='w-4 h-4 mr-1 inline' />
-                  {entry.sub_acc_name}
-                </span>
-                <span
-                  className='text-gray-800 font-medium max-w-[180px] truncate'
-                  title={entry.particulars}
-                >
-                  {entry.particulars}
-                </span>
-                <span className='text-green-700 font-semibold'>
-                  <Calculator className='w-4 h-4 inline' /> ₹
-                  {entry.credit.toLocaleString()}
-                </span>
-                <span className='text-red-700 font-semibold'>
-                  <Calculator className='w-4 h-4 inline' /> ₹
-                  {entry.debit.toLocaleString()}
-                </span>
-                <span className='text-sm text-gray-700'>{entry.staff}</span>
-                {entry.lock_record && (
-                  <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                    <Lock className='w-3 h-3 mr-1' />
-                    Locked
+                {/* Horizontal layout - elements arranged side by side */}
+                <div className='flex flex-wrap items-center gap-4'>
+                  {/* S.No */}
+                  <span className='font-bold text-blue-700 min-w-[60px]'>
+                    #{entry.sno}
                   </span>
-                )}
-                {entry.edited && (
-                  <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
-                    Edited ({entry.editCount}x)
+                  
+                  {/* Date */}
+                  <span className='text-sm text-gray-600 min-w-[120px]'>
+                    <Calendar className='w-4 h-4 inline mr-1' />
+                    {format(new Date(entry.c_date), 'MMM dd, yyyy')}
                   </span>
-                )}
-                {entry.approved ? (
-                  <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                    Approved
-                  </span>
-                ) : (
-                  <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                    Pending
-                  </span>
-                )}
-                {isAdmin && (
-                  <Button
-                    size='sm'
-                    variant='secondary'
-                    icon={entry.lock_record ? Unlock : Lock}
-                    onClick={() => {
-                      toggleLock(entry);
-                    }}
+                  
+                  {/* Company */}
+                  <span
+                    className='font-bold text-blue-900 bg-blue-50 rounded px-2 py-1 text-sm min-w-[150px]'
+                    title={entry.company_name}
                   >
-                    {entry.lock_record ? 'Unlock' : 'Lock'}
-                  </Button>
-                )}
-                <Button
-                  size='sm'
-                  variant='secondary'
-                  onClick={() => printVoucher(entry)}
-                >
-                  Voucher
-                </Button>
-                <Button
-                  size='sm'
-                  icon={Edit}
-                  onClick={() => {
-                    handleEdit(entry);
-                  }}
-                  disabled={entry.lock_record && !isAdmin}
-                >
-                  <span className='sr-only'>Edit</span>
-                </Button>
-                {isAdmin && (
-                  <Button
-                    size='sm'
-                    variant='danger'
-                    onClick={() => {
-                      handleDelete(entry);
-                    }}
-                    disabled={entry.lock_record}
+                    <Building className='w-4 h-4 mr-1 inline' />
+                    {entry.company_name}
+                  </span>
+                  
+                  {/* Account */}
+                  <span
+                    className='font-semibold text-indigo-900 bg-indigo-50 rounded px-2 py-1 text-sm min-w-[150px]'
+                    title={entry.acc_name}
                   >
-                    <span className='sr-only'>Delete</span>
-                  </Button>
-                )}
+                    <FileText className='w-4 h-4 mr-1 inline' />
+                    {entry.acc_name}
+                  </span>
+                  
+                  {/* Sub Account */}
+                  <span
+                    className='font-semibold text-purple-900 bg-purple-50 rounded px-2 py-1 text-sm min-w-[150px]'
+                    title={entry.sub_acc_name}
+                  >
+                    <User className='w-4 h-4 mr-1 inline' />
+                    {entry.sub_acc_name}
+                  </span>
+                  
+                  {/* Particulars */}
+                  <span
+                    className='text-gray-800 font-medium max-w-[200px] truncate text-sm min-w-[150px]'
+                    title={entry.particulars}
+                  >
+                    {entry.particulars}
+                  </span>
+                  
+                  {/* Credit Amount */}
+                  <span className='text-green-700 font-semibold text-sm min-w-[100px]'>
+                    <Calculator className='w-4 h-4 inline mr-1' />
+                    ₹{entry.credit.toLocaleString()}
+                  </span>
+                  
+                  {/* Debit Amount */}
+                  <span className='text-red-700 font-semibold text-sm min-w-[100px]'>
+                    <Calculator className='w-4 h-4 inline mr-1' />
+                    ₹{entry.debit.toLocaleString()}
+                  </span>
+                  
+                  {/* Staff */}
+                  <span className='text-sm text-gray-700 min-w-[100px]'>{entry.staff}</span>
+                  
+                  {/* Status badges */}
+                  <div className='flex flex-wrap gap-1 min-w-[200px]'>
+                    {entry.lock_record && (
+                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
+                        <Lock className='w-3 h-3 mr-1' />
+                        Locked
+                      </span>
+                    )}
+                    {entry.edited && (
+                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
+                        Edited ({entry.editCount}x)
+                      </span>
+                    )}
+                    {entry.approved ? (
+                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                        Approved
+                      </span>
+                    ) : (
+                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Action buttons */}
+                  <div className='flex flex-wrap gap-2 min-w-[200px]'>
+                    {isAdmin && (
+                      <Button
+                        size='sm'
+                        variant='secondary'
+                        icon={entry.lock_record ? Unlock : Lock}
+                        onClick={() => {
+                          toggleLock(entry);
+                        }}
+                      >
+                        {entry.lock_record ? 'Unlock' : 'Lock'}
+                      </Button>
+                    )}
+                    <Button
+                      size='sm'
+                      variant='secondary'
+                      onClick={() => printVoucher(entry)}
+                    >
+                      Voucher
+                    </Button>
+                    <Button
+                      size='sm'
+                      icon={Edit}
+                      onClick={() => {
+                        handleEdit(entry);
+                      }}
+                      disabled={entry.lock_record && !isAdmin}
+                    >
+                      <span className='sr-only'>Edit</span>
+                    </Button>
+                    {isAdmin && (
+                      <Button
+                        size='sm'
+                        variant='danger'
+                        onClick={() => {
+                          handleDelete(entry);
+                        }}
+                        disabled={entry.lock_record}
+                      >
+                        <span className='sr-only'>Delete</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             ))
+          )}
+          
+          {/* Progress Indicator */}
+          {isLoadingAll && loadingProgress.total > 0 && (
+            <div className='text-center py-4'>
+              <div className='bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto'>
+                <div className='text-sm text-blue-800 mb-2'>{loadingProgress.message}</div>
+                <div className='w-full bg-blue-200 rounded-full h-2 mb-2'>
+                  <div 
+                    className='bg-blue-600 h-2 rounded-full transition-all duration-300'
+                    style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+                <div className='text-xs text-blue-600'>
+                  {loadingProgress.current.toLocaleString()} / {loadingProgress.total.toLocaleString()} records
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Load More and Load All Buttons */}
+          <div className='text-center py-4 space-x-4'>
+            {entries.length < totalEntries && (
+              <Button
+                onClick={loadMoreEntries}
+                disabled={isLoadingMore || isLoadingAll}
+                variant='secondary'
+                icon={isLoadingMore ? RefreshCw : Plus}
+                className='min-w-[200px]'
+              >
+                {isLoadingMore ? 'Loading...' : `Load More (${totalEntries - entries.length} remaining)`}
+              </Button>
+            )}
+            
+            {entries.length < totalEntries && (
+              <Button
+                onClick={loadAllEntries}
+                disabled={isLoadingMore || isLoadingAll}
+                variant='primary'
+                icon={isLoadingAll ? RefreshCw : Database}
+                className='min-w-[200px]'
+              >
+                {isLoadingAll ? 'Loading All...' : `Load All ${totalEntries} Records`}
+              </Button>
+            )}
+          </div>
+          
+          {/* Pagination Info */}
+          {totalEntries > 0 && (
+            <div className='text-center text-sm text-gray-600 py-2'>
+              Showing {entries.length} of {totalEntries} entries
+            </div>
           )}
         </div>
       </Card>
@@ -1421,83 +1886,79 @@ const EditEntry: React.FC = () => {
                   <Input
                     label='Date'
                     type='date'
-                    value={selectedEntry.c_date}
-                    onChange={value => handleInputChange('c_date', value)}
-                    disabled={!editMode || selectedEntry.lock_record}
+                    value={selectedEntry?.c_date || ''}
+                    onChange={value => editMode ? handleInputChange('c_date', value) : undefined}
+                    disabled={!editMode || selectedEntry?.lock_record}
                   />
                   <Select
                     label='Company Name'
-                    value={selectedEntry.company_name}
-                    onChange={value => handleInputChange('company_name', value)}
+                    value={selectedEntry?.company_name || ''}
+                    onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
                     options={companies}
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                   />
                   <Select
                     label='Staff'
-                    value={selectedEntry.staff}
-                    onChange={value => handleInputChange('staff', value)}
+                    value={selectedEntry?.staff || ''}
+                    onChange={value => editMode ? handleInputChange('staff', value) : undefined}
                     options={users}
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                   />
                   <Select
                     label='Main Account'
-                    value={selectedEntry.acc_name}
-                    onChange={value => handleInputChange('acc_name', value)}
-                    options={accounts}
-                    disabled={!editMode || selectedEntry.lock_record}
+                    value={selectedEntry?.acc_name || ''}
+                    onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
+                    options={distinctAccountNames}
+                    disabled={!editMode || selectedEntry?.lock_record}
+                    placeholder='Select account...'
                   />
                   <Select
                     label='Sub Account'
-                    value={selectedEntry.sub_acc_name || ''}
-                    onChange={value => handleInputChange('sub_acc_name', value)}
-                    options={subAccounts}
-                    disabled={!editMode || selectedEntry.lock_record}
+                    value={selectedEntry?.sub_acc_name || ''}
+                    onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
+                    options={dependentSubAccounts}
+                    disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.acc_name}
+                    placeholder='Select sub account...'
                   />
-                  <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-2'>
-                      Particulars
-                    </label>
-                    <textarea
-                      value={selectedEntry.particulars || ''}
-                      onChange={e =>
-                        handleInputChange('particulars', e.target.value)
-                      }
-                      disabled={!editMode || selectedEntry.lock_record}
-                      rows={3}
-                      className='w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 text-base min-h-12'
-                    />
-                  </div>
+                  <Select
+                    label='Particulars'
+                    value={selectedEntry?.particulars || ''}
+                    onChange={value => editMode ? handleInputChange('particulars', value) : undefined}
+                    options={dependentParticulars}
+                    disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.sub_acc_name}
+                    placeholder='Select particulars...'
+                  />
                   <Input
                     label='Sale Quantity'
                     type='number'
-                    value={selectedEntry.sale_qty}
+                    value={selectedEntry?.sale_qty || 0}
                     onChange={value =>
-                      handleInputChange('sale_qty', parseFloat(value) || 0)
+                      editMode ? handleInputChange('sale_qty', parseFloat(value) || 0) : undefined
                     }
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                     className='min-h-12 text-base'
                     placeholder='Enter sale quantity'
                   />
                   <Input
                     label='Purchase Quantity'
                     type='number'
-                    value={selectedEntry.purchase_qty || 0}
+                    value={selectedEntry?.purchase_qty || 0}
                     onChange={value =>
-                      handleInputChange('purchase_qty', parseFloat(value) || 0)
+                      editMode ? handleInputChange('purchase_qty', parseFloat(value) || 0) : undefined
                     }
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                     placeholder='Enter purchase quantity'
                   />
                   <Input
                     label='Credit Amount'
                     type='number'
-                    value={selectedEntry.credit}
+                    value={selectedEntry?.credit || 0}
                     onChange={value =>
-                      handleInputChange('credit', parseFloat(value) || 0)
+                      editMode ? handleInputChange('credit', parseFloat(value) || 0) : undefined
                     }
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                     className={
-                      selectedEntry.credit > 0
+                      (selectedEntry?.credit || 0) > 0
                         ? 'border-green-300 bg-green-50'
                         : ''
                     }
@@ -1506,13 +1967,13 @@ const EditEntry: React.FC = () => {
                   <Input
                     label='Debit Amount'
                     type='number'
-                    value={selectedEntry.debit}
+                    value={selectedEntry?.debit || 0}
                     onChange={value =>
-                      handleInputChange('debit', parseFloat(value) || 0)
+                      editMode ? handleInputChange('debit', parseFloat(value) || 0) : undefined
                     }
-                    disabled={!editMode || selectedEntry.lock_record}
+                    disabled={!editMode || selectedEntry?.lock_record}
                     className={
-                      selectedEntry.debit > 0 ? 'border-red-300 bg-red-50' : ''
+                      (selectedEntry?.debit || 0) > 0 ? 'border-red-300 bg-red-50' : ''
                     }
                     placeholder='Enter debit amount'
                   />
@@ -1530,26 +1991,26 @@ const EditEntry: React.FC = () => {
                       Entry Time:
                     </span>
                     <div>
-                      {format(
+                      {selectedEntry?.entry_time ? format(
                         new Date(selectedEntry.entry_time),
                         'MMM dd, yyyy HH:mm:ss'
-                      )}
+                      ) : 'N/A'}
                     </div>
                   </div>
                   <div>
                     <span className='font-medium text-gray-700'>
                       Created By:
                     </span>
-                    <div>{selectedEntry.users}</div>
+                    <div>{selectedEntry?.users || 'N/A'}</div>
                   </div>
                   <div>
                     <span className='font-medium text-gray-700'>
                       Edit Count:
                     </span>
-                    <div>{selectedEntry.e_count}</div>
+                    <div>{selectedEntry?.e_count || 0}</div>
                   </div>
                 </div>
-                {selectedEntry.edited && (
+                {selectedEntry?.edited && (
                   <div className='mt-2 text-sm'>
                     <span className='font-medium text-gray-700'>
                       Last Edited:

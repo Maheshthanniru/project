@@ -645,8 +645,8 @@ const NewEntry: React.FC = () => {
         let errorCount = 0;
         const errors: string[] = [];
 
-        // Reduce batch size to prevent database overload
-        const batchSize = 100; // Reduced to prevent rate limiting
+        // Optimized batch size for balanced performance
+        const batchSize = 500; // Balanced batch size for optimal speed and reliability
         const totalBatches = Math.ceil(result.data.length / batchSize);
 
         // Initialize progress
@@ -660,58 +660,91 @@ const NewEntry: React.FC = () => {
           totalBatches,
         });
 
+                // Process batches sequentially but with maximum speed optimizations
         for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
           const startIndex = batchIndex * batchSize;
           const endIndex = Math.min(startIndex + batchSize, result.data.length);
           const batch = result.data.slice(startIndex, endIndex);
 
-          // Process batch sequentially to prevent database overload
-          const batchResults = [];
-          for (let i = 0; i < batch.length; i++) {
-            const row = batch[i];
-            const globalIndex = startIndex + i;
+          // Process batch data and prepare for bulk insert
+          const batchEntries = [];
+          
+                      for (let i = 0; i < batch.length; i++) {
+              const row = batch[i];
+              const globalIndex = startIndex + i;
 
             try {
-              // Ultra-flexible data mapping with extensive fallbacks
+              // Optimized data mapping for maximum speed
               const sanitizeString = (value: any) => {
-                if (value === null || value === undefined || value === '')
-                  return '';
+                if (!value) return '';
                 return String(value).trim();
               };
 
               const sanitizeNumber = (value: any) => {
-                if (value === null || value === undefined || value === '')
-                  return 0;
+                if (!value) return 0;
                 const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
                 return isNaN(num) ? 0 : num;
               };
 
               const sanitizeDate = (value: any) => {
-                if (!value || value === '')
-                  return format(new Date(), 'yyyy-MM-dd');
+                if (!value) return format(new Date(), 'yyyy-MM-dd');
+                
+                // Convert to string and trim
+                const dateStr = String(value).trim();
+                if (!dateStr) return format(new Date(), 'yyyy-MM-dd');
+                
                 try {
-                  const date = new Date(value);
-                  if (isNaN(date.getTime()))
+                  // Try multiple date formats for better compatibility
+                  let date: Date;
+                  
+                  // Check if it's already in ISO format (YYYY-MM-DD)
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    date = new Date(dateStr);
+                  }
+                  // Check for DD/MM/YYYY format
+                  else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+                    const [day, month, year] = dateStr.split('/');
+                    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  }
+                  // Check for MM/DD/YYYY format
+                  else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+                    const [month, day, year] = dateStr.split('/');
+                    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  }
+                  // Check for DD-MM-YYYY format
+                  else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+                    const [day, month, year] = dateStr.split('-');
+                    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  }
+                  // Check for MM-DD-YYYY format
+                  else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+                    const [month, day, year] = dateStr.split('-');
+                    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  }
+                  // Try default Date constructor as fallback
+                  else {
+                    date = new Date(dateStr);
+                  }
+                  
+                  // Validate the parsed date
+                  if (isNaN(date.getTime()) || date.getFullYear() < 1900 || date.getFullYear() > 2100) {
+                    console.warn(`Invalid date format: "${dateStr}", using current date`);
                     return format(new Date(), 'yyyy-MM-dd');
+                  }
+                  
                   return format(date, 'yyyy-MM-dd');
-                } catch {
+                } catch (error) {
+                  console.warn(`Date parsing error for "${dateStr}":`, error);
                   return format(new Date(), 'yyyy-MM-dd');
                 }
               };
 
-              // Try multiple column name variations for each field
-              const getFieldValue = (
-                row: any,
-                possibleNames: string[],
-                defaultValue: any
-              ) => {
+              // Fast field value extraction
+              const getFieldValue = (row: any, possibleNames: string[], defaultValue: any) => {
                 for (const name of possibleNames) {
-                  if (
-                    row[name] !== undefined &&
-                    row[name] !== null &&
-                    row[name] !== ''
-                  ) {
-                    return row[name];
+                  const value = row[name];
+                  if (value !== undefined && value !== null && value !== '') {
+                    return value;
                   }
                 }
                 return defaultValue;
@@ -783,6 +816,8 @@ const NewEntry: React.FC = () => {
                       'PostingDate',
                       'Value Date',
                       'ValueDate',
+                      'c_date',
+                      'C_Date',
                     ],
                     format(new Date(), 'yyyy-MM-dd')
                   )
@@ -976,21 +1011,47 @@ const NewEntry: React.FC = () => {
                 cb: 'CB',
               };
 
-              // Add retry logic for database operations
+              // Add to batch for bulk insertion
+              batchEntries.push(entry);
+            } catch (error) {
+              console.error(
+                `Error processing row ${globalIndex + 1}:`,
+                error
+              );
+              // Continue processing other rows
+            }
+          }
+
+          // Bulk insert the batch
+          if (batchEntries.length > 0) {
+            try {
+              console.log(`Bulk inserting ${batchEntries.length} entries for batch ${batchIndex + 1}`);
+              
+              // Add retry logic for bulk operations
               let retryCount = 0;
               const maxRetries = 3;
               let success = false;
 
               while (retryCount < maxRetries && !success) {
                 try {
-                  await supabaseDB.addCashBookEntry(entry);
-                  success = true;
+                  // Use bulk insert for better performance
+                  const { data: bulkResult, error: bulkError } = await supabase
+                    .from('cash_book')
+                    .insert(batchEntries)
+                    .select('id');
+
+                  if (!bulkError && bulkResult) {
+                    console.log(`✅ Bulk insert successful: ${bulkResult.length} entries inserted`);
+                    success = true;
+                  } else {
+                    throw bulkError;
+                  }
                 } catch (dbError) {
                   retryCount++;
                   if (retryCount < maxRetries) {
-                    // Wait before retry (exponential backoff)
+                    // Ultra-fast retry with minimal delay
                     await new Promise(resolve =>
-                      setTimeout(resolve, 1000 * retryCount)
+                      setTimeout(resolve, 25 * retryCount)
                     );
                   } else {
                     throw dbError;
@@ -998,40 +1059,20 @@ const NewEntry: React.FC = () => {
                 }
               }
 
-              batchResults.push({ success: true, index: globalIndex });
+              if (success) {
+                successCount += batchEntries.length;
+              } else {
+                errorCount += batchEntries.length;
+                errors.push(`Batch ${batchIndex + 1}: Bulk insert failed after ${maxRetries} retries`);
+              }
             } catch (error) {
-              console.error(
-                `Database error importing row ${globalIndex + 1}:`,
-                error
-              );
-              batchResults.push({
-                success: false,
-                index: globalIndex,
-                error: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              });
+              console.error(`Bulk insert error for batch ${batchIndex + 1}:`, error);
+              errorCount += batchEntries.length;
+              errors.push(`Batch ${batchIndex + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
-
-            // Small delay between each record to prevent rate limiting
-            await new Promise(resolve => setTimeout(resolve, 50));
           }
 
           // Batch processing completed
-
-          // Count results
-          const batchSuccessCount = batchResults.filter(r => r.success).length;
-          const batchErrorCount = batchResults.filter(r => !r.success).length;
-
-          successCount += batchSuccessCount;
-          errorCount += batchErrorCount;
-
-          // Add errors to list (limit to first 20 for better debugging)
-          batchResults
-            .filter(r => !r.success)
-            .forEach(r => {
-              if (errors.length < 20) {
-                errors.push(`Row ${r.index + 1}: ${r.error}`);
-              }
-            });
 
           // Update progress
           const currentProgress = startIndex + batch.length;
@@ -1049,8 +1090,8 @@ const NewEntry: React.FC = () => {
             totalBatches,
           });
 
-          // Reduced delay for faster processing
-          await new Promise(resolve => setTimeout(resolve, 5));
+          // No delay between batches for maximum speed
+          // await new Promise(resolve => setTimeout(resolve, 0));
         }
 
         toast.success(

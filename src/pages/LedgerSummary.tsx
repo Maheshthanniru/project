@@ -146,12 +146,12 @@ const LedgerSummary: React.FC = () => {
     }
 
     try {
-      const accounts = await supabaseDB.getAccountsByCompany(
+      const accounts = await supabaseDB.getDistinctAccountNamesByCompany(
         filters.companyName
       );
       const accountsData = accounts.map(account => ({
-        value: account.acc_name,
-        label: account.acc_name,
+        value: account,
+        label: account,
       }));
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
     } catch (error) {
@@ -167,13 +167,13 @@ const LedgerSummary: React.FC = () => {
     }
 
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(
-        filters.companyName,
-        filters.mainAccount
+      const subAccounts = await supabaseDB.getSubAccountsByAccountAndCompany(
+        filters.mainAccount,
+        filters.companyName
       );
       const subAccountsData = subAccounts.map(subAcc => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+        value: subAcc,
+        label: subAcc,
       }));
       setSubAccounts([
         { value: '', label: 'All Sub Accounts' },

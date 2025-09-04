@@ -116,17 +116,52 @@ export interface Driver {
 class SupabaseDatabase {
   // Company operations
   async getCompanies(): Promise<Company[]> {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('*')
-      .order('company_name');
+    try {
+      console.log('🔄 Fetching all companies from companies table...');
+      
+      // First get the total count
+      const { count: totalCount, error: countError } = await supabase
+        .from('companies')
+        .select('*', { count: 'exact', head: true });
+      
+      console.log('📊 Total companies in companies table:', totalCount);
+      
+      // Load all companies with explicit high limit
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .order('company_name')
+        .limit(10000); // Explicit high limit to get all companies
 
-    if (error) {
-      console.error('Error fetching companies:', error);
+      if (error) {
+        console.error('❌ Error fetching companies:', error);
+        return [];
+      }
+
+      console.log('✅ Companies fetched:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error in getCompanies:', error);
       return [];
     }
+  }
 
-    return data || [];
+  async getCompaniesCount(): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('companies')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        console.error('Error getting companies count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting companies count:', error);
+      return 0;
+    }
   }
 
   async addCompany(companyName: string, address: string): Promise<Company> {
@@ -292,19 +327,262 @@ class SupabaseDatabase {
   }
 
   // Cash Book operations
-  async getCashBookEntries(): Promise<CashBookEntry[]> {
-    const { data, error } = await supabase
-      .from('cash_book')
-      .select('*')
-      .order('c_date', { ascending: false })
-      .order('created_at', { ascending: false });
+  async getCashBookEntries(limit: number = 1000, offset: number = 0): Promise<CashBookEntry[]> {
+    try {
+      console.log(`🔄 Fetching cash book entries (limit: ${limit}, offset: ${offset})...`);
+      
+      // Use proper range calculation for Supabase
+      const start = offset;
+      const end = offset + limit - 1;
+      
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('*')
+        .order('c_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(start, end);
 
-    if (error) {
-      console.error('Error fetching cash book entries:', error);
+      if (error) {
+        console.error(`❌ Error fetching cash book entries (offset: ${offset}, limit: ${limit}):`, error);
+        return [];
+      }
+
+      const resultCount = data?.length || 0;
+      console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
+      return data || [];
+    } catch (error) {
+      console.error('Error in getCashBookEntries:', error);
       return [];
     }
+  }
 
-    return data || [];
+  // Get total count for pagination
+  async getCashBookEntriesCount(): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        console.error('Error getting count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting count:', error);
+      return 0;
+    }
+  }
+
+  // Get all cash book entries using pagination to bypass Supabase's 1000 record limit
+  async getAllCashBookEntries(): Promise<CashBookEntry[]> {
+    try {
+      console.log('🔄 Fetching all cash book entries using improved pagination...');
+      
+      // First, get the total count
+      const totalCount = await this.getCashBookEntriesCount();
+      console.log(`📊 Total records in database: ${totalCount}`);
+      
+      if (totalCount === 0) {
+        console.log('⚠️ No records found in database');
+        return [];
+      }
+      
+      let allEntries: CashBookEntry[] = [];
+      const batchSize = 1000;
+      let offset = 0;
+      let hasMoreData = true;
+      let batchCount = 0;
+      
+      while (hasMoreData && offset < totalCount) {
+        try {
+          console.log(`🔄 Fetching batch ${batchCount + 1} (offset: ${offset}, limit: ${batchSize})...`);
+          
+          const batch = await this.getCashBookEntries(batchSize, offset);
+          
+          if (batch.length === 0) {
+            console.log('⚠️ No more data returned, stopping pagination');
+            hasMoreData = false;
+          } else {
+            allEntries = [...allEntries, ...batch];
+            offset += batchSize;
+            batchCount++;
+            
+            console.log(`📊 Batch ${batchCount}: ${batch.length} records, Total so far: ${allEntries.length}/${totalCount}`);
+            
+            // If we got less than batchSize, we've reached the end
+            if (batch.length < batchSize) {
+              console.log('✅ Reached end of data (got less than batch size)');
+              hasMoreData = false;
+            }
+            
+            // Safety check to prevent infinite loops
+            if (allEntries.length >= totalCount) {
+              console.log('✅ Reached total count, stopping pagination');
+              hasMoreData = false;
+            }
+          }
+        } catch (batchError) {
+          console.error(`❌ Error in batch ${batchCount + 1}:`, batchError);
+          // Continue with next batch instead of failing completely
+          offset += batchSize;
+          batchCount++;
+          
+          // If we've had too many errors, stop
+          if (batchCount > 10) {
+            console.error('❌ Too many batch errors, stopping pagination');
+            hasMoreData = false;
+          }
+        }
+      }
+      
+      console.log(`✅ Pagination complete: ${allEntries.length} records fetched in ${batchCount} batches`);
+      
+      if (allEntries.length !== totalCount) {
+        console.warn(`⚠️ Warning: Expected ${totalCount} records but got ${allEntries.length}`);
+      }
+      
+      return allEntries;
+    } catch (error) {
+      console.error('❌ Error in getAllCashBookEntries:', error);
+      return [];
+    }
+  }
+
+  // Get filtered cash book entries using server-side filtering for better performance
+  async getAllFilteredCashBookEntries(filters: {
+    companyName?: string;
+    accountName?: string;
+    subAccountName?: string;
+  }): Promise<CashBookEntry[]> {
+    try {
+      console.log('🔄 Fetching filtered cash book entries with server-side filtering...');
+      console.log('🔍 Filters:', filters);
+      
+      let query = supabase
+        .from('cash_book')
+        .select('*', { count: 'exact' });
+
+      // Apply filters at database level for better performance
+      if (filters.companyName) {
+        query = query.eq('company_name', filters.companyName);
+        console.log(`🏢 Filtering by company: ${filters.companyName}`);
+      }
+      
+      if (filters.accountName) {
+        query = query.eq('acc_name', filters.accountName);
+        console.log(`📄 Filtering by account: ${filters.accountName}`);
+      }
+      
+      if (filters.subAccountName) {
+        query = query.eq('sub_acc_name', filters.subAccountName);
+        console.log(`👤 Filtering by sub-account: ${filters.subAccountName}`);
+      }
+
+      // Order by date for consistent results
+      query = query.order('c_date', { ascending: false });
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('❌ Error fetching filtered entries:', error);
+        return [];
+      }
+
+      console.log(`📊 Filtered entries loaded: ${data?.length || 0} (Total available: ${count || 0})`);
+      
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error in getAllFilteredCashBookEntries:', error);
+      return [];
+    }
+  }
+
+  // Search entries with pagination
+  async searchCashBookEntries(
+    searchTerm: string = '',
+    dateFilter: string = '',
+    limit: number = 1000,
+    offset: number = 0
+  ): Promise<{ data: CashBookEntry[], total: number }> {
+    try {
+      console.log(`🔍 Searching entries with: "${searchTerm}", date: "${dateFilter}" (limit: ${limit}, offset: ${offset})`);
+      
+      let query = supabase
+        .from('cash_book')
+        .select('*', { count: 'exact' });
+
+      // Apply search filter
+      if (searchTerm) {
+        query = query.or(`acc_name.ilike.%${searchTerm}%,sub_acc_name.ilike.%${searchTerm}%,particulars.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%`);
+      }
+
+      // Apply date filter
+      if (dateFilter) {
+        if (dateFilter.length === 4 && /^\d{4}$/.test(dateFilter)) {
+          // Year filter
+          query = query.gte('c_date', `${dateFilter}-01-01`).lte('c_date', `${dateFilter}-12-31`);
+        } else if (dateFilter.includes('-')) {
+          // Specific date filter
+          query = query.eq('c_date', dateFilter);
+        } else {
+          // Partial date filter
+          query = query.gte('c_date', `${dateFilter}`);
+        }
+      }
+
+      // Apply pagination and ordering
+      query = query
+        .order('c_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('Error searching entries:', error);
+        return { data: [], total: 0 };
+      }
+
+      console.log(`✅ Search completed: ${data?.length || 0} records found (total: ${count || 0})`);
+      return { data: data || [], total: count || 0 };
+    } catch (error) {
+      console.error('Error in searchCashBookEntries:', error);
+      return { data: [], total: 0 };
+    }
+  }
+
+  // Get entries by date range with pagination
+  async getCashBookEntriesByDateRange(
+    startDate: string,
+    endDate: string,
+    limit: number = 1000,
+    offset: number = 0
+  ): Promise<{ data: CashBookEntry[], total: number }> {
+    try {
+      console.log(`📅 Fetching entries from ${startDate} to ${endDate} (limit: ${limit}, offset: ${offset})`);
+      
+      const { data, error, count } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact' })
+        .gte('c_date', startDate)
+        .lte('c_date', endDate)
+        .order('c_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Error fetching entries by date range:', error);
+        return { data: [], total: 0 };
+      }
+
+      console.log(`✅ Date range query completed: ${data?.length || 0} records found (total: ${count || 0})`);
+      return { data: data || [], total: count || 0 };
+    } catch (error) {
+      console.error('Error in getCashBookEntriesByDateRange:', error);
+      return { data: [], total: 0 };
+    }
   }
 
   async addCashBookEntry(
@@ -911,32 +1189,7 @@ class SupabaseDatabase {
     return true;
   }
 
-  // Search operations
-  async searchCashBookEntries(
-    searchTerm: string,
-    dateFilter?: string
-  ): Promise<CashBookEntry[]> {
-    let query = supabase.from('cash_book').select('*');
 
-    if (searchTerm) {
-      query = query.or(
-        `particulars.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,acc_name.ilike.%${searchTerm}%`
-      );
-    }
-
-    if (dateFilter) {
-      query = query.eq('c_date', dateFilter);
-    }
-
-    const { data, error } = await query.order('c_date', { ascending: false });
-
-    if (error) {
-      console.error('Error searching cash book entries:', error);
-      return [];
-    }
-
-    return data || [];
-  }
 
   // Dashboard stats
   async getDashboardStats(date?: string) {
@@ -1264,6 +1517,119 @@ class SupabaseDatabase {
       ...new Set(data?.map(item => item.debit).filter(Boolean)),
     ];
     return uniqueAmounts.sort((a, b) => a - b);
+  }
+
+  // New functions for dependent dropdowns
+  async getDistinctAccountNames(): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('acc_name')
+        .not('acc_name', 'is', null)
+        .order('acc_name');
+
+      if (error) {
+        console.error('Error fetching distinct account names:', error);
+        return [];
+      }
+
+      const uniqueAccounts = [...new Set(data?.map(item => item.acc_name))];
+      return uniqueAccounts.sort();
+    } catch (error) {
+      console.error('Error in getDistinctAccountNames:', error);
+      return [];
+    }
+  }
+
+  // Company-based filtering functions
+  async getDistinctAccountNamesByCompany(companyName: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('acc_name')
+        .eq('company_name', companyName)
+        .not('acc_name', 'is', null)
+        .order('acc_name');
+
+      if (error) {
+        console.error('Error fetching distinct account names by company:', error);
+        return [];
+      }
+
+      const uniqueAccounts = [...new Set(data?.map(item => item.acc_name))];
+      return uniqueAccounts.sort();
+    } catch (error) {
+      console.error('Error in getDistinctAccountNamesByCompany:', error);
+      return [];
+    }
+  }
+
+  async getSubAccountsByAccountName(accountName: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('sub_acc_name')
+        .eq('acc_name', accountName)
+        .not('sub_acc_name', 'is', null)
+        .order('sub_acc_name');
+
+      if (error) {
+        console.error('Error fetching sub accounts by account name:', error);
+        return [];
+      }
+
+      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      return uniqueSubAccounts.sort();
+    } catch (error) {
+      console.error('Error in getSubAccountsByAccountName:', error);
+      return [];
+    }
+  }
+
+  async getSubAccountsByAccountAndCompany(accountName: string, companyName: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('sub_acc_name')
+        .eq('acc_name', accountName)
+        .eq('company_name', companyName)
+        .not('sub_acc_name', 'is', null)
+        .order('sub_acc_name');
+
+      if (error) {
+        console.error('Error fetching sub accounts by account and company:', error);
+        return [];
+      }
+
+      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      return uniqueSubAccounts.sort();
+    } catch (error) {
+      console.error('Error in getSubAccountsByAccountAndCompany:', error);
+      return [];
+    }
+  }
+
+  async getParticularsBySubAccount(accountName: string, subAccountName: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('particulars')
+        .eq('acc_name', accountName)
+        .eq('sub_acc_name', subAccountName)
+        .not('particulars', 'is', null)
+        .order('particulars');
+
+      if (error) {
+        console.error('Error fetching particulars by sub account:', error);
+        return [];
+      }
+
+      const uniqueParticulars = [...new Set(data?.map(item => item.particulars))];
+      return uniqueParticulars.sort();
+    } catch (error) {
+      console.error('Error in getParticularsBySubAccount:', error);
+      return [];
+    }
   }
 }
 
