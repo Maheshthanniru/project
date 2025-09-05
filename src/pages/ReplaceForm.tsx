@@ -115,7 +115,7 @@ const ReplaceForm: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      const allEntries = await supabaseDB.getCashBookEntries();
+      const allEntries = await supabaseDB.getAllCashBookEntries();
       setEntries(allEntries);
     } catch (error) {
       console.error('Error loading entries:', error);

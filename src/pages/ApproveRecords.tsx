@@ -116,7 +116,7 @@ const ApproveRecords: React.FC = () => {
     setLoading(true);
     setFetchError(null);
     try {
-      const allEntries = await supabaseDB.getCashBookEntries();
+      const allEntries = await supabaseDB.getAllCashBookEntries();
       console.log('[ApproveRecords] Fetched entries:', allEntries);
 
       // Debug: Check approval status of entries

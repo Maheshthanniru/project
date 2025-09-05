@@ -4,6 +4,7 @@ import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
 import { supabaseDB } from '../lib/supabaseDatabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, addDays, subDays, startOfMonth, endOfMonth } from 'date-fns';
@@ -53,6 +54,10 @@ const DailyReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showCompanyBalances, setShowCompanyBalances] = useState(true);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  
+  // Data loading states
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [allLoadedEntries, setAllLoadedEntries] = useState<any[]>([]);
 
   useEffect(() => {
     loadCompanies();
@@ -73,41 +78,70 @@ const DailyReport: React.FC = () => {
     }
   };
 
+
+
   const generateReport = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('🔄 Generating Daily Report for:', selectedDate);
+      
+      // Use server-side filtering for much faster performance
+      const { data: entries, error } = await supabase
+        .from('cash_book')
+        .select('*')
+        .eq('c_date', selectedDate)
+        .order('created_at', { ascending: false });
 
-      // Get entries for the selected date
-      let entries = await supabaseDB.getCashBookEntries();
-      entries = entries.filter(entry => entry.c_date === selectedDate);
+      if (error) {
+        console.error('Error fetching entries for date:', error);
+        toast.error('Failed to load entries for selected date');
+        return;
+      }
+
+      console.log(`✅ Loaded ${entries?.length || 0} entries for ${selectedDate}`);
 
       // Apply company filter
+      let filteredEntries = entries || [];
       if (selectedCompany) {
-        entries = entries.filter(
+        filteredEntries = filteredEntries.filter(
           entry => entry.company_name === selectedCompany
         );
       }
 
       // Apply search filter
       if (searchTerm) {
-        entries = entries.filter(
+        filteredEntries = filteredEntries.filter(
           entry =>
             entry.particulars
-              .toLowerCase()
+              ?.toLowerCase()
               .includes(searchTerm.toLowerCase()) ||
-            entry.acc_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            entry.acc_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (entry.sub_acc_name &&
               entry.sub_acc_name
                 .toLowerCase()
                 .includes(searchTerm.toLowerCase())) ||
-            entry.staff.toLowerCase().includes(searchTerm.toLowerCase())
+            entry.staff?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       }
 
+      // Calculate opening balance efficiently using server-side query
+      const { data: previousEntries, error: prevError } = await supabase
+        .from('cash_book')
+        .select('credit, debit')
+        .lt('c_date', selectedDate);
+
+      if (prevError) {
+        console.error('Error fetching previous entries:', prevError);
+      }
+
+      const openingBalance = (previousEntries || []).reduce(
+        (sum, entry) => sum + (entry.credit - entry.debit),
+        0
+      );
+
       // Calculate totals
-      const totalCredit = entries.reduce((sum, entry) => sum + entry.credit, 0);
-      const totalDebit = entries.reduce((sum, entry) => sum + entry.debit, 0);
+      const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
+      const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
 
       // Calculate online vs offline breakdown
       let onlineCredit = 0;
@@ -115,7 +149,7 @@ const DailyReport: React.FC = () => {
       let onlineDebit = 0;
       let offlineDebit = 0;
 
-      entries.forEach(entry => {
+      filteredEntries.forEach(entry => {
         // Credit amounts
         onlineCredit += entry.credit_online || 0;
         offlineCredit += entry.credit_offline || 0;
@@ -128,26 +162,16 @@ const DailyReport: React.FC = () => {
       const totalOnline = onlineCredit + onlineDebit;
       const totalOffline = offlineCredit + offlineDebit;
 
-      // Calculate opening balance (all entries before selected date)
-      const allEntries = await supabaseDB.getCashBookEntries();
-      const previousEntries = allEntries.filter(
-        entry => entry.c_date < selectedDate
-      );
-      const openingBalance = previousEntries.reduce(
-        (sum, entry) => sum + (entry.credit - entry.debit),
-        0
-      );
-
       const closingBalance = openingBalance + (totalCredit - totalDebit);
       const grandTotal = totalCredit + totalDebit;
 
-      // Calculate company-wise balances
+      // Calculate company-wise balances efficiently
       const companyBalances: { [key: string]: number } = {};
-      const allCompanies = await supabaseDB.getCompanies();
+      const allCompanies = companies.filter(c => c.value !== '');
 
       allCompanies.forEach(company => {
-        const companyEntries = entries.filter(
-          entry => entry.company_name === company.company_name
+        const companyEntries = filteredEntries.filter(
+          entry => entry.company_name === company.value
         );
         const companyCredit = companyEntries.reduce(
           (sum, entry) => sum + entry.credit,
@@ -157,11 +181,11 @@ const DailyReport: React.FC = () => {
           (sum, entry) => sum + entry.debit,
           0
         );
-        companyBalances[company.company_name] = companyCredit - companyDebit;
+        companyBalances[company.value] = companyCredit - companyDebit;
       });
 
       setReportData({
-        entries,
+        entries: filteredEntries,
         totalCredit,
         totalDebit,
         openingBalance,
@@ -175,6 +199,14 @@ const DailyReport: React.FC = () => {
         totalOnline,
         totalOffline,
       });
+
+      // Update total entries count for display
+      const totalCount = await supabaseDB.getCashBookEntriesCount();
+      setTotalEntries(totalCount);
+      setAllLoadedEntries(filteredEntries); // Store current filtered entries
+
+      console.log(`✅ Daily Report generated for ${selectedDate}: ${filteredEntries.length} entries`);
+      toast.success(`Daily Report generated: ${filteredEntries.length} entries for ${selectedDate}`);
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error('Failed to generate report');
@@ -326,8 +358,18 @@ const DailyReport: React.FC = () => {
             </Button>
           </div>
         </div>
+        
+        
         {/* Responsive table/card layout */}
         <Card className='overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
+          {/* Progress Indicator */}
+          {loading && (
+            <div className='text-center py-8'>
+              <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+              <p className='mt-2 text-gray-600'>Generating Daily Report for {selectedDate}...</p>
+            </div>
+          )}
+          
           {loading ? (
             <div className='text-center text-gray-500 py-8'>Loading...</div>
           ) : reportData.entries.length === 0 ? (
@@ -342,6 +384,9 @@ const DailyReport: React.FC = () => {
                 </div>
                 <div className='flex flex-col md:flex-row md:items-center gap-4 text-sm text-gray-600'>
                   <span>Total Entries: {reportData.entries.length}</span>
+                  <span className='text-xs text-green-600 font-medium'>
+                    ✓ Optimized query for {selectedDate}
+                  </span>
                   <span>
                     Total Credits: ₹{reportData.totalCredit.toLocaleString()}
                   </span>
@@ -520,6 +565,13 @@ const DailyReport: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              
+              {/* Performance Info */}
+              {reportData.entries.length > 0 && (
+                <div className='text-center text-sm text-green-600 py-4 mt-4 border-t border-gray-200'>
+                  ✓ Fast Daily Report generated using optimized server-side queries
+                </div>
+              )}
             </>
           )}
         </Card>

@@ -177,7 +177,7 @@ const NewEntry: React.FC = () => {
 
   useEffect(() => {
     const fetchRecentEntries = async () => {
-      const entries = await supabaseDB.getCashBookEntries();
+      const entries = await supabaseDB.getAllCashBookEntries();
       setRecentEntries(
         entries
           .sort((a, b) => {
@@ -198,7 +198,7 @@ const NewEntry: React.FC = () => {
   const updateDailyEntryNumber = async () => {
     try {
       // Get today's entries count for daily entry number
-      const todayEntries = await supabaseDB.getCashBookEntries();
+      const todayEntries = await supabaseDB.getAllCashBookEntries();
       const todayCount = todayEntries.filter(
         dbEntry => dbEntry.c_date === entry.date
       ).length;
@@ -211,7 +211,7 @@ const NewEntry: React.FC = () => {
 
   const updateTotalEntryCount = async () => {
     try {
-      const allEntries = await supabaseDB.getCashBookEntries();
+      const allEntries = await supabaseDB.getAllCashBookEntries();
       setTotalEntryCount(allEntries.length);
     } catch (error) {
       console.error('Error updating total entry count:', error);
@@ -1104,7 +1104,7 @@ const NewEntry: React.FC = () => {
 
         // Refresh data
         updateTotalEntryCount();
-        const entries = await supabaseDB.getCashBookEntries();
+        const entries = await supabaseDB.getAllCashBookEntries();
         setRecentEntries(
           entries
             .sort((a, b) => {

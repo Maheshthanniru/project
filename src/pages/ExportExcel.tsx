@@ -160,7 +160,7 @@ const ExportExcel: React.FC = () => {
 
     switch (exportOptions.reportType) {
       case 'cashbook':
-        let entries = await supabaseDB.getCashBookEntries();
+        let entries = await supabaseDB.getAllCashBookEntries();
         entries = entries.filter(
           entry =>
             entry.c_date >= dateRange.from && entry.c_date <= dateRange.to
@@ -180,7 +180,7 @@ const ExportExcel: React.FC = () => {
         return formatDataForExcel(entries, 'cashbook');
 
       case 'ledger':
-        const ledgerData = await supabaseDB.getCashBookEntries();
+        const ledgerData = await supabaseDB.getAllCashBookEntries();
         const filteredLedgerData = ledgerData.filter(
           entry =>
             entry.c_date >= dateRange.from && entry.c_date <= dateRange.to
@@ -188,7 +188,7 @@ const ExportExcel: React.FC = () => {
         return formatDataForExcel(filteredLedgerData, 'ledger');
 
       case 'balancesheet':
-        const balanceData = await supabaseDB.getCashBookEntries();
+        const balanceData = await supabaseDB.getAllCashBookEntries();
         const filteredBalanceData = balanceData.filter(
           entry =>
             entry.c_date >= dateRange.from && entry.c_date <= dateRange.to

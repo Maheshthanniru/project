@@ -7,7 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
-import { TrendingUp, TrendingDown, Search, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Search, BarChart3, Plus, Database, RefreshCw } from 'lucide-react';
 
 interface DetailedLedgerFilters {
   fromDate: string;
@@ -60,6 +60,13 @@ const DetailedLedger: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Pagination states
+  const [pageSize] = useState(1000); // Show 1000 entries per page
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: '' });
 
   // Dropdown data
   const [companies, setCompanies] = useState<
@@ -268,7 +275,15 @@ const DetailedLedger: React.FC = () => {
   const loadLedgerData = async () => {
     setLoading(true);
     try {
-      const entries = await supabaseDB.getCashBookEntries();
+      console.log('🔄 Loading initial ledger data...');
+      
+      // Load first page (1000 entries) for better performance
+      const entries = await supabaseDB.getCashBookEntries(pageSize, 0);
+      console.log('✅ Initial entries fetched:', entries.length);
+      
+      // Get total count for pagination info
+      const totalCount = await supabaseDB.getCashBookEntriesCount();
+      setTotalEntries(totalCount);
 
       // Convert to ledger format with running balance
       let runningBalance = 0;
@@ -296,11 +311,130 @@ const DetailedLedger: React.FC = () => {
       });
 
       setLedgerEntries(ledgerData);
+      
+      if (entries.length === 0) {
+        toast.success('No entries found in database');
+      } else {
+        toast.success(`Loaded ${entries.length} entries (showing first ${pageSize} of ${totalCount})`);
+      }
     } catch (error) {
       console.error('Error loading ledger data:', error);
       toast.error('Failed to load ledger data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreEntries = async () => {
+    if (isLoadingMore || ledgerEntries.length >= totalEntries) return;
+    
+    try {
+      setIsLoadingMore(true);
+      const nextPage = Math.floor(ledgerEntries.length / pageSize) + 1;
+      const offset = ledgerEntries.length;
+      
+      console.log(`🔄 Loading more entries - Page: ${nextPage}, Offset: ${offset}`);
+      
+      const moreEntries = await supabaseDB.getCashBookEntries(pageSize, offset);
+      console.log(`✅ Loaded ${moreEntries.length} more entries`);
+      
+      // Convert to ledger format with running balance
+      let runningBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].runningBalance : 0;
+      const moreLedgerData: LedgerEntry[] = moreEntries.map((entry, index) => {
+        const balance = entry.credit - entry.debit;
+        runningBalance += balance;
+
+        return {
+          id: entry.id,
+          sno: entry.sno,
+          date: entry.c_date,
+          companyName: entry.company_name,
+          accountName: entry.acc_name,
+          subAccount: entry.sub_acc_name || '',
+          particulars: entry.particulars,
+          credit: entry.credit,
+          debit: entry.debit,
+          staff: entry.staff,
+          user: entry.staff,
+          entryTime: entry.entry_time,
+          approved: entry.approved,
+          balance: balance,
+          runningBalance: runningBalance,
+        };
+      });
+      
+      setLedgerEntries(prev => [...prev, ...moreLedgerData]);
+      
+      if (moreEntries.length === 0) {
+        toast.success('No more entries to load');
+      }
+    } catch (error) {
+      console.error('Error loading more entries:', error);
+      toast.error('Failed to load more entries');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadAllEntries = async () => {
+    try {
+      setIsLoadingAll(true);
+      setLoadingProgress({ current: 0, total: 0, message: 'Starting to load all entries...' });
+      console.log('🔄 Loading ALL entries from database...');
+      
+      // First get the total count
+      const totalCount = await supabaseDB.getCashBookEntriesCount();
+      setLoadingProgress({ current: 0, total: totalCount, message: `Found ${totalCount} total records, starting to load...` });
+      
+      if (totalCount === 0) {
+        toast.error('No records found in database');
+        return;
+      }
+      
+      // Load all entries using the pagination helper
+      const allEntries = await supabaseDB.getAllCashBookEntries();
+      console.log(`✅ Loaded ALL ${allEntries.length} entries`);
+      
+      // Convert to ledger format with running balance
+      let runningBalance = 0;
+      const ledgerData: LedgerEntry[] = allEntries.map((entry, index) => {
+        const balance = entry.credit - entry.debit;
+        runningBalance += balance;
+
+        return {
+          id: entry.id,
+          sno: entry.sno,
+          date: entry.c_date,
+          companyName: entry.company_name,
+          accountName: entry.acc_name,
+          subAccount: entry.sub_acc_name || '',
+          particulars: entry.particulars,
+          credit: entry.credit,
+          debit: entry.debit,
+          staff: entry.staff,
+          user: entry.staff,
+          entryTime: entry.entry_time,
+          approved: entry.approved,
+          balance: balance,
+          runningBalance: runningBalance,
+        };
+      });
+      
+      setLedgerEntries(ledgerData);
+      setTotalEntries(ledgerData.length);
+      setLoadingProgress({ current: ledgerData.length, total: totalCount, message: 'Loading complete!' });
+      
+      toast.success(`Loaded ALL ${ledgerData.length} entries successfully`);
+    } catch (error) {
+      console.error('Error loading all entries:', error);
+      toast.error('Failed to load all entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setLoadingProgress({ current: 0, total: 0, message: 'Loading failed' });
+    } finally {
+      setIsLoadingAll(false);
+      // Clear progress after a delay
+      setTimeout(() => {
+        setLoadingProgress({ current: 0, total: 0, message: '' });
+      }, 3000);
     }
   };
 
@@ -409,6 +543,61 @@ const DetailedLedger: React.FC = () => {
   const getRecords = () => {
     applyFilters();
     toast.success(`Found ${filteredEntries.length} records`);
+  };
+
+  const loadFilteredData = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 Loading filtered data from server...');
+      
+      // Use server-side filtering for better performance with large datasets
+      const filteredEntries = await supabaseDB.getAllFilteredCashBookEntries({
+        companyName: filters.companyName || undefined,
+        accountName: filters.mainAccount || undefined,
+        subAccountName: filters.subAccount || undefined,
+      });
+      
+      console.log(`📊 Filtered entries loaded: ${filteredEntries.length}`);
+      
+      // Convert to ledger format with running balance
+      let runningBalance = 0;
+      const ledgerData: LedgerEntry[] = filteredEntries.map((entry, index) => {
+        const balance = entry.credit - entry.debit;
+        runningBalance += balance;
+
+        return {
+          id: entry.id,
+          sno: entry.sno,
+          date: entry.c_date,
+          companyName: entry.company_name,
+          accountName: entry.acc_name,
+          subAccount: entry.sub_acc_name || '',
+          particulars: entry.particulars,
+          credit: entry.credit,
+          debit: entry.debit,
+          staff: entry.staff,
+          user: entry.staff,
+          entryTime: entry.entry_time,
+          approved: entry.approved,
+          balance: balance,
+          runningBalance: runningBalance,
+        };
+      });
+      
+      setLedgerEntries(ledgerData);
+      setTotalEntries(ledgerData.length);
+      
+      if (ledgerData.length === 0) {
+        toast.success(`No entries found for the selected filters`);
+      } else {
+        toast.success(`Found ${ledgerData.length} entries matching your filters`);
+      }
+    } catch (error) {
+      console.error('Error loading filtered data:', error);
+      toast.error('Failed to load filtered data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetFilters = () => {
@@ -600,21 +789,21 @@ const DetailedLedger: React.FC = () => {
             </div>
 
             {/* Filtering Guidance */}
-            {!filters.companyName && (
-              <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
-                <div className='flex items-center gap-2'>
-                  <div className='w-2 h-2 bg-blue-500 rounded-full'></div>
-                  <span className='text-sm text-blue-800 font-medium'>
-                    Filtering Tip
-                  </span>
-                </div>
-                <p className='text-sm text-blue-700 mt-1'>
-                  Select a company first to see its specific main accounts and
-                  sub-accounts. This ensures you only see relevant accounts for
-                  the selected company.
-                </p>
+            <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
+              <div className='flex items-center gap-2'>
+                <div className='w-2 h-2 bg-blue-500 rounded-full'></div>
+                <span className='text-sm text-blue-800 font-medium'>
+                  Filtering Options
+                </span>
               </div>
-            )}
+              <div className='text-sm text-blue-700 mt-1 space-y-1'>
+                <p><strong>Client-side filtering:</strong> Fast filtering on currently loaded data (up to {pageSize} records)</p>
+                <p><strong>Server-side filtering:</strong> Load all matching records from the entire database (all 67k+ records)</p>
+                {!filters.companyName && (
+                  <p className='text-orange-700'><strong>Tip:</strong> Select a company first to see its specific accounts and sub-accounts.</p>
+                )}
+              </div>
+            </div>
 
             {/* Amount Filters */}
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -649,7 +838,15 @@ const DetailedLedger: React.FC = () => {
                 onClick={getRecords}
                 className='bg-green-600 hover:bg-green-700'
               >
-                Get Record
+                Get Record (Client-side)
+              </Button>
+
+              <Button
+                onClick={loadFilteredData}
+                className='bg-blue-600 hover:bg-blue-700'
+                disabled={loading}
+              >
+                {loading ? 'Loading...' : 'Load Filtered Data (Server-side)'}
               </Button>
 
               <Button variant='secondary' onClick={resetFilters}>
@@ -687,6 +884,11 @@ const DetailedLedger: React.FC = () => {
           </div>
           <div className='text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border'>
             <strong>{filteredEntries.length}</strong> records found
+            {totalEntries > 0 && (
+              <span className='text-xs text-gray-500 ml-2'>
+                (of {totalEntries} total)
+              </span>
+            )}
           </div>
         </div>
       </Card>
@@ -740,7 +942,7 @@ const DetailedLedger: React.FC = () => {
       {/* Ledger Table */}
       <Card
         title='Detailed Ledger Entries'
-        subtitle={`Showing ${filteredEntries.length} entries`}
+        subtitle={`Showing ${filteredEntries.length} entries${totalEntries > 0 ? ` (of ${totalEntries} total)` : ''}`}
       >
         {loading ? (
           <div className='text-center py-8'>
@@ -901,6 +1103,58 @@ const DetailedLedger: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+        
+        {/* Progress Indicator */}
+        {isLoadingAll && loadingProgress.total > 0 && (
+          <div className='text-center py-4'>
+            <div className='bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto'>
+              <div className='text-sm text-blue-800 mb-2'>{loadingProgress.message}</div>
+              <div className='w-full bg-blue-200 rounded-full h-2 mb-2'>
+                <div 
+                  className='bg-blue-600 h-2 rounded-full transition-all duration-300'
+                  style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
+                ></div>
+              </div>
+              <div className='text-xs text-blue-600'>
+                {loadingProgress.current.toLocaleString()} / {loadingProgress.total.toLocaleString()} records
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Load More and Load All Buttons */}
+        <div className='text-center py-4 space-x-4'>
+          {ledgerEntries.length < totalEntries && (
+            <Button
+              onClick={loadMoreEntries}
+              disabled={isLoadingMore || isLoadingAll}
+              variant='secondary'
+              icon={isLoadingMore ? RefreshCw : Plus}
+              className='min-w-[200px]'
+            >
+              {isLoadingMore ? 'Loading...' : `Load More (${totalEntries - ledgerEntries.length} remaining)`}
+            </Button>
+          )}
+          
+          {ledgerEntries.length < totalEntries && (
+            <Button
+              onClick={loadAllEntries}
+              disabled={isLoadingMore || isLoadingAll}
+              variant='primary'
+              icon={isLoadingAll ? RefreshCw : Database}
+              className='min-w-[200px]'
+            >
+              {isLoadingAll ? 'Loading All...' : `Load All ${totalEntries} Records`}
+            </Button>
+          )}
+        </div>
+        
+        {/* Pagination Info */}
+        {totalEntries > 0 && (
+          <div className='text-center text-sm text-gray-600 py-2'>
+            Showing {ledgerEntries.length} of {totalEntries} entries
           </div>
         )}
       </Card>

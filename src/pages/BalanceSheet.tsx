@@ -93,8 +93,8 @@ const BalanceSheet: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Get filtered entries
-      let entries = await supabaseDB.getCashBookEntries();
+      // Get filtered entries - use getAllCashBookEntries to get all 67k records
+      let entries = await supabaseDB.getAllCashBookEntries();
 
       // Apply date filter
       if (filters.betweenDates) {

@@ -22,7 +22,6 @@ import {
   Plus,
   Database,
 } from 'lucide-react';
-import jsPDF from 'jspdf';
 
 interface EditHistory {
   id: string;
@@ -53,7 +52,6 @@ const EditEntry: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   // Performance optimization states
-  const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(1000); // Show 1000 entries per page for better data visibility
   const [totalEntries, setTotalEntries] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -109,37 +107,16 @@ const EditEntry: React.FC = () => {
   }, [entries, searchTerm, dateFilter, statusFilter]);
   
   const [showHistory, setShowHistory] = useState(false);
-  const [entryHistory, setEntryHistory] = useState<EditHistory[]>([]);
-  const [allHistory, setAllHistory] = useState<EditHistory[]>([]);
-  const [showAllActivity, setShowAllActivity] = useState(false);
-  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  const [entryHistory] = useState<EditHistory[]>([]);
 
   // Form data for editing
   const [companies, setCompanies] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [accounts, setAccounts] = useState<{ value: string; label: string }[]>(
-    []
-  );
-  const [subAccounts, setSubAccounts] = useState<
     { value: string; label: string }[]
   >([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
 
   // Add dropdown data for edit form
   const [particularsOptions, setParticularsOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [saleQuantityOptions, setSaleQuantityOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [purchaseQuantityOptions, setPurchaseQuantityOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [creditAmountOptions, setCreditAmountOptions] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [debitAmountOptions, setDebitAmountOptions] = useState<
     { value: string; label: string }[]
   >([]);
 
@@ -159,16 +136,12 @@ const EditEntry: React.FC = () => {
   const [filterStaff, setFilterStaff] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
-  // Add state for expanded entry
-  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
-  const [pinnedEntryId, setPinnedEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeData = async () => {
       console.log('🔄 Initializing EditEntry data...');
       await loadEntries();
       await loadDropdownData();
-      await loadAllHistory();
     };
 
     initializeData();
@@ -258,38 +231,8 @@ const EditEntry: React.FC = () => {
       }));
       setParticularsOptions(particularsData);
 
-      const uniqueSaleQuantities = await supabaseDB.getUniqueSaleQuantities();
-      console.log('📊 Sale quantities loaded:', uniqueSaleQuantities.length);
-      const saleQuantityData = uniqueSaleQuantities.map(qty => ({
-        value: qty.toString(),
-        label: qty.toString(),
-      }));
-      setSaleQuantityOptions(saleQuantityData);
-
-      const uniquePurchaseQuantities =
-        await supabaseDB.getUniquePurchaseQuantities();
-      console.log('📦 Purchase quantities loaded:', uniquePurchaseQuantities.length);
-      const purchaseQuantityData = uniquePurchaseQuantities.map(qty => ({
-        value: qty.toString(),
-        label: qty.toString(),
-      }));
-      setPurchaseQuantityOptions(purchaseQuantityData);
-
-      const uniqueCreditAmounts = await supabaseDB.getUniqueCreditAmounts();
-      console.log('💰 Credit amounts loaded:', uniqueCreditAmounts.length);
-      const creditAmountData = uniqueCreditAmounts.map(amount => ({
-        value: amount.toString(),
-        label: `₹${amount.toLocaleString()}`,
-      }));
-      setCreditAmountOptions(creditAmountData);
-
-      const uniqueDebitAmounts = await supabaseDB.getUniqueDebitAmounts();
-      console.log('💸 Debit amounts loaded:', uniqueDebitAmounts.length);
-      const debitAmountData = uniqueDebitAmounts.map(amount => ({
-        value: amount.toString(),
-        label: `₹${amount.toLocaleString()}`,
-      }));
-      setDebitAmountOptions(debitAmountData);
+      // Note: Sale quantity, purchase quantity, credit amount, and debit amount options
+      // are not currently used in the UI, so we skip loading them for performance
       
       console.log('✅ All dropdown data loaded successfully');
     } catch (error) {
@@ -447,7 +390,7 @@ const EditEntry: React.FC = () => {
             break;
           case 'locked':
             // TODO: Implement locked filter when Supabase schema supports it
-            allEntries = allEntries.filter(entry => false);
+            allEntries = allEntries.filter(() => false);
             break;
         }
       }
@@ -619,7 +562,7 @@ const EditEntry: React.FC = () => {
       setTotalEntries(filteredEntries.length);
       
       if (filteredEntries.length === 0) {
-        toast.info(`No entries found for the selected filters`);
+        toast.success(`No entries found for the selected filters`);
       } else {
         toast.success(`Found ${filteredEntries.length} entries matching your filters`);
       }
@@ -631,25 +574,7 @@ const EditEntry: React.FC = () => {
     }
   }, [filterCompanyName, filterAccountName, filterSubAccountName]);
 
-  const loadAllHistory = async () => {
-    try {
-      // TODO: Implement activity history in Supabase
-      setAllHistory([]);
-    } catch (error) {
-      console.error('Error loading history:', error);
-      toast.error('Failed to load history');
-    }
-  };
 
-  const loadEntryHistory = async (entryId: string) => {
-    try {
-      // TODO: Implement edit history in Supabase
-      setEntryHistory([]);
-    } catch (error) {
-      console.error('Error loading entry history:', error);
-      toast.error('Failed to load entry history');
-    }
-  };
 
   // Debug function to test RLS and data access
   const testDataAccess = async () => {
@@ -740,7 +665,6 @@ const EditEntry: React.FC = () => {
       );
       if (updatedEntry) {
         await loadEntries();
-        await loadAllHistory();
         setEditMode(false);
         setSelectedEntry(null);
         toast.success('Entry updated successfully!');
@@ -780,7 +704,6 @@ const EditEntry: React.FC = () => {
         console.log('Delete result:', success);
         if (success) {
           await loadEntries();
-          await loadAllHistory();
           toast.success('Entry deleted successfully!');
         } else {
           toast.error('Failed to delete entry - check console for details');
@@ -797,8 +720,6 @@ const EditEntry: React.FC = () => {
   const handleCancel = () => {
     setEditMode(false);
     setSelectedEntry(null);
-    setAccounts([]);
-    setSubAccounts([]);
     // Clear dependent dropdowns
     setDependentSubAccounts([]);
     setDependentParticulars([]);
@@ -882,7 +803,6 @@ const EditEntry: React.FC = () => {
       }
       if (result) {
         await loadEntries();
-        (await loadAllHistory) && loadAllHistory();
         toast.success(
           `Entry ${entry.locked || entry.lock_record ? 'unlocked' : 'locked'} successfully!`
         );
@@ -894,32 +814,12 @@ const EditEntry: React.FC = () => {
     }
   };
 
-  const toggleApproval = async (entry: any) => {
-    if (!isAdmin) {
-      toast.error('Only admins can approve entries');
-      return;
-    }
-
-    try {
-      const result = await supabaseDB.toggleApproval(entry.id);
-      if (result) {
-        await loadEntries();
-        await loadAllHistory();
-        toast.success('Entry approval toggled successfully!');
-      } else {
-        toast.error('Failed to toggle approval');
-      }
-    } catch (error) {
-      console.error('Error toggling approval:', error);
-      toast.error('Failed to toggle approval');
-    }
-  };
 
   const exportData = async (
     exportFormat: 'json' | 'excel' | 'pdf' | 'csv' = 'json'
   ) => {
     try {
-      const data = await supabaseDB.exportData();
+      await supabaseDB.exportData();
 
       if (exportFormat === 'excel' || exportFormat === 'csv') {
         // Export to Excel/CSV - use the current filtered entries instead of all data
@@ -1103,7 +1003,7 @@ const EditEntry: React.FC = () => {
         yPosition += 5;
 
         // Add data (limited to fit on page)
-        currentEntries.slice(0, 25).forEach((entry: any, index: number) => {
+        currentEntries.slice(0, 25).forEach((entry: any) => {
           if (yPosition > 250) {
             doc.addPage();
             yPosition = 20;
@@ -1327,7 +1227,6 @@ const EditEntry: React.FC = () => {
             variant='secondary'
             onClick={async () => {
               await loadEntries();
-              await loadAllHistory();
               toast.success('Data refreshed!');
             }}
           >
@@ -1374,7 +1273,6 @@ const EditEntry: React.FC = () => {
                   await loadDropdownData();
                   toast.success('Company names refreshed');
                 }}
-                title='Refresh Company Names'
               >
                 <span className='sr-only'>Refresh</span>
               </Button>

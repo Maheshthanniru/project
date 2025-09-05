@@ -72,8 +72,8 @@ const Dashboard: React.FC = () => {
         totalOffline: dashboardStats.totalOffline,
       });
 
-      // Get recent entries
-      const entries = await supabaseDB.getCashBookEntries();
+      // Get recent entries - use getAllCashBookEntries to get all data for better recent entries selection
+      const entries = await supabaseDB.getAllCashBookEntries();
       setRecentEntries(entries.slice(0, 10));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

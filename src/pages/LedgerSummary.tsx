@@ -190,8 +190,8 @@ const LedgerSummary: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Get filtered entries from Supabase
-      let entries = await supabaseDB.getCashBookEntries();
+      // Get filtered entries from Supabase - use getAllCashBookEntries to get all 67k records
+      let entries = await supabaseDB.getAllCashBookEntries();
 
       // Apply date filter
       if (filters.betweenDates) {
