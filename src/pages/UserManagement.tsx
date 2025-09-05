@@ -6,7 +6,7 @@ import Card from '../components/UI/Card';
 import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
-import { UserIcon, Shield, X, Save, Edit } from 'lucide-react';
+import { UserIcon, Shield, X, Save, Edit, ChevronDown, ChevronUp } from 'lucide-react';
 interface Feature {
   key: string;
   name: string;

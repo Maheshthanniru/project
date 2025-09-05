@@ -21,6 +21,8 @@ import {
   RefreshCw,
   Plus,
   Database,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface EditHistory {
@@ -46,6 +48,12 @@ const EditEntry: React.FC = () => {
   const [entries, setEntries] = useState<any[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
+  
+  // Calendar state
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [entriesForSelectedDate, setEntriesForSelectedDate] = useState<any[]>([]);
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -71,6 +79,17 @@ const EditEntry: React.FC = () => {
   const filteredEntries = useMemo(() => {
     let filtered = entries;
     
+    // Apply date filter from calendar selection (priority over other date filters)
+    if (selectedDateFilter) {
+      filtered = filtered.filter(entry => {
+        if (entry.c_date) {
+          const entryDate = format(new Date(entry.c_date), 'yyyy-MM-dd');
+          return entryDate === selectedDateFilter;
+        }
+        return false;
+      });
+    }
+    
     if (searchTerm) {
       filtered = filtered.filter(
         entry =>
@@ -80,7 +99,7 @@ const EditEntry: React.FC = () => {
       );
     }
     
-    if (dateFilter) {
+    if (dateFilter && !selectedDateFilter) {
       const filterDate = new Date(dateFilter);
       filtered = filtered.filter(entry => {
         const entryDate = new Date(entry.c_date);
@@ -104,7 +123,7 @@ const EditEntry: React.FC = () => {
     // to ensure we load from all 67k records, not just the initially loaded subset
     
     return filtered;
-  }, [entries, searchTerm, dateFilter, statusFilter]);
+  }, [entries, selectedDateFilter, searchTerm, dateFilter, statusFilter]);
   
   const [showHistory, setShowHistory] = useState(false);
   const [entryHistory] = useState<EditHistory[]>([]);
@@ -465,6 +484,7 @@ const EditEntry: React.FC = () => {
 
       console.log('✅ Final filtered entries:', allEntries.length);
       setEntries(allEntries);
+      setSelectedDateFilter(''); // Clear date filter when loading all entries
 
       if (allEntries.length === 0) {
         toast.success('No entries found in database');
@@ -623,6 +643,7 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
     setSelectedEntry({ ...entry });
     setEditMode(true);
+    setEntriesForSelectedDate([]); // Clear multiple entries selection
     
     // Set filter values to match the selected entry to prevent useEffect from clearing data
     setFilterCompanyName(entry.company_name || '');
@@ -720,6 +741,8 @@ const EditEntry: React.FC = () => {
   const handleCancel = () => {
     setEditMode(false);
     setSelectedEntry(null);
+    setEntriesForSelectedDate([]); // Clear multiple entries selection
+    setSelectedDateFilter(''); // Clear date filter
     // Clear dependent dropdowns
     setDependentSubAccounts([]);
     setDependentParticulars([]);
@@ -781,6 +804,148 @@ const EditEntry: React.FC = () => {
         await loadDependentParticulars(selectedEntry.acc_name, value);
       }
     }
+  };
+
+  // Get dates that have entries - Enhanced with better error handling
+  const getDatesWithEntries = useMemo(() => {
+    const datesWithEntries = new Set<string>();
+    entries.forEach(entry => {
+      if (entry.c_date) {
+        try {
+          // Handle different date formats and ensure proper parsing
+          const entryDate = new Date(entry.c_date);
+          if (!isNaN(entryDate.getTime())) {
+            const dateStr = format(entryDate, 'yyyy-MM-dd');
+            datesWithEntries.add(dateStr);
+          }
+        } catch (error) {
+          console.warn('Invalid date format for entry:', entry.c_date, error);
+        }
+      }
+    });
+    
+    // Debug: Log dates with entries for verification
+    if (datesWithEntries.size > 0) {
+      console.log('Calendar: Dates with entries:', Array.from(datesWithEntries).sort());
+    }
+    
+    return datesWithEntries;
+  }, [entries]);
+
+  // Custom Calendar Component
+  const CustomCalendar = ({ onDateSelect, selectedDate, onClose }: {
+    onDateSelect: (date: string) => void;
+    selectedDate: string;
+    onClose: () => void;
+  }) => {
+    const today = new Date();
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const days = [];
+    const currentDate = new Date(startDate);
+    
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+      setCurrentMonth(prev => {
+        const newDate = new Date(prev);
+        if (direction === 'prev') {
+          newDate.setMonth(newDate.getMonth() - 1);
+        } else {
+          newDate.setMonth(newDate.getMonth() + 1);
+        }
+        return newDate;
+      });
+    };
+
+    const handleDateClick = (date: Date) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      onDateSelect(dateStr);
+      onClose();
+    };
+
+    return (
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 p-4 min-w-[280px]">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => navigateMonth('prev')}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <h3 className="font-semibold text-sm">
+            {monthNames[month]} {year}
+          </h3>
+          <button
+            onClick={() => navigateMonth('next')}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="p-2 text-center font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+          
+          {days.map((date, index) => {
+            const dateStr = format(date, 'yyyy-MM-dd');
+            const isCurrentMonth = date.getMonth() === month;
+            const isToday = dateStr === format(today, 'yyyy-MM-dd');
+            const isSelected = dateStr === selectedDate;
+            const hasEntries = getDatesWithEntries.has(dateStr);
+            
+            return (
+              <button
+                key={index}
+                onClick={() => handleDateClick(date)}
+                className={`
+                  relative p-2 text-xs rounded hover:bg-blue-100 transition-colors
+                  ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                  ${isToday ? 'bg-blue-200 font-bold' : ''}
+                  ${isSelected ? 'bg-blue-500 text-white' : ''}
+                `}
+              >
+                {date.getDate()}
+                {hasEntries && (
+                  <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-green-500 rounded-full opacity-80 shadow-sm"></div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        
+        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full opacity-80 shadow-sm"></div>
+            <span>Has entries</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const toggleLock = async (entry: any) => {
@@ -1395,6 +1560,8 @@ const EditEntry: React.FC = () => {
                 setFilterDebit('');
                 setFilterStaff('');
                 setFilterDate('');
+                setSelectedDateFilter(''); // Clear calendar date filter
+                setEntriesForSelectedDate([]); // Clear multiple entries selection
                 // Clear dependent dropdowns and reload all account names
                 setDependentSubAccounts([]);
                 setDependentParticulars([]);
@@ -1410,7 +1577,12 @@ const EditEntry: React.FC = () => {
           </div>
           <div className='col-span-1 flex items-end'>
             <div className='text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border border-gray-300 w-full text-center'>
-              <strong>{entries.length}</strong> entries found
+              <strong>{filteredEntries.length}</strong> entries found
+              {selectedDateFilter && (
+                <div className='text-xs text-blue-600 mt-1'>
+                  Filtered by: {format(new Date(selectedDateFilter), 'dd-MMM-yyyy')}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1747,6 +1919,34 @@ const EditEntry: React.FC = () => {
         </div>
       )}
 
+      {/* Multiple Entries for Selected Date */}
+      {entriesForSelectedDate.length > 1 && (
+        <div className='mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg'>
+          <h4 className='text-sm font-semibold text-blue-800 mb-2'>
+            Multiple Entries for {selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd-MMM-yyyy') : 'Selected Date'}
+          </h4>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2'>
+            {entriesForSelectedDate.map((entry, index) => (
+              <button
+                key={entry.id}
+                onClick={() => setSelectedEntry(entry)}
+                className={`p-2 text-xs rounded border text-left transition-colors ${
+                  selectedEntry?.id === entry.id
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-100'
+                }`}
+              >
+                <div className='font-medium'>Entry #{entry.sno}</div>
+                <div className='text-gray-500'>{entry.company_name}</div>
+                <div className='text-gray-500'>{entry.acc_name}</div>
+                {entry.credit > 0 && <div className='text-green-600'>Credit: ₹{entry.credit}</div>}
+                {entry.debit > 0 && <div className='text-red-600'>Debit: ₹{entry.debit}</div>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Edit Modal - Fixed Layout with Proper Spacing */}
       {selectedEntry && (
         <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
@@ -1781,13 +1981,62 @@ const EditEntry: React.FC = () => {
                   <form className='space-y-1 text-xs'>
                     {/* Basic Information - Reordered */}
                     <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
-                      <Input
-                        label='Date'
-                        type='date'
-                        value={selectedEntry?.c_date || ''}
-                        onChange={value => editMode ? handleInputChange('c_date', value) : undefined}
-                        disabled={!editMode || selectedEntry?.lock_record}
-                      />
+                      <div className="relative">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Date
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd-MMM-yyyy') : ''}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            placeholder="Select date..."
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCalendar(!showCalendar)}
+                            disabled={selectedEntry?.lock_record}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Calendar className="w-4 h-4 text-gray-500" />
+                          </button>
+                        </div>
+                        {showCalendar && (
+                          <CustomCalendar
+                            onDateSelect={(date) => {
+                              if (editMode) {
+                                handleInputChange('c_date', date);
+                              } else {
+                                // In view mode, filter entries by selected date
+                                setSelectedDateFilter(date);
+                                
+                                const entriesForDate = entries.filter(entry => {
+                                  if (entry.c_date) {
+                                    const entryDate = format(new Date(entry.c_date), 'yyyy-MM-dd');
+                                    return entryDate === date;
+                                  }
+                                  return false;
+                                });
+                                
+                                setEntriesForSelectedDate(entriesForDate);
+                                
+                                if (entriesForDate.length > 0) {
+                                  // Show the first entry for that date
+                                  setSelectedEntry(entriesForDate[0]);
+                                  toast.success(`Found ${entriesForDate.length} entries for ${format(new Date(date), 'dd-MMM-yyyy')}. Showing filtered results.`);
+                                } else {
+                                  // No entries for this date, show a message
+                                  toast.info(`No entries found for ${format(new Date(date), 'dd-MMM-yyyy')}`);
+                                }
+                              }
+                              setShowCalendar(false);
+                            }}
+                            selectedDate={selectedEntry?.c_date || ''}
+                            onClose={() => setShowCalendar(false)}
+                          />
+                        )}
+                      </div>
                       <Select
                         label='Company Name'
                         value={selectedEntry?.company_name || ''}
