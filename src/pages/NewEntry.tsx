@@ -8,18 +8,13 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import { importFromFile, validateImportedData } from '../utils/excel';
+import { importFromFile } from '../utils/excel';
 import {
   Upload,
   FileText,
-  CheckCircle,
   AlertCircle,
-  X,
-  Plus,
   Trash2,
   Building,
-  Clock,
-  Search,
   RefreshCw,
 } from 'lucide-react';
 
@@ -177,7 +172,7 @@ const NewEntry: React.FC = () => {
 
   useEffect(() => {
     const fetchRecentEntries = async () => {
-      const entries = await supabaseDB.getAllCashBookEntries();
+      const entries = await supabaseDB.getCashBookEntries();
       setRecentEntries(
         entries
           .sort((a, b) => {
@@ -189,7 +184,7 @@ const NewEntry: React.FC = () => {
               : b.sno;
             return bTime - aTime;
           })
-          .slice(0, 5)
+          .slice(0, 3)
       );
     };
     fetchRecentEntries();
@@ -198,20 +193,20 @@ const NewEntry: React.FC = () => {
   const updateDailyEntryNumber = async () => {
     try {
       // Get today's entries count for daily entry number
-      const todayEntries = await supabaseDB.getAllCashBookEntries();
+      const todayEntries = await supabaseDB.getCashBookEntries();
       const todayCount = todayEntries.filter(
         dbEntry => dbEntry.c_date === entry.date
       ).length;
-      setCurrentDailyEntryNo(todayCount + 1);
+      setCurrentDailyEntryNo(todayCount);
     } catch (error) {
       console.error('Error updating daily entry number:', error);
-      setCurrentDailyEntryNo(1);
+      setCurrentDailyEntryNo(0);
     }
   };
 
   const updateTotalEntryCount = async () => {
     try {
-      const allEntries = await supabaseDB.getAllCashBookEntries();
+      const allEntries = await supabaseDB.getCashBookEntries();
       setTotalEntryCount(allEntries.length);
     } catch (error) {
       console.error('Error updating total entry count:', error);
@@ -1104,7 +1099,7 @@ const NewEntry: React.FC = () => {
 
         // Refresh data
         updateTotalEntryCount();
-        const entries = await supabaseDB.getAllCashBookEntries();
+        const entries = await supabaseDB.getCashBookEntries();
         setRecentEntries(
           entries
             .sort((a, b) => {
@@ -1116,7 +1111,7 @@ const NewEntry: React.FC = () => {
                 : b.sno;
               return bTime - aTime;
             })
-            .slice(0, 5)
+            .slice(0, 3)
         );
       } else {
         toast.error(result.error || 'Failed to import CSV data');
@@ -1130,135 +1125,91 @@ const NewEntry: React.FC = () => {
   };
 
   return (
-    <div className='h-screen flex flex-col'>
-      <div className='flex-1 overflow-y-auto p-6'>
-        <div className='w-full max-w-6xl mx-auto'>
-          {/* Header */}
-          <div className='flex items-center justify-between mb-6'>
-            <div>
-              <h1 className='text-3xl font-bold text-gray-900'>New Entry</h1>
-              <p className='text-gray-600'>
-                Create new cash book entries with automatic daily entry
-                numbering
-              </p>
-            </div>
-            <div className='text-right'>
-              <div className='flex flex-col items-end gap-2'>
-                <div className='flex items-center gap-4'>
-                  <div>
-                    <div className='text-sm text-gray-600'>Total Entries</div>
-                    <div className='text-2xl font-bold text-purple-600'>
-                      {totalEntryCount.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className='w-px h-8 bg-gray-300'></div>
-                  <div>
-                    <div className='text-sm text-gray-600'>Daily Entry #</div>
-                    <div className='text-2xl font-bold text-blue-600'>
-                      {currentDailyEntryNo}
-                    </div>
-                  </div>
+    <div className='min-h-screen flex flex-col w-full max-w-full'>
+      {/* Header - Fixed at top */}
+      <div className='flex items-center justify-between p-1 bg-white border-b border-gray-200 flex-shrink-0'>
+        <div>
+          <h1 className='text-lg font-bold text-gray-900'>New Entry</h1>
+          <p className='text-xs text-gray-600'>
+            Create new cash book entries with automatic daily entry numbering
+          </p>
+        </div>
+        <div className='text-right'>
+          <div className='flex flex-col items-end gap-1'>
+            <div className='flex items-center gap-3'>
+              <div>
+                <div className='text-xs text-gray-600'>Total Entries</div>
+                <div className='text-lg font-bold text-purple-600'>
+                  {totalEntryCount.toLocaleString()}
                 </div>
-                <div className='flex gap-2'>
-                  <Button
-                    variant='secondary'
-                    onClick={testDatabaseConnection}
-                    className='text-sm'
-                  >
-                    Test DB
-                  </Button>
-                  <Button
-                    variant='secondary'
-                    onClick={loadDropdownData}
-                    className='text-sm'
-                    icon={RefreshCw}
-                  >
-                    Refresh Data
-                  </Button>
-                  <Button
-                    icon={Upload}
-                    variant='secondary'
-                    onClick={() => setShowUploadModal(true)}
-                  >
-                    Upload CSV
-                  </Button>
+              </div>
+              <div className='w-px h-6 bg-gray-300'></div>
+              <div>
+                <div className='text-xs text-gray-600'>Daily Entry #</div>
+                <div className='text-lg font-bold text-blue-600'>
+                  {currentDailyEntryNo}
                 </div>
               </div>
             </div>
+            <div className='flex gap-1'>
+              <Button
+                variant='secondary'
+                onClick={testDatabaseConnection}
+                size='sm'
+                className='text-xs'
+              >
+                Test DB
+              </Button>
+              <Button
+                variant='secondary'
+                onClick={loadDropdownData}
+                size='sm'
+                className='text-xs'
+                icon={RefreshCw}
+              >
+                Refresh
+              </Button>
+              <Button
+                icon={Upload}
+                variant='secondary'
+                size='sm'
+                onClick={() => setShowUploadModal(true)}
+              >
+                CSV
+              </Button>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Main Content - Vertical Layout */}
-          <div className='space-y-6'>
-            {/* Recent Entries Card - Moved to Top */}
-            <Card title='Recent Entries'>
-              {recentEntries.length === 0 ? (
-                <div className='text-center text-gray-500 py-4'>
-                  No recent entries found.
-                </div>
-              ) : (
-                <div className='overflow-x-auto'>
-                  <table className='w-full text-sm border border-gray-200'>
-                    <thead className='bg-gray-50 border-b border-gray-200'>
-                      <tr>
-                        <th className='px-3 py-2 text-left'>S.No</th>
-                        <th className='px-3 py-2 text-left'>Date</th>
-                        <th className='px-3 py-2 text-left'>Company</th>
-                        <th className='px-3 py-2 text-left'>Account</th>
-                        <th className='px-3 py-2 text-left'>Particulars</th>
-                        <th className='px-3 py-2 text-left'>Credit</th>
-                        <th className='px-3 py-2 text-left'>Debit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentEntries.map((entry, idx) => (
-                        <tr
-                          key={entry.id}
-                          className='border-b border-gray-100 hover:bg-gray-50'
-                        >
-                          <td className='px-3 py-2 text-center'>{entry.sno}</td>
-                          <td className='px-3 py-2'>{entry.c_date}</td>
-                          <td className='px-3 py-2'>{entry.company_name}</td>
-                          <td className='px-3 py-2'>{entry.acc_name}</td>
-                          <td className='px-3 py-2'>{entry.particulars}</td>
-                          <td className='px-3 py-2 text-right'>
-                            {parseFloat(entry.credit || '0').toLocaleString()}
-                          </td>
-                          <td className='px-3 py-2 text-right'>
-                            {parseFloat(entry.debit || '0').toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-
-            {/* Entry Form - Moved Below Recent Entries */}
+      {/* Main Content - Vertical Layout */}
+      <div className='flex-1 p-1'>
+        <div className='w-full max-w-7xl mx-auto flex flex-col'>
+          {/* Entry Form - Full Panel */}
+          <div className='w-full'>
             <Card
-              title='New Entry Form'
-              className='p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+              className='p-1 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'
             >
-              <form onSubmit={handleSubmit} className='space-y-4'>
+              <form onSubmit={handleSubmit} className='space-y-1 text-xs'>
                 {/* Dual Entry Toggle */}
-                <div className='flex items-center mb-4'>
+                <div className='flex items-center justify-center mb-1 p-1 bg-blue-50 rounded border border-blue-200'>
                   <input
                     type='checkbox'
                     id='dualEntryEnabled'
                     checked={dualEntryEnabled}
                     onChange={e => setDualEntryEnabled(e.target.checked)}
-                    className='mr-2'
+                    className='mr-3 w-4 h-4'
                   />
                   <label
                     htmlFor='dualEntryEnabled'
-                    className='text-sm font-medium'
+                    className='text-sm font-medium text-blue-800'
                   >
                     Enable Dual Entry
                   </label>
                 </div>
 
                 {/* Basic Information */}
-                <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
                   <Input
                     label='Date'
                     type='date'
@@ -1315,8 +1266,8 @@ const NewEntry: React.FC = () => {
                 </div>
 
                 {/* Account Information */}
-                <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-                  <div className='space-y-2'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                  <div className='space-y-1'>
                     <Select
                       label='Main Account'
                       value={entry.accountName}
@@ -1355,7 +1306,7 @@ const NewEntry: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className='space-y-2'>
+                  <div className='space-y-1'>
                     <Select
                       label='Sub Account'
                       value={entry.subAccount}
@@ -1402,7 +1353,7 @@ const NewEntry: React.FC = () => {
                 />
 
                 {/* Amounts */}
-                <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                   <Input
                     label='Credit'
                     value={entry.credit}
@@ -1450,7 +1401,7 @@ const NewEntry: React.FC = () => {
                   </div>
 
                   {entry.quantityChecked && (
-                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                       <Input
                         label='Sale Quantity'
                         value={entry.saleQ}
@@ -1477,12 +1428,12 @@ const NewEntry: React.FC = () => {
 
                 {/* Dual Entry Section */}
                 {dualEntryEnabled && (
-                  <div className='border-2 border-blue-300 rounded-lg p-4 mt-4 bg-blue-50'>
-                    <h3 className='text-lg font-bold mb-4 text-blue-700'>
+                  <div className='border border-blue-300 rounded p-1 mt-1 bg-blue-50'>
+                    <h3 className='text-sm font-bold mb-1 text-blue-700 text-center'>
                       Dual Entry
                     </h3>
                     {/* Basic Information */}
-                    <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
                       <Input
                         label='Date'
                         type='date'
@@ -1517,7 +1468,7 @@ const NewEntry: React.FC = () => {
                       />
                     </div>
                     {/* Account Information */}
-                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
                       <Select
                         label='Main Account'
                         value={dualEntry.accountName}
@@ -1555,7 +1506,7 @@ const NewEntry: React.FC = () => {
                       className='mt-2'
                     />
                     {/* Amounts */}
-                    <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
                       <Input
                         label='Credit'
                         value={dualEntry.credit}
@@ -1602,7 +1553,7 @@ const NewEntry: React.FC = () => {
                       </div>
 
                       {dualEntry.quantityChecked && (
-                        <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                           <Input
                             label='Sale Quantity'
                             value={dualEntry.saleQ}
@@ -1633,17 +1584,19 @@ const NewEntry: React.FC = () => {
                 )}
 
                 {/* Action Buttons */}
-                <div className='flex gap-4 pt-4'>
+                <div className='flex flex-col sm:flex-row gap-1 pt-1 border-t border-gray-200'>
                   <Button
                     type='submit'
                     disabled={loading}
-                    className='flex-1 lg:flex-none text-lg py-3'
+                    size='sm'
+                    className='flex-1 text-xs py-1'
                   >
                     {loading ? 'Saving...' : 'Save Entry'}
                   </Button>
                   <Button
                     type='button'
                     variant='secondary'
+                    size='sm'
                     onClick={() => {
                       setEntry({
                         date: entry.date,
@@ -1665,7 +1618,7 @@ const NewEntry: React.FC = () => {
                       setAccounts([]);
                       setSubAccounts([]);
                     }}
-                    className='flex-1 lg:flex-none text-lg py-3'
+                    className='flex-1 text-xs py-1'
                   >
                     Reset Form
                   </Button>
@@ -1673,6 +1626,7 @@ const NewEntry: React.FC = () => {
               </form>
             </Card>
           </div>
+
         </div>
       </div>
 

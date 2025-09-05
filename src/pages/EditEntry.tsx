@@ -1195,7 +1195,7 @@ const EditEntry: React.FC = () => {
   }
 
   return (
-    <div className='min-h-screen flex flex-col w-full max-w-full overflow-x-auto'>
+    <div className='min-h-screen flex flex-col w-full max-w-full'>
       <div className='flex items-center justify-between'>
         <div>
           <h1 className='text-3xl font-bold text-gray-900'>Edit Form</h1>
@@ -1238,46 +1238,42 @@ const EditEntry: React.FC = () => {
 
       {/* Search and Filter */}
       <Card className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6'>
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 w-full'>
+          {/* Date - First */}
           <div className='col-span-1'>
-            <div className='flex items-end gap-2'>
-              <div className='flex-1'>
-                <Select
-                  label='Company Name'
-                  value={filterCompanyName}
-                  onChange={async (value) => {
-                    setFilterCompanyName(value);
-                    setFilterAccountName('');
-                    setFilterSubAccountName('');
-                    // Load account names for the selected company
-                    if (value) {
-                      await loadAccountNamesByCompany(value);
-                    } else {
-                      // If no company selected, load all account names
-                      await loadDistinctAccountNames();
-                    }
-                    // Clear dependent dropdowns
-                    setDependentSubAccounts([]);
-                    setDependentParticulars([]);
-                  }}
-                  options={companies}
-                  placeholder='Select company...'
-                />
-              </div>
-              <Button
-                size='sm'
-                variant='secondary'
-                icon={RefreshCw}
-                onClick={async () => {
-                  console.log('🔄 Refreshing company names...');
-                  await loadDropdownData();
-                  toast.success('Company names refreshed');
-                }}
-              >
-                <span className='sr-only'>Refresh</span>
-              </Button>
-            </div>
+            <Input
+              label='Date'
+              type='date'
+              value={filterDate}
+              onChange={setFilterDate}
+            />
           </div>
+          {/* Company Name - Second */}
+          <div className='col-span-1'>
+            <Select
+              label='Company Name'
+              value={filterCompanyName}
+              onChange={async (value) => {
+                setFilterCompanyName(value);
+                setFilterAccountName('');
+                setFilterSubAccountName('');
+                // Load account names for the selected company
+                if (value) {
+                  await loadAccountNamesByCompany(value);
+                } else {
+                  // If no company selected, load all account names
+                  await loadDistinctAccountNames();
+                }
+                // Clear dependent dropdowns
+                setDependentSubAccounts([]);
+                setDependentParticulars([]);
+              }}
+              options={companies}
+              placeholder='Select company...'
+            />
+          </div>
+          
+          {/* Account Name - Third */}
           <div className='col-span-1'>
             <Select
               label='Account Name'
@@ -1301,6 +1297,8 @@ const EditEntry: React.FC = () => {
               placeholder='Select account...'
             />
           </div>
+          
+          {/* Sub Account - Fourth */}
           <div className='col-span-1'>
             <Select
               label='Sub Account'
@@ -1319,51 +1317,8 @@ const EditEntry: React.FC = () => {
               placeholder='Select sub account...'
             />
           </div>
-          <div className='col-span-1'>
-            <Select
-              label='Particulars'
-              value={filterParticulars}
-              onChange={setFilterParticulars}
-              options={particularsOptions}
-              placeholder='Select particulars...'
-            />
-          </div>
-          <div className='col-span-1'>
-            <Input
-              label='Sale Qty'
-              type='number'
-              value={filterSaleQ}
-              onChange={setFilterSaleQ}
-              placeholder='Enter sale quantity'
-            />
-          </div>
-          <div className='col-span-1'>
-            <Input
-              label='Purchase Qty'
-              type='number'
-              value={filterPurchaseQ}
-              onChange={setFilterPurchaseQ}
-              placeholder='Enter purchase quantity'
-            />
-          </div>
-          <div className='col-span-1'>
-            <Input
-              label='Credit'
-              type='number'
-              value={filterCredit}
-              onChange={setFilterCredit}
-              placeholder='Enter credit amount'
-            />
-          </div>
-          <div className='col-span-1'>
-            <Input
-              label='Debit'
-              type='number'
-              value={filterDebit}
-              onChange={setFilterDebit}
-              placeholder='Enter debit amount'
-            />
-          </div>
+          
+          {/* Staff - Fifth */}
           <div className='col-span-1'>
             <Select
               label='Staff'
@@ -1373,14 +1328,41 @@ const EditEntry: React.FC = () => {
               placeholder='Select staff...'
             />
           </div>
+          
+          {/* Particulars */}
           <div className='col-span-1'>
-            <Input
-              label='Date'
-              type='date'
-              value={filterDate}
-              onChange={setFilterDate}
+            <Select
+              label='Particulars'
+              value={filterParticulars}
+              onChange={setFilterParticulars}
+              options={particularsOptions}
+              placeholder='Select particulars...'
             />
           </div>
+          
+          {/* Credit */}
+          <div className='col-span-1'>
+            <Input
+              label='Credit'
+              type='number'
+              value={filterCredit}
+              onChange={setFilterCredit}
+              placeholder='Enter credit amount'
+            />
+          </div>
+          
+          {/* Debit */}
+          <div className='col-span-1'>
+            <Input
+              label='Debit'
+              type='number'
+              value={filterDebit}
+              onChange={setFilterDebit}
+              placeholder='Enter debit amount'
+            />
+          </div>
+          
+          {/* Remaining fields */}
           <div className='col-span-1'>
             <Input
               label='Search'
@@ -1431,6 +1413,22 @@ const EditEntry: React.FC = () => {
               <strong>{entries.length}</strong> entries found
             </div>
           </div>
+        </div>
+        
+        {/* Action Buttons Row */}
+        <div className='mt-4 flex gap-2'>
+          <Button
+            size='sm'
+            variant='secondary'
+            icon={RefreshCw}
+            onClick={async () => {
+              console.log('🔄 Refreshing company names...');
+              await loadDropdownData();
+              toast.success('Company names refreshed');
+            }}
+          >
+            Refresh Companies
+          </Button>
         </div>
       </Card>
 
@@ -1777,109 +1775,120 @@ const EditEntry: React.FC = () => {
             </div>
 
             {/* Content - Scrollable */}
-            <div className='flex-1 overflow-y-auto p-6'>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
-                {/* Basic Information */}
-                <div className='space-y-6'>
-                  <Input
-                    label='Date'
-                    type='date'
-                    value={selectedEntry?.c_date || ''}
-                    onChange={value => editMode ? handleInputChange('c_date', value) : undefined}
-                    disabled={!editMode || selectedEntry?.lock_record}
-                  />
-                  <Select
-                    label='Company Name'
-                    value={selectedEntry?.company_name || ''}
-                    onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
-                    options={companies}
-                    disabled={!editMode || selectedEntry?.lock_record}
-                  />
-                  <Select
-                    label='Staff'
-                    value={selectedEntry?.staff || ''}
-                    onChange={value => editMode ? handleInputChange('staff', value) : undefined}
-                    options={users}
-                    disabled={!editMode || selectedEntry?.lock_record}
-                  />
-                  <Select
-                    label='Main Account'
-                    value={selectedEntry?.acc_name || ''}
-                    onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
-                    options={distinctAccountNames}
-                    disabled={!editMode || selectedEntry?.lock_record}
-                    placeholder='Select account...'
-                  />
-                  <Select
-                    label='Sub Account'
-                    value={selectedEntry?.sub_acc_name || ''}
-                    onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
-                    options={dependentSubAccounts}
-                    disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.acc_name}
-                    placeholder='Select sub account...'
-                  />
-                  <Select
-                    label='Particulars'
-                    value={selectedEntry?.particulars || ''}
-                    onChange={value => editMode ? handleInputChange('particulars', value) : undefined}
-                    options={dependentParticulars}
-                    disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.sub_acc_name}
-                    placeholder='Select particulars...'
-                  />
-                  <Input
-                    label='Sale Quantity'
-                    type='number'
-                    value={selectedEntry?.sale_qty || 0}
-                    onChange={value =>
-                      editMode ? handleInputChange('sale_qty', parseFloat(value) || 0) : undefined
-                    }
-                    disabled={!editMode || selectedEntry?.lock_record}
-                    className='min-h-12 text-base'
-                    placeholder='Enter sale quantity'
-                  />
-                  <Input
-                    label='Purchase Quantity'
-                    type='number'
-                    value={selectedEntry?.purchase_qty || 0}
-                    onChange={value =>
-                      editMode ? handleInputChange('purchase_qty', parseFloat(value) || 0) : undefined
-                    }
-                    disabled={!editMode || selectedEntry?.lock_record}
-                    placeholder='Enter purchase quantity'
-                  />
-                  <Input
-                    label='Credit Amount'
-                    type='number'
-                    value={selectedEntry?.credit || 0}
-                    onChange={value =>
-                      editMode ? handleInputChange('credit', parseFloat(value) || 0) : undefined
-                    }
-                    disabled={!editMode || selectedEntry?.lock_record}
-                    className={
-                      (selectedEntry?.credit || 0) > 0
-                        ? 'border-green-300 bg-green-50'
-                        : ''
-                    }
-                    placeholder='Enter credit amount'
-                  />
-                  <Input
-                    label='Debit Amount'
-                    type='number'
-                    value={selectedEntry?.debit || 0}
-                    onChange={value =>
-                      editMode ? handleInputChange('debit', parseFloat(value) || 0) : undefined
-                    }
-                    disabled={!editMode || selectedEntry?.lock_record}
-                    className={
-                      (selectedEntry?.debit || 0) > 0 ? 'border-red-300 bg-red-50' : ''
-                    }
-                    placeholder='Enter debit amount'
-                  />
-                </div>
-              </div>
+            <div className='flex-1 p-1'>
+              <div className='w-full max-w-7xl mx-auto'>
+                <Card className='p-1 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'>
+                  <form className='space-y-1 text-xs'>
+                    {/* Basic Information - Reordered */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
+                      <Input
+                        label='Date'
+                        type='date'
+                        value={selectedEntry?.c_date || ''}
+                        onChange={value => editMode ? handleInputChange('c_date', value) : undefined}
+                        disabled={!editMode || selectedEntry?.lock_record}
+                      />
+                      <Select
+                        label='Company Name'
+                        value={selectedEntry?.company_name || ''}
+                        onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
+                        options={companies}
+                        disabled={!editMode || selectedEntry?.lock_record}
+                      />
+                      <Select
+                        label='Main Account'
+                        value={selectedEntry?.acc_name || ''}
+                        onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
+                        options={distinctAccountNames}
+                        disabled={!editMode || selectedEntry?.lock_record}
+                        placeholder='Select account...'
+                      />
+                      <Select
+                        label='Sub Account'
+                        value={selectedEntry?.sub_acc_name || ''}
+                        onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
+                        options={dependentSubAccounts}
+                        disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.acc_name}
+                        placeholder='Select sub account...'
+                      />
+                      <Select
+                        label='Staff'
+                        value={selectedEntry?.staff || ''}
+                        onChange={value => editMode ? handleInputChange('staff', value) : undefined}
+                        options={users}
+                        disabled={!editMode || selectedEntry?.lock_record}
+                      />
+                    </div>
 
-              {/* Entry Metadata */}
-              <div className='bg-gray-50 p-4 rounded-lg mt-8'>
+                    {/* Particulars */}
+                    <Input
+                      label='Particulars'
+                      value={selectedEntry?.particulars || ''}
+                      onChange={value => editMode ? handleInputChange('particulars', value) : undefined}
+                      placeholder='Enter transaction details...'
+                      disabled={!editMode || selectedEntry?.lock_record}
+                    />
+
+                    {/* Amounts */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                      <Input
+                        label='Credit'
+                        value={selectedEntry?.credit || ''}
+                        onChange={val =>
+                          editMode ? handleInputChange('credit', parseFloat(val) || 0) : undefined
+                        }
+                        placeholder='Enter credit amount...'
+                        disabled={!editMode || selectedEntry?.lock_record}
+                        className={
+                          (selectedEntry?.credit || 0) > 0
+                            ? 'border-green-300 bg-green-50'
+                            : ''
+                        }
+                      />
+                      <Input
+                        label='Debit'
+                        value={selectedEntry?.debit || ''}
+                        onChange={val =>
+                          editMode ? handleInputChange('debit', parseFloat(val) || 0) : undefined
+                        }
+                        placeholder='Enter debit amount...'
+                        disabled={!editMode || selectedEntry?.lock_record}
+                        className={
+                          (selectedEntry?.debit || 0) > 0 ? 'border-red-300 bg-red-50' : ''
+                        }
+                      />
+                    </div>
+
+                    {/* Quantity Details */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                      <Input
+                        label='Sale Quantity'
+                        type='number'
+                        value={selectedEntry?.sale_qty || ''}
+                        onChange={val =>
+                          editMode ? handleInputChange('sale_qty', parseFloat(val) || 0) : undefined
+                        }
+                        placeholder='Enter sale quantity...'
+                        disabled={!editMode || selectedEntry?.lock_record}
+                      />
+                      <Input
+                        label='Purchase Quantity'
+                        type='number'
+                        value={selectedEntry?.purchase_qty || ''}
+                        onChange={val =>
+                          editMode ? handleInputChange('purchase_qty', parseFloat(val) || 0) : undefined
+                        }
+                        placeholder='Enter purchase quantity...'
+                        disabled={!editMode || selectedEntry?.lock_record}
+                      />
+                    </div>
+                  </form>
+                </Card>
+              </div>
+            </div>
+
+            {/* Entry Metadata */}
+            <div className='bg-gray-50 p-4 rounded-lg mt-8'>
                 <h4 className='font-medium text-gray-900 mb-3'>
                   Entry Information
                 </h4>
@@ -1923,7 +1932,6 @@ const EditEntry: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
 
             {/* Footer - Fixed at Bottom */}
             {editMode && (

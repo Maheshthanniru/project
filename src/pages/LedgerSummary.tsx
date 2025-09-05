@@ -294,13 +294,73 @@ const LedgerSummary: React.FC = () => {
         (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
       );
 
-      const mainAccountSummariesArray = Array.from(accountMap.values()).sort(
-        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-      );
-
-      const subAccountSummariesArray = Array.from(subAccountMap.values()).sort(
-        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-      );
+      // Create company-specific summaries when company filter is active
+      let mainAccountSummariesArray: AccountSummary[] = [];
+      let subAccountSummariesArray: SubAccountSummary[] = [];
+      
+      if (filters.companyName) {
+        // When company filter is active, create summaries only for the selected company
+        const companyAccountMap = new Map<string, AccountSummary>();
+        const companySubAccountMap = new Map<string, SubAccountSummary>();
+        
+        // Process only entries for the selected company
+        entries.forEach(entry => {
+          if (entry.company_name === filters.companyName) {
+            // Account summary for this company
+            const accountKey = entry.acc_name;
+            if (!companyAccountMap.has(accountKey)) {
+              companyAccountMap.set(accountKey, {
+                accountName: entry.acc_name,
+                credit: 0,
+                debit: 0,
+                balance: 0,
+                transactionCount: 0,
+              });
+            }
+            const accountSummary = companyAccountMap.get(accountKey)!;
+            accountSummary.credit += entry.credit;
+            accountSummary.debit += entry.debit;
+            accountSummary.balance = accountSummary.credit - accountSummary.debit;
+            accountSummary.transactionCount++;
+            
+            // Sub Account summary for this company
+            if (entry.sub_acc_name) {
+              const subAccountKey = entry.sub_acc_name;
+              if (!companySubAccountMap.has(subAccountKey)) {
+                companySubAccountMap.set(subAccountKey, {
+                  subAccount: entry.sub_acc_name,
+                  credit: 0,
+                  debit: 0,
+                  balance: 0,
+                  transactionCount: 0,
+                });
+              }
+              const subAccountSummary = companySubAccountMap.get(subAccountKey)!;
+              subAccountSummary.credit += entry.credit;
+              subAccountSummary.debit += entry.debit;
+              subAccountSummary.balance = subAccountSummary.credit - subAccountSummary.debit;
+              subAccountSummary.transactionCount++;
+            }
+          }
+        });
+        
+        mainAccountSummariesArray = Array.from(companyAccountMap.values()).sort(
+          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
+        );
+        
+        subAccountSummariesArray = Array.from(companySubAccountMap.values()).sort(
+          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
+        );
+      } else {
+        // When no company filter, use all data
+        mainAccountSummariesArray = Array.from(accountMap.values()).sort(
+          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
+        );
+        
+        subAccountSummariesArray = Array.from(subAccountMap.values()).sort(
+          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
+        );
+      }
 
       setCompanySummaries(companySummariesArray);
       setMainAccountSummaries(mainAccountSummariesArray);
@@ -478,17 +538,28 @@ const LedgerSummary: React.FC = () => {
             <tbody>
               ${currentData
                 .map(
-                  item => `
+                  item => {
+                    const name = activeTab === 'company' ? (item as CompanySummary).companyName : 
+                                 activeTab === 'mainAccount' ? (item as AccountSummary).accountName : 
+                                 (item as SubAccountSummary).subAccount;
+                    const credit = activeTab === 'company' ? (item as CompanySummary).totalCredit : 
+                                  (item as AccountSummary | SubAccountSummary).credit;
+                    const debit = activeTab === 'company' ? (item as CompanySummary).totalDebit : 
+                                 (item as AccountSummary | SubAccountSummary).debit;
+                    const balance = item.balance;
+                    
+                    return `
                 <tr>
-                  <td>${activeTab === 'company' ? item.companyName : activeTab === 'mainAccount' ? item.accountName : item.subAccount}</td>
-                  <td class="text-right text-green">₹${(activeTab === 'company' ? item.totalCredit : item.credit).toLocaleString()}</td>
-                  <td class="text-right text-red">₹${(activeTab === 'company' ? item.totalDebit : item.debit).toLocaleString()}</td>
-                  <td class="text-right ${(activeTab === 'company' ? item.balance : item.balance) >= 0 ? 'text-green' : 'text-red'}">
-                    ₹${Math.abs(activeTab === 'company' ? item.balance : item.balance).toLocaleString()}
-                    ${(activeTab === 'company' ? item.balance : item.balance) >= 0 ? ' CR' : ' DR'}
+                  <td>${name}</td>
+                  <td class="text-right text-green">₹${credit.toLocaleString()}</td>
+                  <td class="text-right text-red">₹${debit.toLocaleString()}</td>
+                  <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
+                    ₹${Math.abs(balance).toLocaleString()}
+                    ${balance >= 0 ? ' CR' : ' DR'}
                   </td>
                 </tr>
-              `
+              `;
+                  }
                 )
                 .join('')}
             </tbody>
@@ -538,7 +609,7 @@ const LedgerSummary: React.FC = () => {
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
-                  Company Name
+                  {filters.companyName ? 'Company Details' : 'Company Name'}
                 </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
                   Credit
@@ -591,7 +662,7 @@ const LedgerSummary: React.FC = () => {
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
-                  Main Account
+                  {filters.companyName ? `${filters.companyName} - Main Account` : 'Main Account'}
                 </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
                   Credit
@@ -644,7 +715,7 @@ const LedgerSummary: React.FC = () => {
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
-                  Sub Account
+                  {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
                 </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
                   Credit
@@ -835,6 +906,40 @@ const LedgerSummary: React.FC = () => {
 
       {/* Summary Tabs */}
       <Card>
+        {/* Company Filter Indicator */}
+        {filters.companyName && (
+          <div className='bg-blue-50 border-l-4 border-blue-400 p-4 mb-4'>
+            <div className='flex items-center'>
+              <div className='flex-shrink-0'>
+                <svg className='h-5 w-5 text-blue-400' viewBox='0 0 20 20' fill='currentColor'>
+                  <path fillRule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clipRule='evenodd' />
+                </svg>
+              </div>
+              <div className='ml-3 flex-1'>
+                <p className='text-sm text-blue-700'>
+                  <strong>Company Filter Active:</strong> Showing data for <span className='font-semibold'>{filters.companyName}</span>
+                </p>
+                <p className='text-xs text-blue-600 mt-1'>
+                  All tabs below show company-specific totals. Clear the company filter to see all companies.
+                </p>
+              </div>
+              <div className='ml-3'>
+                <Button
+                  size='sm'
+                  variant='secondary'
+                  onClick={() => {
+                    setFilters(prev => ({ ...prev, companyName: '', mainAccount: '', subAccount: '' }));
+                    toast.success('Company filter cleared');
+                  }}
+                  className='text-blue-600 hover:text-blue-800'
+                >
+                  Clear Company Filter
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className='border-b border-gray-200'>
           <nav className='flex space-x-8'>
             <button
@@ -845,7 +950,7 @@ const LedgerSummary: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Companywise Totals
+              {filters.companyName ? `${filters.companyName} - Company Totals` : 'Companywise Totals'}
             </button>
             <button
               onClick={() => setActiveTab('mainAccount')}
@@ -855,7 +960,7 @@ const LedgerSummary: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              MainAccountwise Totals
+              {filters.companyName ? `${filters.companyName} - Main Account Totals` : 'MainAccountwise Totals'}
             </button>
             <button
               onClick={() => setActiveTab('subAccount')}
@@ -865,7 +970,7 @@ const LedgerSummary: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Sub Account wise totals
+              {filters.companyName ? `${filters.companyName} - Sub Account Totals` : 'Sub Account wise totals'}
             </button>
             <button
               onClick={() => setActiveTab('subAccountGrand')}
@@ -875,7 +980,7 @@ const LedgerSummary: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Sub Account Wise Grand Totals
+              {filters.companyName ? `${filters.companyName} - Sub Account Grand Totals` : 'Sub Account Wise Grand Totals'}
             </button>
           </nav>
         </div>

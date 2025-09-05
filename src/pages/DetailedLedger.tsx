@@ -174,12 +174,25 @@ const DetailedLedger: React.FC = () => {
     }
   };
 
+  // Debug function to check BVR/BVT company data
+  const debugCompanyData = async () => {
+    try {
+      console.log('🔍 [DEBUG] Starting BVR/BVT company data debug...');
+      await supabaseDB.debugCompanyAccountData();
+      toast.success('Debug data logged to console. Check browser console for details.');
+    } catch (error) {
+      console.error('Error in debug:', error);
+      toast.error('Debug failed. Check console for details.');
+    }
+  };
+
   const loadAllAccounts = async () => {
     try {
-      const allAccounts = await supabaseDB.getAccounts();
-      const accountsData = allAccounts.map((account: any) => ({
-        value: account.acc_name,
-        label: account.acc_name,
+      // Use getDistinctAccountNames to get all account names from 67k cash_book records
+      const allAccountNames = await supabaseDB.getDistinctAccountNames();
+      const accountsData = allAccountNames.map((accountName: string) => ({
+        value: accountName,
+        label: accountName,
       }));
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
     } catch (error) {
@@ -191,10 +204,11 @@ const DetailedLedger: React.FC = () => {
 
   const loadAllSubAccounts = async () => {
     try {
-      const allSubAccounts = await supabaseDB.getSubAccounts();
-      const subAccountsData = allSubAccounts.map((subAcc: any) => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+      // Use getDistinctSubAccountNames to get all sub-account names from 67k cash_book records
+      const allSubAccountNames = await supabaseDB.getDistinctSubAccountNames();
+      const subAccountsData = allSubAccountNames.map((subAccountName: string) => ({
+        value: subAccountName,
+        label: subAccountName,
       }));
       setSubAccounts([
         { value: '', label: 'All Sub Accounts' },
@@ -209,14 +223,17 @@ const DetailedLedger: React.FC = () => {
 
   const loadAccountsByCompany = async (companyName: string) => {
     try {
-      console.log('Fetching accounts for company:', companyName);
+      console.log('🔍 [DetailedLedger] Fetching accounts for company:', companyName);
       const accounts = await supabaseDB.getDistinctAccountNamesByCompany(companyName);
-      console.log('Fetched accounts:', accounts);
+      console.log('📊 [DetailedLedger] Fetched accounts:', accounts);
+      console.log('📊 [DetailedLedger] Number of accounts found:', accounts.length);
+      
       const accountsData = accounts.map((account: string) => ({
         value: account,
         label: account,
       }));
-      console.log('Setting accounts data:', accountsData);
+      
+      console.log('📊 [DetailedLedger] Setting accounts dropdown with:', accountsData.length + 1, 'items');
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
     } catch (error) {
       console.error('Error loading accounts by company:', error);
@@ -251,15 +268,11 @@ const DetailedLedger: React.FC = () => {
 
   const loadAllSubAccountsForCompany = async (companyName: string) => {
     try {
-      // Get all sub accounts that belong to the company
-      const allSubAccounts = await supabaseDB.getSubAccounts();
-      const companySubAccounts = allSubAccounts.filter(
-        (subAcc: any) => subAcc.company_name === companyName
-      );
-
-      const subAccountsData = companySubAccounts.map((subAcc: any) => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+      // Use getDistinctSubAccountNamesByCompany to get all sub-account names for the company from 67k cash_book records
+      const companySubAccountNames = await supabaseDB.getDistinctSubAccountNamesByCompany(companyName);
+      const subAccountsData = companySubAccountNames.map((subAccountName: string) => ({
+        value: subAccountName,
+        label: subAccountName,
       }));
       setSubAccounts([
         { value: '', label: 'All Sub Accounts' },
@@ -632,8 +645,8 @@ const DetailedLedger: React.FC = () => {
   };
 
   const exportToExcel = () => {
-    const exportData = filteredEntries.map(entry => ({
-      'S.No': entry.sno,
+    const exportData = filteredEntries.map((entry, index) => ({
+      'S.No': index + 1,
       Date: entry.date,
       Company: entry.companyName,
       'Main Account': entry.accountName,
@@ -691,6 +704,9 @@ const DetailedLedger: React.FC = () => {
           </Button>
           <Button variant='secondary' onClick={exportToExcel}>
             Export Excel
+          </Button>
+          <Button variant='secondary' onClick={debugCompanyData}>
+            Debug BVR/BVT
           </Button>
         </div>
       </div>
@@ -1007,7 +1023,7 @@ const DetailedLedger: React.FC = () => {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                     }`}
                   >
-                    <td className='px-3 py-2 font-medium'>{entry.sno}</td>
+                    <td className='px-3 py-2 font-medium'>{index + 1}</td>
                     <td className='px-3 py-2'>
                       {format(new Date(entry.date), 'dd-MMM-yy')}
                     </td>
@@ -1261,10 +1277,10 @@ const DetailedLedger: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredEntries.map(entry => (
+                    {filteredEntries.map((entry, index) => (
                       <tr key={entry.id}>
                         <td className='border border-gray-300 px-2 py-1'>
-                          {entry.sno}
+                          {index + 1}
                         </td>
                         <td className='border border-gray-300 px-2 py-1'>
                           {format(new Date(entry.date), 'dd-MMM-yy')}

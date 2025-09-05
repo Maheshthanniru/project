@@ -85,10 +85,11 @@ const ExportExcel: React.FC = () => {
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
 
-      const accounts = await supabaseDB.getAccounts();
-      const accountsData = accounts.map(account => ({
-        value: account.acc_name,
-        label: account.acc_name,
+      // Use getDistinctAccountNames to get all account names from 67k cash_book records
+      const accountNames = await supabaseDB.getDistinctAccountNames();
+      const accountsData = accountNames.map(accountName => ({
+        value: accountName,
+        label: accountName,
       }));
       setAccounts([{ value: '', label: 'All Accounts' }, ...accountsData]);
     } catch (error) {

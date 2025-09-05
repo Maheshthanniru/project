@@ -89,19 +89,21 @@ const ReplaceForm: React.FC = () => {
       }));
       setCompanies(companiesData);
 
-      // Load all unique account names
-      const accounts = await supabaseDB.getAccounts();
-      const allAccounts = Array.from(
-        new Set(accounts.map(acc => acc.acc_name))
-      ).map(acc => ({ value: acc, label: acc }));
+      // Load all unique account names from 67k cash_book records
+      const accountNames = await supabaseDB.getDistinctAccountNames();
+      const allAccounts = accountNames.map(accountName => ({ 
+        value: accountName, 
+        label: accountName 
+      }));
       setAccounts(allAccounts);
       setNewAccounts(allAccounts);
 
-      // Load all unique sub accounts
-      const subAccounts = await supabaseDB.getSubAccounts();
-      const allSubAccounts = Array.from(
-        new Set(subAccounts.map(sub => sub.sub_acc))
-      ).map(sub => ({ value: sub, label: sub }));
+      // Load all unique sub accounts from 67k cash_book records
+      const subAccountNames = await supabaseDB.getDistinctSubAccountNames();
+      const allSubAccounts = subAccountNames.map(subAccountName => ({ 
+        value: subAccountName, 
+        label: subAccountName 
+      }));
       setSubAccounts(allSubAccounts);
       setNewSubAccounts(allSubAccounts);
     } catch (error) {

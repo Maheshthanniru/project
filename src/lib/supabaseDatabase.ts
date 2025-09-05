@@ -1544,6 +1544,8 @@ class SupabaseDatabase {
   // Company-based filtering functions
   async getDistinctAccountNamesByCompany(companyName: string): Promise<string[]> {
     try {
+      console.log(`🔍 [DEBUG] Fetching account names for company: "${companyName}"`);
+      
       const { data, error } = await supabase
         .from('cash_book')
         .select('acc_name')
@@ -1556,7 +1558,13 @@ class SupabaseDatabase {
         return [];
       }
 
+      console.log(`📊 [DEBUG] Raw data for company "${companyName}":`, data?.length || 0, 'records');
+      console.log(`📊 [DEBUG] Sample data:`, data?.slice(0, 5));
+
       const uniqueAccounts = [...new Set(data?.map(item => item.acc_name))];
+      console.log(`📊 [DEBUG] Unique accounts for company "${companyName}":`, uniqueAccounts.length, 'accounts');
+      console.log(`📊 [DEBUG] Account names:`, uniqueAccounts);
+      
       return uniqueAccounts.sort();
     } catch (error) {
       console.error('Error in getDistinctAccountNamesByCompany:', error);
@@ -1629,6 +1637,94 @@ class SupabaseDatabase {
     } catch (error) {
       console.error('Error in getParticularsBySubAccount:', error);
       return [];
+    }
+  }
+
+  // Get all distinct sub-account names from cash_book (all 67k records)
+  async getDistinctSubAccountNames(): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('sub_acc_name')
+        .not('sub_acc_name', 'is', null)
+        .not('sub_acc_name', 'eq', '')
+        .order('sub_acc_name');
+
+      if (error) {
+        console.error('Error fetching distinct sub-account names:', error);
+        return [];
+      }
+
+      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      return uniqueSubAccounts.sort();
+    } catch (error) {
+      console.error('Error in getDistinctSubAccountNames:', error);
+      return [];
+    }
+  }
+
+  // Get distinct sub-account names by company from cash_book
+  async getDistinctSubAccountNamesByCompany(companyName: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('sub_acc_name')
+        .eq('company_name', companyName)
+        .not('sub_acc_name', 'is', null)
+        .not('sub_acc_name', 'eq', '')
+        .order('sub_acc_name');
+
+      if (error) {
+        console.error('Error fetching distinct sub-account names by company:', error);
+        return [];
+      }
+
+      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      return uniqueSubAccounts.sort();
+    } catch (error) {
+      console.error('Error in getDistinctSubAccountNamesByCompany:', error);
+      return [];
+    }
+  }
+
+  // Debug function to check company names and account names in database
+  async debugCompanyAccountData(): Promise<void> {
+    try {
+      console.log('🔍 [DEBUG] Starting company and account data analysis...');
+      
+      // Get all unique company names
+      const { data: companyData, error: companyError } = await supabase
+        .from('cash_book')
+        .select('company_name')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '');
+      
+      if (companyError) {
+        console.error('Error fetching company names:', companyError);
+        return;
+      }
+      
+      const uniqueCompanies = [...new Set(companyData?.map(item => item.company_name))].sort();
+      console.log('📊 [DEBUG] All unique company names in database:', uniqueCompanies);
+      
+      // Check for BVR and BVT specifically
+      const bvrData = companyData?.filter(item => 
+        item.company_name?.toLowerCase().includes('bvr') || 
+        item.company_name?.toLowerCase().includes('bvt')
+      );
+      console.log('📊 [DEBUG] BVR/BVT related company names:', bvrData?.map(item => item.company_name));
+      
+      // Get account names for BVR and BVT companies
+      for (const company of uniqueCompanies) {
+        if (company?.toLowerCase().includes('bvr') || company?.toLowerCase().includes('bvt')) {
+          console.log(`🔍 [DEBUG] Checking accounts for company: "${company}"`);
+          const accounts = await this.getDistinctAccountNamesByCompany(company);
+          console.log(`📊 [DEBUG] Found ${accounts.length} accounts for "${company}":`, accounts);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error in debugCompanyAccountData:', error);
     }
   }
 }
