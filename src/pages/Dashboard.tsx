@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { useLocation } from 'react-router-dom';
 import Card from '../components/UI/Card';
 import Select from '../components/UI/Select';
 import { supabaseDB } from '../lib/supabaseDatabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useDashboardStats, useRecentEntries, useCompanyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
+import toast from 'react-hot-toast';
 import {
   TrendingUp,
   TrendingDown,
@@ -12,74 +16,103 @@ import {
   AlertTriangle,
   Building,
   Users,
+  RefreshCw,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState({
-    totalCredit: 0,
-    totalDebit: 0,
-    balance: 0,
-    totalTransactions: 0,
-    pendingApprovals: 0,
-    companiesCount: 0,
-    accountsCount: 0,
-    activeUsersCount: 0,
-    onlineCredit: 0,
-    offlineCredit: 0,
-    onlineDebit: 0,
-    offlineDebit: 0,
-    totalOnline: 0,
-    totalOffline: 0,
-  });
-  const [recentEntries, setRecentEntries] = useState<any[]>([]);
+  const location = useLocation();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
   );
-  const [loading, setLoading] = useState(true);
 
+  // React Query hooks for data fetching
+  const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
+  const { data: recentEntries, isLoading: recentLoading, isFetching: recentFetching } = useRecentEntries();
+  const { data: companyBalances, isLoading: companyLoading, isFetching: companyFetching } = useCompanyBalances();
+  const { companies, accounts, users, pendingApprovals, isLoading: dropdownLoading } = useDropdownData();
+  const { invalidateAll, invalidateStats, invalidateRecentEntries } = useInvalidateDashboard();
+
+  // Combined loading states
+  const loading = statsLoading || recentLoading || companyLoading || dropdownLoading;
+  const autoUpdating = statsFetching || recentFetching || companyFetching;
+
+  // Listen for storage events to refresh when new entries are created
   useEffect(() => {
-    fetchDashboardData();
-  }, [selectedDate]);
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'dashboard-refresh' && e.newValue) {
+        invalidateAll();
+        // Clear the trigger
+        localStorage.removeItem('dashboard-refresh');
+      }
+    };
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [invalidateAll]);
 
-      // Get stats from Supabase database
-      const dashboardStats = await supabaseDB.getDashboardStats(selectedDate);
-
-      // Get additional counts
-      const companies = await supabaseDB.getCompanies();
-      const accounts = await supabaseDB.getAccounts();
-      const users = await supabaseDB.getUsers();
-      const pendingApprovals = await supabaseDB.getPendingApprovalsCount();
-
-      setStats({
-        totalCredit: dashboardStats.totalCredit,
-        totalDebit: dashboardStats.totalDebit,
-        balance: dashboardStats.balance,
-        totalTransactions: dashboardStats.todayEntries,
-        pendingApprovals: pendingApprovals,
-        companiesCount: companies.length,
-        accountsCount: accounts.length,
-        activeUsersCount: users.filter(u => u.is_active).length,
-        onlineCredit: dashboardStats.onlineCredit,
-        offlineCredit: dashboardStats.offlineCredit,
-        onlineDebit: dashboardStats.onlineDebit,
-        offlineDebit: dashboardStats.offlineDebit,
-        totalOnline: dashboardStats.totalOnline,
-        totalOffline: dashboardStats.totalOffline,
-      });
-
-      // Get recent entries - use getAllCashBookEntries to get all data for better recent entries selection
-      const entries = await supabaseDB.getAllCashBookEntries();
-      setRecentEntries(entries.slice(0, 10));
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
+  // Also check for refresh trigger on component mount
+  useEffect(() => {
+    const refreshTrigger = localStorage.getItem('dashboard-refresh');
+    if (refreshTrigger) {
+      invalidateAll();
+      localStorage.removeItem('dashboard-refresh');
     }
+  }, [invalidateAll]);
+
+  // Listen for custom events to refresh dashboard
+  useEffect(() => {
+    const handleDashboardRefresh = () => {
+      invalidateAll();
+    };
+
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
+    return () => window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
+  }, [invalidateAll]);
+
+  // Set up Supabase real-time subscription for automatic updates
+  useEffect(() => {
+    console.log('🔄 Setting up Supabase real-time subscription for dashboard...');
+    
+    const subscription = supabase
+      .channel('cash_book_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen for INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'cash_book'
+        },
+        (payload) => {
+          console.log('📊 Database change detected:', payload.eventType, payload.new || payload.old);
+          // Show a subtle notification that dashboard is updating
+          toast.success('Dashboard updated automatically', {
+            duration: 2000,
+            position: 'top-right',
+            style: {
+              background: '#10B981',
+              color: 'white',
+            },
+          });
+          // Invalidate React Query cache to trigger refetch
+          invalidateAll();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔄 Cleaning up Supabase real-time subscription...');
+      subscription.unsubscribe();
+    };
+  }, [invalidateAll]);
+
+  // Manual refresh function
+  const handleManualRefresh = () => {
+    invalidateAll();
+    toast.success('Dashboard refreshed!', {
+      duration: 2000,
+      position: 'top-right',
+    });
   };
 
   const getTransactionColor = (credit: number, debit: number) => {
@@ -120,10 +153,35 @@ const Dashboard: React.FC = () => {
           </h1>
           <p className='text-gray-600'>
             Here's your business overview for today.
+            {companyBalances && companyBalances.length > 0 && (
+              <span className='ml-2 text-blue-600 font-medium'>
+                ({companyBalances.length} companies tracked)
+              </span>
+            )}
           </p>
         </div>
 
         <div className='flex items-center gap-4'>
+          <button
+            onClick={handleManualRefresh}
+            disabled={loading || autoUpdating}
+            className='flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+          >
+            <RefreshCw className={`w-4 h-4 ${(loading || autoUpdating) ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : autoUpdating ? 'Auto-updating...' : 'Refresh'}
+          </button>
+          {autoUpdating && !loading && (
+            <div className='flex items-center gap-2 text-sm text-green-600'>
+              <div className='w-2 h-2 bg-green-600 rounded-full animate-pulse'></div>
+              Auto-updating all 67k+ transactions...
+            </div>
+          )}
+          {loading && (
+            <div className='flex items-center gap-2 text-sm text-blue-600'>
+              <div className='w-2 h-2 bg-blue-600 rounded-full animate-pulse'></div>
+              Processing all transactions...
+            </div>
+          )}
           <Select
             value={selectedDate}
             onChange={setSelectedDate}
@@ -140,7 +198,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-green-100 text-sm font-medium'>Total Credit</p>
               <p className='text-2xl font-bold'>
-                ₹{stats.totalCredit.toLocaleString()}
+                ₹{stats?.totalCredit?.toLocaleString() || '0'}
               </p>
             </div>
             <TrendingUp className='w-8 h-8 text-green-200' />
@@ -152,7 +210,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-red-100 text-sm font-medium'>Total Debit</p>
               <p className='text-2xl font-bold'>
-                ₹{stats.totalDebit.toLocaleString()}
+                ₹{stats?.totalDebit?.toLocaleString() || '0'}
               </p>
             </div>
             <TrendingDown className='w-8 h-8 text-red-200' />
@@ -164,7 +222,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-blue-100 text-sm font-medium'>Net Balance</p>
               <p className='text-2xl font-bold'>
-                ₹{stats.balance.toLocaleString()}
+                ₹{stats?.balance?.toLocaleString() || '0'}
               </p>
             </div>
             <DollarSign className='w-8 h-8 text-blue-200' />
@@ -177,7 +235,7 @@ const Dashboard: React.FC = () => {
               <p className='text-purple-100 text-sm font-medium'>
                 Transactions
               </p>
-              <p className='text-2xl font-bold'>{stats.totalTransactions}</p>
+              <p className='text-2xl font-bold'>{stats?.totalTransactions || 0}</p>
             </div>
             <FileText className='w-8 h-8 text-purple-200' />
           </div>
@@ -187,7 +245,7 @@ const Dashboard: React.FC = () => {
           <div className='flex items-center justify-between'>
             <div>
               <p className='text-orange-100 text-sm font-medium'>Pending</p>
-              <p className='text-2xl font-bold'>{stats.pendingApprovals}</p>
+              <p className='text-2xl font-bold'>{pendingApprovals?.data || 0}</p>
             </div>
             <AlertTriangle className='w-8 h-8 text-orange-200' />
           </div>
@@ -205,7 +263,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-indigo-800'>Total Companies</p>
               <p className='text-2xl font-bold text-indigo-900'>
-                {stats.companiesCount || 0}
+                {companies?.data?.length || 0}
               </p>
             </div>
           </div>
@@ -217,7 +275,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-emerald-800'>Total Accounts</p>
               <p className='text-2xl font-bold text-emerald-900'>
-                {stats.accountsCount || 0}
+                {accounts?.data?.length || 0}
               </p>
             </div>
           </div>
@@ -229,7 +287,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-amber-800'>Active Users</p>
               <p className='text-2xl font-bold text-amber-900'>
-                {stats.activeUsersCount || 0}
+                {users?.data?.filter(u => u.is_active)?.length || 0}
               </p>
             </div>
           </div>
@@ -246,13 +304,13 @@ const Dashboard: React.FC = () => {
             <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
             <p className='mt-2 text-gray-600'>Loading transactions...</p>
           </div>
-        ) : recentEntries.length === 0 ? (
+        ) : !recentEntries || recentEntries.length === 0 ? (
           <div className='text-center py-8 text-gray-500'>
             No transactions found.
           </div>
         ) : (
           <div className='space-y-3'>
-            {recentEntries.map(entry => (
+            {recentEntries?.map(entry => (
               <div
                 key={entry.id}
                 className={`p-4 rounded-lg border ${getTransactionBg(entry.credit, entry.debit)} hover:shadow-sm transition-shadow`}
@@ -260,14 +318,14 @@ const Dashboard: React.FC = () => {
                 <div className='flex items-center justify-between'>
                   <div className='flex-1'>
                     <div className='flex items-center gap-2 mb-1'>
-                      <span className='font-semibold text-gray-900'>
+                      <span className='font-semibold text-gray-900 text-xs'>
                         #{entry.sno}
                       </span>
-                      <h4 className='font-medium text-gray-900'>
+                      <h4 className='font-medium text-gray-900 text-xs'>
                         {entry.acc_name}
                       </h4>
                       {entry.sub_acc_name && (
-                        <span className='text-sm text-gray-500'>
+                        <span className='text-xs text-gray-500'>
                           → {entry.sub_acc_name}
                         </span>
                       )}
@@ -348,6 +406,103 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Company Closing Balances Table */}
+      <Card
+        title='Company Closing Balances'
+        subtitle='Current balance for each company (Credit - Debit)'
+      >
+        {loading ? (
+          <div className='text-center py-8'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+            <p className='mt-2 text-gray-600'>Loading company balances...</p>
+          </div>
+        ) : !companyBalances || companyBalances.length === 0 ? (
+          <div className='text-center py-8 text-gray-500'>
+            No company data found.
+          </div>
+        ) : (
+          <div className='overflow-x-auto'>
+            <table className='w-full text-xs'>
+              <thead>
+                <tr className='border-b border-gray-200 bg-gray-50'>
+                  <th className='text-left py-3 px-4 font-semibold text-gray-700'>
+                    Company Name
+                  </th>
+                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                    Total Credit
+                  </th>
+                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                    Total Debit
+                  </th>
+                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                    Closing Balance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {companyBalances?.map((company, index) => (
+                  <tr
+                    key={company.companyName}
+                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                    }`}
+                  >
+                    <td className='py-3 px-4 font-medium text-gray-900'>
+                      {company.companyName}
+                    </td>
+                    <td className='py-3 px-4 text-right text-green-600 font-medium'>
+                      ₹{company.totalCredit.toLocaleString()}
+                    </td>
+                    <td className='py-3 px-4 text-right text-red-600 font-medium'>
+                      ₹{company.totalDebit.toLocaleString()}
+                    </td>
+                    <td className='py-3 px-4 text-right font-semibold'>
+                      <span
+                        className={`px-2 py-1 rounded-full text-sm ${
+                          company.closingBalance > 0
+                            ? 'bg-green-100 text-green-800'
+                            : company.closingBalance < 0
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        ₹{company.closingBalance.toLocaleString()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className='border-t-2 border-gray-300 bg-gray-100 font-semibold'>
+                  <td className='py-3 px-4 text-gray-900'>
+                    Total Companies: {companyBalances?.length || 0}
+                  </td>
+                  <td className='py-3 px-4 text-right text-green-600'>
+                    ₹{companyBalances?.reduce((sum, c) => sum + c.totalCredit, 0)?.toLocaleString() || '0'}
+                  </td>
+                  <td className='py-3 px-4 text-right text-red-600'>
+                    ₹{companyBalances?.reduce((sum, c) => sum + c.totalDebit, 0)?.toLocaleString() || '0'}
+                  </td>
+                  <td className='py-3 px-4 text-right'>
+                    <span
+                      className={`px-2 py-1 rounded-full text-sm font-bold ${
+                        (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) > 0
+                          ? 'bg-green-100 text-green-800'
+                          : (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) < 0
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      ₹{companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0)?.toLocaleString() || '0'}
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
       </Card>

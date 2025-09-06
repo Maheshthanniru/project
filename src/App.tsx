@@ -6,7 +6,10 @@ import {
   Navigate,
 } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { queryClient } from './lib/queryClient';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -168,10 +171,16 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AppContent />
-        <DebugInfo isVisible={false} />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppContent />
+          <DebugInfo isVisible={false} />
+          {/* React Query DevTools - only in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <ReactQueryDevtools initialIsOpen={false} />
+          )}
+        </AuthProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 };

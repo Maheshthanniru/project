@@ -1258,21 +1258,225 @@ class SupabaseDatabase {
 
 
 
-  // Dashboard stats
+  // Dashboard stats - All time totals (fetches ALL records, not just 1000)
   async getDashboardStats(date?: string) {
+    try {
+      console.log('🔄 Fetching dashboard stats for ALL records (not just 1000)...');
+      
+      // First get the total count
+      const { count: totalCount, error: countError } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact', head: true });
+      
+      if (countError) {
+        console.error('Error getting total count:', countError);
+        return this.getDashboardStatsFallback();
+      }
+
+      console.log(`📊 Total records in database: ${totalCount}`);
+
+      if (totalCount === 0) {
+        console.log('⚠️ No records found in database');
+        return this.getDashboardStatsFallback();
+      }
+
+      // Try to use database aggregation for better performance - get sums directly from database
+      let aggregatedData = null;
+      let aggError = null;
+      
+      try {
+        const result = await supabase.rpc('get_dashboard_totals');
+        aggregatedData = result.data;
+        aggError = result.error;
+      } catch (error) {
+        console.log('⚠️ Database function not available, will use fallback method');
+        aggError = error;
+      }
+
+      let totalCredit = 0;
+      let totalDebit = 0;
+      let onlineCredit = 0;
+      let offlineCredit = 0;
+      let onlineDebit = 0;
+      let offlineDebit = 0;
+
+      if (aggError || !aggregatedData) {
+        console.log('⚠️ Database aggregation not available, using getAllCashBookEntries fallback...');
+        // Fallback: Use getAllCashBookEntries to get all records (handles pagination properly)
+        const allEntries = await this.getAllCashBookEntries();
+        console.log(`📊 Fetched ${allEntries.length} entries for dashboard stats (fallback method)`);
+        
+        if (allEntries.length > 0) {
+          totalCredit = allEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+          totalDebit = allEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+          onlineCredit = allEntries.reduce((sum, e) => sum + (e.credit_online || 0), 0);
+          offlineCredit = allEntries.reduce((sum, e) => sum + (e.credit_offline || 0), 0);
+          onlineDebit = allEntries.reduce((sum, e) => sum + (e.debit_online || 0), 0);
+          offlineDebit = allEntries.reduce((sum, e) => sum + (e.debit_offline || 0), 0);
+        }
+      } else {
+        console.log('✅ Using database aggregation for dashboard stats');
+        const totals = aggregatedData[0];
+        totalCredit = totals.total_credit || 0;
+        totalDebit = totals.total_debit || 0;
+        onlineCredit = totals.total_credit_online || 0;
+        offlineCredit = totals.total_credit_offline || 0;
+        onlineDebit = totals.total_debit_online || 0;
+        offlineDebit = totals.total_debit_offline || 0;
+      }
+
+      const balance = totalCredit - totalDebit;
+      const totalTransactions = totalCount; // Use exact count from database
+      const totalOnline = onlineCredit + onlineDebit;
+      const totalOffline = offlineCredit + offlineDebit;
+
+      // Get today's entries count
+      const today = date || new Date().toISOString().split('T')[0];
+      const { count: todayCount } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact', head: true })
+        .eq('c_date', today);
+      
+      const todayEntries = todayCount || 0;
+
+      console.log(`✅ Dashboard stats calculated: ${totalTransactions} total transactions, ₹${totalCredit.toLocaleString()} credit, ₹${totalDebit.toLocaleString()} debit`);
+
+      return {
+        totalCredit,
+        totalDebit,
+        balance,
+        totalTransactions,
+        todayEntries: todayEntries,
+        onlineCredit,
+        offlineCredit,
+        onlineDebit,
+        offlineDebit,
+        totalOnline,
+        totalOffline,
+      };
+    } catch (error) {
+      console.error('Error in getDashboardStats:', error);
+      return this.getDashboardStatsFallback();
+    }
+  }
+
+  // Fallback method for dashboard stats
+  private getDashboardStatsFallback() {
+    return {
+      totalCredit: 0,
+      totalDebit: 0,
+      balance: 0,
+      totalTransactions: 0,
+      todayEntries: 0,
+      onlineCredit: 0,
+      offlineCredit: 0,
+      onlineDebit: 0,
+      offlineDebit: 0,
+      totalOnline: 0,
+      totalOffline: 0,
+    };
+  }
+
+  // Get company-wise closing balances (optimized version)
+  async getCompanyClosingBalances(): Promise<Array<{companyName: string, closingBalance: number, totalCredit: number, totalDebit: number}>> {
+    try {
+      console.log('🔄 Fetching company-wise closing balances...');
+      
+      // Use a more efficient approach - get only the fields we need
+      let entries;
+      const { data: initialEntries, error } = await supabase
+        .from('cash_book')
+        .select('company_name, credit, debit')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '');
+
+      if (error) {
+        console.error('Error fetching company data:', error);
+        return [];
+      }
+
+      entries = initialEntries;
+      console.log(`📊 Processing ${entries?.length || 0} entries for company balances`);
+      
+      if (!entries || entries.length === 0) {
+        console.log('⚠️ No entries found with company names, trying fallback method...');
+        
+        // Fallback: Try without filters
+        const { data: fallbackEntries, error: fallbackError } = await supabase
+          .from('cash_book')
+          .select('company_name, credit, debit')
+          .limit(1000);
+
+        if (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          return [];
+        }
+
+        console.log(`📊 Fallback found ${fallbackEntries?.length || 0} entries`);
+        
+        if (!fallbackEntries || fallbackEntries.length === 0) {
+          console.log('⚠️ No entries found in database at all');
+          return [];
+        }
+
+        // Use fallback entries
+        entries = fallbackEntries;
+      }
+
+      // Group by company and calculate totals
+      const companyTotals = new Map<string, {totalCredit: number, totalDebit: number}>();
+      
+      entries.forEach(entry => {
+        if (entry.company_name) {
+          const companyName = entry.company_name.trim();
+          
+          if (!companyTotals.has(companyName)) {
+            companyTotals.set(companyName, { totalCredit: 0, totalDebit: 0 });
+          }
+          
+          const totals = companyTotals.get(companyName)!;
+          totals.totalCredit += entry.credit || 0;
+          totals.totalDebit += entry.debit || 0;
+        }
+      });
+      
+      // Convert to array and calculate closing balances
+      const companyBalances = Array.from(companyTotals.entries()).map(([companyName, totals]) => ({
+        companyName,
+        totalCredit: totals.totalCredit,
+        totalDebit: totals.totalDebit,
+        closingBalance: totals.totalCredit - totals.totalDebit
+      }));
+      
+      // Sort by company name
+      companyBalances.sort((a, b) => a.companyName.localeCompare(b.companyName));
+      
+      console.log(`✅ Company balances calculated for ${companyBalances.length} companies`);
+      console.log('📊 Sample companies:', companyBalances.slice(0, 3));
+      
+      return companyBalances;
+    } catch (error) {
+      console.error('Error fetching company closing balances:', error);
+      return [];
+    }
+  }
+
+  // Dashboard stats for specific date (if needed for date filtering)
+  async getDashboardStatsForDate(date: string) {
     const { data, error } = await supabase
       .from('cash_book')
       .select(
         'credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline'
-      );
+      )
+      .eq('c_date', date);
 
     if (error) {
-      console.error('Error fetching dashboard stats:', error);
+      console.error('Error fetching dashboard stats for date:', error);
       return {
         totalCredit: 0,
         totalDebit: 0,
         balance: 0,
-        todayEntries: 0,
+        totalTransactions: 0,
         onlineCredit: 0,
         offlineCredit: 0,
         onlineDebit: 0,
@@ -1283,30 +1487,28 @@ class SupabaseDatabase {
     }
 
     const entries = data || [];
-    const today = date || new Date().toISOString().split('T')[0];
-
-    const todayEntries = entries.filter(e => e.c_date === today);
-    const totalCredit = todayEntries.reduce(
+    
+    const totalCredit = entries.reduce(
       (sum, e) => sum + (e.credit || 0),
       0
     );
-    const totalDebit = todayEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+    const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
     const balance = totalCredit - totalDebit;
+    const totalTransactions = entries.length;
 
-    // Calculate online vs offline amounts using new fields
-    const onlineCredit = todayEntries.reduce(
+    const onlineCredit = entries.reduce(
       (sum, e) => sum + (e.credit_online || 0),
       0
     );
-    const offlineCredit = todayEntries.reduce(
+    const offlineCredit = entries.reduce(
       (sum, e) => sum + (e.credit_offline || 0),
       0
     );
-    const onlineDebit = todayEntries.reduce(
+    const onlineDebit = entries.reduce(
       (sum, e) => sum + (e.debit_online || 0),
       0
     );
-    const offlineDebit = todayEntries.reduce(
+    const offlineDebit = entries.reduce(
       (sum, e) => sum + (e.debit_offline || 0),
       0
     );
@@ -1318,7 +1520,7 @@ class SupabaseDatabase {
       totalCredit,
       totalDebit,
       balance,
-      todayEntries: todayEntries.length,
+      totalTransactions,
       onlineCredit,
       offlineCredit,
       onlineDebit,

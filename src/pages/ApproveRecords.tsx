@@ -257,8 +257,12 @@ const ApproveRecords: React.FC = () => {
       setLoading(true);
       const success = await supabaseDB.toggleApproval(entryId);
       if (success) {
-        toast.success('Record approved successfully!');
-        await loadEntries(); // Reload to get updated data
+      toast.success('Record approved successfully!');
+      await loadEntries(); // Reload to get updated data
+      
+      // Trigger dashboard refresh
+      localStorage.setItem('dashboard-refresh', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error('Failed to approve record');
       }
@@ -285,6 +289,10 @@ const ApproveRecords: React.FC = () => {
 
       toast.success('Record rejected successfully!');
       await loadEntries(); // Reload to get updated data
+      
+      // Trigger dashboard refresh
+      localStorage.setItem('dashboard-refresh', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error) {
       console.error('Error rejecting record:', error);
       toast.error('Error rejecting record');
@@ -314,6 +322,10 @@ const ApproveRecords: React.FC = () => {
         await loadEntries();
         setSelectedEntries(new Set());
         toast.success(`${approvedCount} entries approved successfully!`);
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error('Failed to approve entries');
       }
@@ -362,6 +374,10 @@ const ApproveRecords: React.FC = () => {
           toast.success(
             `${approvedCount} entries approved for ${filters.company}!`
           );
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         }
       } catch (error) {
         toast.error('Failed to approve company entries');
@@ -408,6 +424,10 @@ const ApproveRecords: React.FC = () => {
           toast.success(
             `${approvedCount} entries approved for ${filters.staff}!`
           );
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         }
       } catch (error) {
         toast.error('Failed to approve staff entries');
@@ -482,6 +502,10 @@ const ApproveRecords: React.FC = () => {
           await loadEntries();
           setSelectedEntries(new Set());
           toast.success(`${approvedCount} entries approved with confirmation!`);
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         }
       } catch (error) {
         toast.error('Failed to approve entries');
@@ -515,6 +539,10 @@ const ApproveRecords: React.FC = () => {
         await loadEntries();
         setSelectedEntries(new Set());
         toast.success(`${rejectedCount} entries rejected successfully!`);
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error('Failed to reject entries');
       }

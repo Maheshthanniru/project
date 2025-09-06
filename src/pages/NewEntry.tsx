@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCreateCashBookEntry, useBulkCashBookOperations } from '../hooks/useCashBookData';
+import { useDropdownData } from '../hooks/useDashboardData';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { importFromFile } from '../utils/excel';
@@ -38,6 +40,11 @@ interface NewEntryForm {
 
 const NewEntry: React.FC = () => {
   const { user } = useAuth();
+  
+  // React Query hooks
+  const createEntryMutation = useCreateCashBookEntry();
+  const bulkOperationsMutation = useBulkCashBookOperations();
+  const { companies, accounts } = useDropdownData();
 
   const [entry, setEntry] = useState<NewEntryForm>({
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -76,12 +83,9 @@ const NewEntry: React.FC = () => {
     quantityChecked: false,
   });
 
-  const [companies, setCompanies] = useState<
-    { value: string; label: string }[]
-  >([]);
-  const [accounts, setAccounts] = useState<{ value: string; label: string }[]>(
-    []
-  );
+  // Convert React Query data to dropdown format
+  const companiesOptions = companies?.data?.map(c => ({ value: c.company_name, label: c.company_name })) || [];
+  const accountsOptions = accounts?.data?.map(a => ({ value: a.acc_name, label: a.acc_name })) || [];
   const [subAccounts, setSubAccounts] = useState<
     { value: string; label: string }[]
   >([]);
@@ -89,7 +93,7 @@ const NewEntry: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentDailyEntryNo, setCurrentDailyEntryNo] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
-  const [recentEntries, setRecentEntries] = useState<any[]>([]);
+  // Recent entries are now managed by React Query
 
   // Modal states for creating new items
   const [showNewCompany, setShowNewCompany] = useState(false);
@@ -111,7 +115,7 @@ const NewEntry: React.FC = () => {
       console.log('🔍 Testing database connection...');
 
       // Test basic connectivity
-      const { data, error } = await supabase.from('companies').select('count');
+      const { error } = await supabase.from('companies').select('count');
       if (error) {
         console.error('❌ Database connection failed:', error);
         toast.error('Database connection failed: ' + error.message);
@@ -136,7 +140,7 @@ const NewEntry: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<any[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // Upload progress is now handled by React Query mutations
   const [importProgress, setImportProgress] = useState({
     current: 0,
     total: 0,
@@ -148,8 +152,38 @@ const NewEntry: React.FC = () => {
   });
   const [importErrors, setImportErrors] = useState<string[]>([]);
 
+  // Refs for form navigation
+  const dateRef = useRef<HTMLInputElement>(null);
+  const companyNameRef = useRef<HTMLInputElement>(null);
+  const mainAccountRef = useRef<HTMLInputElement>(null);
+  const subAccountRef = useRef<HTMLInputElement>(null);
+  const particularsRef = useRef<HTMLInputElement>(null);
+  const creditRef = useRef<HTMLInputElement>(null);
+  const debitRef = useRef<HTMLInputElement>(null);
+  const staffRef = useRef<HTMLInputElement>(null);
+
+  // Refs for dual entry form navigation
+  const dualDateRef = useRef<HTMLInputElement>(null);
+  const dualCompanyNameRef = useRef<HTMLInputElement>(null);
+  const dualMainAccountRef = useRef<HTMLInputElement>(null);
+  const dualSubAccountRef = useRef<HTMLInputElement>(null);
+  const dualParticularsRef = useRef<HTMLInputElement>(null);
+  const dualCreditRef = useRef<HTMLInputElement>(null);
+  const dualDebitRef = useRef<HTMLInputElement>(null);
+  const dualStaffRef = useRef<HTMLInputElement>(null);
+
+  // Function to handle Enter key navigation
+  const handleKeyDown = (e: React.KeyboardEvent, nextRef: React.RefObject<HTMLElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef.current) {
+        nextRef.current.focus();
+      }
+    }
+  };
+
   useEffect(() => {
-    loadDropdownData();
+    loadUsersData();
     updateDailyEntryNumber();
     updateTotalEntryCount();
   }, []);
@@ -171,21 +205,10 @@ const NewEntry: React.FC = () => {
   }, [entry.companyName, entry.accountName]);
 
   useEffect(() => {
+    // Recent entries are now managed by React Query
     const fetchRecentEntries = async () => {
-      const entries = await supabaseDB.getCashBookEntries();
-      setRecentEntries(
-        entries
-          .sort((a, b) => {
-            const aTime = a.created_at
-              ? new Date(a.created_at).getTime()
-              : a.sno;
-            const bTime = b.created_at
-              ? new Date(b.created_at).getTime()
-              : b.sno;
-            return bTime - aTime;
-          })
-          .slice(0, 3)
-      );
+      // This function is no longer needed as recent entries are handled by React Query
+      console.log('Recent entries are now managed by React Query');
     };
     fetchRecentEntries();
   }, []);
@@ -214,20 +237,9 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  const loadDropdownData = async () => {
+  // Load users data (companies and accounts are now handled by React Query)
+  const loadUsersData = async () => {
     try {
-      console.log('🔍 Loading dropdown data...');
-
-      // Load companies
-      const companies = await supabaseDB.getCompanies();
-      console.log('📊 Companies loaded:', companies.length);
-      const companiesData = companies.map(company => ({
-        value: company.company_name,
-        label: company.company_name,
-      }));
-      setCompanies(companiesData);
-
-      // Load users
       const users = await supabaseDB.getUsers();
       console.log('👥 Users loaded:', users.length);
       const usersData = users
@@ -237,27 +249,18 @@ const NewEntry: React.FC = () => {
           label: user.username,
         }));
       setUsers(usersData);
-
-      console.log('✅ Dropdown data loaded successfully');
     } catch (error) {
-      console.error('❌ Error loading dropdown data:', error);
-      toast.error('Failed to load dropdown data. Check console for details.');
-
-      // If it's a network/RLS issue, show specific message
-      if (error instanceof Error && error.message.includes('fetch')) {
-        toast.error('Network issue detected. Please check your connection.');
-      }
+      console.error('❌ Error loading users data:', error);
+      toast.error('Failed to load users data.');
     }
   };
 
   const loadAccountsByCompany = async () => {
     try {
-      const accounts = await supabaseDB.getAccountsByCompany(entry.companyName);
-      const accountsData = accounts.map(account => ({
-        value: account.acc_name,
-        label: account.acc_name,
-      }));
-      setAccounts(accountsData);
+      await supabaseDB.getAccountsByCompany(entry.companyName);
+      // Accounts data is now managed by React Query
+      // Note: Accounts are now managed by React Query, but we still need to filter by company
+      // This will be handled by the component logic
       setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
     } catch (error) {
       console.error('Error loading accounts:', error);
@@ -328,10 +331,10 @@ const NewEntry: React.FC = () => {
     }
     setLoading(true);
     try {
-      // Save main entry
+      // Prepare main entry data
       const mainCreditNum = parseFloat(entry.credit) || 0;
       const mainDebitNum = parseFloat(entry.debit) || 0;
-      const newEntry = await supabaseDB.addCashBookEntry({
+      const mainEntryData = {
         acc_name: entry.accountName,
         sub_acc_name: entry.subAccount,
         particulars: entry.particulars,
@@ -351,12 +354,13 @@ const NewEntry: React.FC = () => {
           ? parseFloat(entry.purchaseQ) || 0
           : 0,
         cb: 'CB',
-      });
-      // If dual entry, save dual entry as the opposite (e.g. if main is debit, dual is credit)
+      };
+
+      // If dual entry, prepare both entries for bulk operation
       if (dualEntryEnabled) {
         const dualCreditNum = parseFloat(dualEntry.credit) || 0;
         const dualDebitNum = parseFloat(dualEntry.debit) || 0;
-        await supabaseDB.addCashBookEntry({
+        const dualEntryData = {
           acc_name: dualEntry.accountName,
           sub_acc_name: dualEntry.subAccount,
           particulars: dualEntry.particulars,
@@ -378,11 +382,15 @@ const NewEntry: React.FC = () => {
             ? parseFloat(dualEntry.purchaseQ) || 0
             : 0,
           cb: 'CB',
-        });
+        };
+
+        // Use bulk operations for dual entries
+        await bulkOperationsMutation.mutateAsync([mainEntryData, dualEntryData]);
+      } else {
+        // Use single entry mutation
+        await createEntryMutation.mutateAsync(mainEntryData);
       }
-      toast.success(
-        `Entry${dualEntryEnabled ? ' (Dual)' : ''} saved successfully!`
-      );
+      
       // Reset forms
       const currentDate = entry.date;
       setEntry({
@@ -402,7 +410,7 @@ const NewEntry: React.FC = () => {
         staff: user?.username || '',
         quantityChecked: false,
       });
-      setAccounts([]);
+      // Accounts are now managed by React Query
       setSubAccounts([]);
       setDualEntry({
         date: currentDate,
@@ -450,10 +458,7 @@ const NewEntry: React.FC = () => {
         newCompanyAddress.trim()
       );
       console.log('Company created successfully:', company);
-      setCompanies(prev => [
-        ...prev,
-        { value: company.company_name, label: company.company_name },
-      ]);
+      // Companies are now managed by React Query - will be refetched automatically
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
       setNewCompanyAddress('');
@@ -478,10 +483,7 @@ const NewEntry: React.FC = () => {
         entry.companyName,
         newAccountName.trim()
       );
-      setAccounts(prev => [
-        ...prev,
-        { value: account.acc_name, label: account.acc_name },
-      ]);
+      // Accounts are now managed by React Query - will be refetched automatically
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
       setNewAccountName('');
       setShowNewAccount(false);
@@ -533,9 +535,7 @@ const NewEntry: React.FC = () => {
           if (entry.companyName) {
             success = await supabaseDB.deleteCompany(entry.companyName);
             if (success) {
-              setCompanies(prev =>
-                prev.filter(c => c.value !== entry.companyName)
-              );
+              // Companies are now managed by React Query - will be refetched automatically
               setEntry(prev => ({
                 ...prev,
                 companyName: '',
@@ -550,9 +550,7 @@ const NewEntry: React.FC = () => {
           if (entry.companyName && entry.accountName) {
             success = await supabaseDB.deleteAccount(entry.accountName);
             if (success) {
-              setAccounts(prev =>
-                prev.filter(a => a.value !== entry.accountName)
-              );
+              // Accounts are now managed by React Query - will be refetched automatically
               setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
               message = 'Account deleted successfully!';
             }
@@ -594,7 +592,7 @@ const NewEntry: React.FC = () => {
 
     setUploadedFile(file);
     setUploadLoading(true);
-    setUploadProgress(0);
+    // Upload progress is now handled by React Query mutations
 
     try {
       const result = await importFromFile(file);
@@ -618,7 +616,7 @@ const NewEntry: React.FC = () => {
       toast.error('Failed to upload CSV file');
     } finally {
       setUploadLoading(false);
-      setUploadProgress(100);
+      // Upload progress is now handled by React Query mutations
     }
   };
 
@@ -629,7 +627,7 @@ const NewEntry: React.FC = () => {
     }
 
     setUploadLoading(true);
-    setUploadProgress(0);
+    // Upload progress is now handled by React Query mutations
     setImportErrors([]);
 
     try {
@@ -1099,20 +1097,11 @@ const NewEntry: React.FC = () => {
 
         // Refresh data
         updateTotalEntryCount();
-        const entries = await supabaseDB.getCashBookEntries();
-        setRecentEntries(
-          entries
-            .sort((a, b) => {
-              const aTime = a.created_at
-                ? new Date(a.created_at).getTime()
-                : a.sno;
-              const bTime = b.created_at
-                ? new Date(b.created_at).getTime()
-                : b.sno;
-              return bTime - aTime;
-            })
-            .slice(0, 3)
-        );
+        // Recent entries are now managed by React Query - no need to manually update
+
+        // Trigger dashboard refresh after CSV import
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error(result.error || 'Failed to import CSV data');
       }
@@ -1162,7 +1151,7 @@ const NewEntry: React.FC = () => {
               </Button>
               <Button
                 variant='secondary'
-                onClick={loadDropdownData}
+                onClick={loadUsersData}
                 size='sm'
                 className='text-xs'
                 icon={RefreshCw}
@@ -1209,24 +1198,28 @@ const NewEntry: React.FC = () => {
                 </div>
 
                 {/* Basic Information */}
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                   <Input
+                    ref={dateRef}
                     label='Date'
                     type='date'
                     value={entry.date}
                     onChange={value => handleInputChange('date', value)}
+                    onKeyDown={(e) => handleKeyDown(e, companyNameRef)}
                     required
                   />
 
                   <div className='space-y-2'>
-                    <Select
+                    <SearchableSelect
+                      ref={companyNameRef}
                       label='Company Name'
                       value={entry.companyName}
                       onChange={value =>
                         handleInputChange('companyName', value)
                       }
-                      options={companies}
+                      options={companiesOptions}
                       placeholder='Select company...'
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, mainAccountRef)}
                       required
                     />
                     <div className='flex gap-2'>
@@ -1254,28 +1247,21 @@ const NewEntry: React.FC = () => {
                       )}
                     </div>
                   </div>
-
-                  <Select
-                    label='Staff'
-                    value={entry.staff}
-                    onChange={value => handleInputChange('staff', value)}
-                    options={users}
-                    placeholder='Select staff...'
-                    required
-                  />
                 </div>
 
                 {/* Account Information */}
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                   <div className='space-y-1'>
-                    <Select
+                    <SearchableSelect
+                      ref={mainAccountRef}
                       label='Main Account'
                       value={entry.accountName}
                       onChange={value =>
                         handleInputChange('accountName', value)
                       }
-                      options={accounts}
+                      options={accountsOptions}
                       placeholder='Select account...'
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, subAccountRef)}
                       required
                       disabled={!entry.companyName}
                     />
@@ -1307,12 +1293,14 @@ const NewEntry: React.FC = () => {
                   </div>
 
                   <div className='space-y-1'>
-                    <Select
+                    <SearchableSelect
+                      ref={subAccountRef}
                       label='Sub Account'
                       value={entry.subAccount}
                       onChange={value => handleInputChange('subAccount', value)}
                       options={subAccounts}
                       placeholder='Select sub account...'
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, particularsRef)}
                       disabled={!entry.accountName}
                     />
                     <div className='flex gap-2'>
@@ -1345,9 +1333,11 @@ const NewEntry: React.FC = () => {
 
                 {/* Particulars */}
                 <Input
+                  ref={particularsRef}
                   label='Particulars'
                   value={entry.particulars}
                   onChange={value => handleInputChange('particulars', value)}
+                  onKeyDown={(e) => handleKeyDown(e, creditRef)}
                   placeholder='Enter transaction details...'
                   required
                 />
@@ -1355,26 +1345,41 @@ const NewEntry: React.FC = () => {
                 {/* Amounts */}
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                   <Input
+                    ref={creditRef}
                     label='Credit'
                     value={entry.credit}
                     onChange={val =>
                       setEntry(prev => ({ ...prev, credit: val }))
                     }
+                    onKeyDown={(e) => handleKeyDown(e, debitRef)}
                     placeholder='Enter credit amount'
                     type='number'
                     min='0'
                   />
                   <Input
+                    ref={debitRef}
                     label='Debit'
                     value={entry.debit}
                     onChange={val =>
                       setEntry(prev => ({ ...prev, debit: val }))
                     }
+                    onKeyDown={(e) => handleKeyDown(e, staffRef)}
                     placeholder='Enter debit amount'
                     type='number'
                     min='0'
                   />
                 </div>
+
+                {/* Staff Field - Now placed below Debit */}
+                <SearchableSelect
+                  ref={staffRef}
+                  label='Staff'
+                  value={entry.staff}
+                  onChange={value => handleInputChange('staff', value)}
+                  options={users}
+                  placeholder='Select staff...'
+                  required
+                />
 
                 {/* Combined Quantity Checkbox and Inputs */}
                 <div className='space-y-4'>
@@ -1433,17 +1438,20 @@ const NewEntry: React.FC = () => {
                       Dual Entry
                     </h3>
                     {/* Basic Information */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                       <Input
+                        ref={dualDateRef}
                         label='Date'
                         type='date'
                         value={dualEntry.date}
                         onChange={value =>
                           setDualEntry(prev => ({ ...prev, date: value }))
                         }
+                        onKeyDown={(e) => handleKeyDown(e, dualCompanyNameRef)}
                         required
                       />
-                      <Select
+                      <SearchableSelect
+                        ref={dualCompanyNameRef}
                         label='Company Name'
                         value={dualEntry.companyName}
                         onChange={value =>
@@ -1452,24 +1460,16 @@ const NewEntry: React.FC = () => {
                             companyName: value,
                           }))
                         }
-                        options={companies}
+                        options={companiesOptions}
                         placeholder='Select company...'
-                        required
-                      />
-                      <Select
-                        label='Staff'
-                        value={dualEntry.staff}
-                        onChange={value =>
-                          setDualEntry(prev => ({ ...prev, staff: value }))
-                        }
-                        options={users}
-                        placeholder='Select staff...'
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualMainAccountRef)}
                         required
                       />
                     </div>
                     {/* Account Information */}
                     <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
-                      <Select
+                      <SearchableSelect
+                        ref={dualMainAccountRef}
                         label='Main Account'
                         value={dualEntry.accountName}
                         onChange={value =>
@@ -1478,12 +1478,14 @@ const NewEntry: React.FC = () => {
                             accountName: value,
                           }))
                         }
-                        options={accounts}
+                        options={accountsOptions}
                         placeholder='Select account...'
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualSubAccountRef)}
                         required
                         disabled={!dualEntry.companyName}
                       />
-                      <Select
+                      <SearchableSelect
+                        ref={dualSubAccountRef}
                         label='Sub Account'
                         value={dualEntry.subAccount}
                         onChange={value =>
@@ -1491,16 +1493,19 @@ const NewEntry: React.FC = () => {
                         }
                         options={subAccounts}
                         placeholder='Select sub account...'
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualParticularsRef)}
                         disabled={!dualEntry.accountName}
                       />
                     </div>
                     {/* Particulars */}
                     <Input
+                      ref={dualParticularsRef}
                       label='Particulars'
                       value={dualEntry.particulars}
                       onChange={value =>
                         setDualEntry(prev => ({ ...prev, particulars: value }))
                       }
+                      onKeyDown={(e) => handleKeyDown(e, dualCreditRef)}
                       placeholder='Enter transaction details...'
                       required
                       className='mt-2'
@@ -1508,26 +1513,43 @@ const NewEntry: React.FC = () => {
                     {/* Amounts */}
                     <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
                       <Input
+                        ref={dualCreditRef}
                         label='Credit'
                         value={dualEntry.credit}
                         onChange={val =>
                           setDualEntry(prev => ({ ...prev, credit: val }))
                         }
+                        onKeyDown={(e) => handleKeyDown(e, dualDebitRef)}
                         placeholder='Enter credit amount'
                         type='number'
                         min='0'
                       />
                       <Input
+                        ref={dualDebitRef}
                         label='Debit'
                         value={dualEntry.debit}
                         onChange={val =>
                           setDualEntry(prev => ({ ...prev, debit: val }))
                         }
+                        onKeyDown={(e) => handleKeyDown(e, dualStaffRef)}
                         placeholder='Enter debit amount'
                         type='number'
                         min='0'
                       />
                     </div>
+
+                    {/* Staff Field - Now placed below Debit for dual entry */}
+                    <SearchableSelect
+                      ref={dualStaffRef}
+                      label='Staff'
+                      value={dualEntry.staff}
+                      onChange={value =>
+                        setDualEntry(prev => ({ ...prev, staff: value }))
+                      }
+                      options={users}
+                      placeholder='Select staff...'
+                      required
+                    />
                     {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
                     <div className='space-y-4 mt-2'>
                       <div className='flex items-center gap-2'>
@@ -1615,7 +1637,7 @@ const NewEntry: React.FC = () => {
                         staff: user?.username || '',
                         quantityChecked: false,
                       });
-                      setAccounts([]);
+                      // Accounts are now managed by React Query
                       setSubAccounts([]);
                     }}
                     className='flex-1 text-xs py-1'

@@ -1,0 +1,102 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabaseDB } from '../lib/supabaseDatabase';
+import { queryKeys } from '../lib/queryClient';
+
+// Hook for dashboard stats
+export const useDashboardStats = (selectedDate?: string) => {
+  return useQuery({
+    queryKey: [...queryKeys.dashboard.stats, selectedDate],
+    queryFn: () => supabaseDB.getDashboardStats(selectedDate),
+    staleTime: 2 * 60 * 1000, // 2 minutes for stats
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+  });
+};
+
+// Hook for recent entries
+export const useRecentEntries = () => {
+  return useQuery({
+    queryKey: queryKeys.dashboard.recentEntries,
+    queryFn: () => supabaseDB.getCashBookEntries(10, 0),
+    staleTime: 1 * 60 * 1000, // 1 minute for recent entries
+    gcTime: 3 * 60 * 1000, // 3 minutes cache
+  });
+};
+
+// Hook for company balances
+export const useCompanyBalances = () => {
+  return useQuery({
+    queryKey: queryKeys.dashboard.companyBalances,
+    queryFn: () => supabaseDB.getCompanyClosingBalances(),
+    staleTime: 3 * 60 * 1000, // 3 minutes for company balances
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
+  });
+};
+
+// Hook for dropdown data (companies, accounts, users)
+export const useDropdownData = () => {
+  const companiesQuery = useQuery({
+    queryKey: queryKeys.dropdowns.companies,
+    queryFn: () => supabaseDB.getCompanies(),
+    staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
+    gcTime: 30 * 60 * 1000, // 30 minutes cache
+  });
+
+  const accountsQuery = useQuery({
+    queryKey: queryKeys.dropdowns.accounts,
+    queryFn: () => supabaseDB.getAccounts(),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: queryKeys.dropdowns.users,
+    queryFn: () => supabaseDB.getUsers(),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const pendingApprovalsQuery = useQuery({
+    queryKey: queryKeys.approvals.count,
+    queryFn: () => supabaseDB.getPendingApprovalsCount(),
+    staleTime: 1 * 60 * 1000, // 1 minute for pending approvals
+    gcTime: 3 * 60 * 1000,
+  });
+
+  return {
+    companies: companiesQuery,
+    accounts: accountsQuery,
+    users: usersQuery,
+    pendingApprovals: pendingApprovalsQuery,
+    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading,
+    isError: companiesQuery.isError || accountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError,
+  };
+};
+
+// Utility hook for invalidating dashboard data
+export const useInvalidateDashboard = () => {
+  const queryClient = useQueryClient();
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+    queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.count });
+  };
+
+  const invalidateStats = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+  };
+
+  const invalidateRecentEntries = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
+    queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+  };
+
+  return {
+    invalidateAll,
+    invalidateStats,
+    invalidateRecentEntries,
+  };
+};

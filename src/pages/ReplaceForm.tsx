@@ -269,6 +269,10 @@ const ReplaceForm: React.FC = () => {
             newAccountName: '',
           }));
           setPreviewMode(false);
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         }
       } catch (error) {
         toast.error('Failed to replace account names');
@@ -315,6 +319,10 @@ const ReplaceForm: React.FC = () => {
             newSubAccount: '',
           }));
           setPreviewMode(false);
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
           toast.error('No records were updated');
         }
@@ -438,6 +446,10 @@ const ReplaceForm: React.FC = () => {
             newCompanyName: '',
           }));
           setPreviewMode(false);
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
           toast.error(
             'No records were updated. Please check the console for details.'

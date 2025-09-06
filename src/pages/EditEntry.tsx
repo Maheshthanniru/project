@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -772,6 +772,10 @@ const EditEntry: React.FC = () => {
         setEditMode(false);
         setSelectedEntry(null);
         toast.success('Entry updated successfully!');
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error('Failed to update entry');
       }
@@ -809,6 +813,10 @@ const EditEntry: React.FC = () => {
         if (success) {
           await loadEntries();
           toast.success('Entry deleted successfully!');
+          
+          // Trigger dashboard refresh
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
           toast.error('Failed to delete entry - check console for details');
         }
@@ -1498,7 +1506,7 @@ const EditEntry: React.FC = () => {
           </div>
           {/* Company Name - Second */}
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Company Name'
               value={filterCompanyName}
               onChange={async (value) => {
@@ -1523,7 +1531,7 @@ const EditEntry: React.FC = () => {
           
           {/* Account Name - Third */}
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Account Name'
               value={filterAccountName}
               onChange={async (value) => {
@@ -1548,7 +1556,7 @@ const EditEntry: React.FC = () => {
           
           {/* Sub Account - Fourth */}
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Sub Account'
               value={filterSubAccountName}
               onChange={async (value) => {
@@ -1568,7 +1576,7 @@ const EditEntry: React.FC = () => {
           
           {/* Staff - Fifth */}
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Staff'
               value={filterStaff}
               onChange={setFilterStaff}
@@ -1579,7 +1587,7 @@ const EditEntry: React.FC = () => {
           
           {/* Particulars */}
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Particulars'
               value={filterParticulars}
               onChange={setFilterParticulars}
@@ -1620,7 +1628,7 @@ const EditEntry: React.FC = () => {
             />
           </div>
           <div className='col-span-1'>
-            <Select
+            <SearchableSelect
               label='Status Filter'
               value={statusFilter}
               onChange={setStatusFilter}
@@ -2130,14 +2138,14 @@ const EditEntry: React.FC = () => {
                           />
                         )}
                       </div>
-                      <Select
+                      <SearchableSelect
                         label='Company Name'
                         value={selectedEntry?.company_name || ''}
                         onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
                         options={companies}
                         disabled={!editMode || selectedEntry?.lock_record}
                       />
-                      <Select
+                      <SearchableSelect
                         label='Main Account'
                         value={selectedEntry?.acc_name || ''}
                         onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
@@ -2145,7 +2153,7 @@ const EditEntry: React.FC = () => {
                         disabled={!editMode || selectedEntry?.lock_record}
                         placeholder='Select account...'
                       />
-                      <Select
+                      <SearchableSelect
                         label='Sub Account'
                         value={selectedEntry?.sub_acc_name || ''}
                         onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
@@ -2153,7 +2161,7 @@ const EditEntry: React.FC = () => {
                         disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.acc_name}
                         placeholder='Select sub account...'
                       />
-                      <Select
+                      <SearchableSelect
                         label='Staff'
                         value={selectedEntry?.staff || ''}
                         onChange={value => editMode ? handleInputChange('staff', value) : undefined}
