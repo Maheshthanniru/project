@@ -450,14 +450,14 @@ class SupabaseDatabase {
     }
   }
 
-  // Get filtered cash book entries using server-side filtering for better performance
-  async getAllFilteredCashBookEntries(filters: {
+  // Get filtered cash book entries with pagination for better performance
+  async getFilteredCashBookEntries(filters: {
     companyName?: string;
     accountName?: string;
     subAccountName?: string;
-  }): Promise<CashBookEntry[]> {
+  }, limit: number = 1000, offset: number = 0): Promise<{ data: CashBookEntry[], total: number }> {
     try {
-      console.log('🔄 Fetching filtered cash book entries with server-side filtering...');
+      console.log(`🔄 Fetching filtered cash book entries with pagination (limit: ${limit}, offset: ${offset})...`);
       console.log('🔍 Filters:', filters);
       
       let query = supabase
@@ -483,6 +483,68 @@ class SupabaseDatabase {
       // Order by date for consistent results
       query = query.order('c_date', { ascending: false });
 
+      // Apply pagination
+      const start = offset;
+      const end = offset + limit - 1;
+      query = query.range(start, end);
+
+      console.log('🔍 Executing paginated database query...');
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('❌ Error fetching filtered entries:', error);
+        return { data: [], total: 0 };
+      }
+
+      console.log(`📊 Filtered entries loaded: ${data?.length || 0} (Total available: ${count || 0})`);
+      console.log('📊 Sample of returned entries:', data?.slice(0, 2).map(e => ({ 
+        id: e.id, 
+        company: e.company_name, 
+        date: e.c_date 
+      })));
+      
+      return { data: data || [], total: count || 0 };
+    } catch (error) {
+      console.error('❌ Error in getFilteredCashBookEntries:', error);
+      return { data: [], total: 0 };
+    }
+  }
+
+  // Get filtered cash book entries using server-side filtering for better performance (loads all at once)
+  async getAllFilteredCashBookEntries(filters: {
+    companyName?: string;
+    accountName?: string;
+    subAccountName?: string;
+  }): Promise<CashBookEntry[]> {
+    try {
+      console.log('🔄 Fetching filtered cash book entries with server-side filtering...');
+      console.log('🔍 Filters:', filters);
+      console.log('🔍 About to query ALL 67k records with filters...');
+      
+      let query = supabase
+        .from('cash_book')
+        .select('*', { count: 'exact' });
+
+      // Apply filters at database level for better performance
+      if (filters.companyName) {
+        query = query.eq('company_name', filters.companyName);
+        console.log(`🏢 Filtering by company: ${filters.companyName}`);
+      }
+      
+      if (filters.accountName) {
+        query = query.eq('acc_name', filters.accountName);
+        console.log(`📄 Filtering by account: ${filters.accountName}`);
+      }
+      
+      if (filters.subAccountName) {
+        query = query.eq('sub_acc_name', filters.subAccountName);
+        console.log(`👤 Filtering by sub-account: ${filters.subAccountName}`);
+      }
+
+      // Order by date for consistent results
+      query = query.order('c_date', { ascending: false });
+
+      console.log('🔍 Executing database query...');
       const { data, error, count } = await query;
 
       if (error) {
@@ -491,6 +553,11 @@ class SupabaseDatabase {
       }
 
       console.log(`📊 Filtered entries loaded: ${data?.length || 0} (Total available: ${count || 0})`);
+      console.log('📊 Sample of returned entries:', data?.slice(0, 2).map(e => ({ 
+        id: e.id, 
+        company: e.company_name, 
+        date: e.c_date 
+      })));
       
       return data || [];
     } catch (error) {

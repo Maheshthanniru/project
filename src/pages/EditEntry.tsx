@@ -376,6 +376,7 @@ const EditEntry: React.FC = () => {
       const { count } = await supabase
         .from('cash_book')
         .select('*', { count: 'exact', head: true });
+      console.log('📊 Total entries in database:', count);
       setTotalEntries(count || 0);
 
       // Apply search filter
@@ -505,6 +506,45 @@ const EditEntry: React.FC = () => {
     
     try {
       setIsLoadingMore(true);
+      
+      // If company/account filters are active, load more filtered entries with pagination
+      if (filterCompanyName || filterAccountName || filterSubAccountName) {
+        console.log('🔄 Company/Account filters active, loading more filtered entries...');
+        
+        try {
+          setLoading(true);
+          console.log('🔄 Loading more filtered entries with pagination...');
+          console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
+          console.log('🔍 Current entries:', entries.length, 'Total available:', totalEntries);
+          
+          // Load next batch of filtered entries
+          const result = await supabaseDB.getFilteredCashBookEntries({
+            companyName: filterCompanyName || undefined,
+            accountName: filterAccountName || undefined,
+            subAccountName: filterSubAccountName || undefined,
+          }, pageSize, entries.length);
+          
+          console.log(`📊 More filtered entries loaded: ${result.data.length}`);
+          
+          // Append new entries to existing ones
+          setEntries(prevEntries => [...prevEntries, ...result.data]);
+          setTotalEntries(result.total);
+          
+          if (result.data.length === 0) {
+            toast.success(`No more entries found for the selected filters`);
+          } else {
+            toast.success(`Loaded ${result.data.length} more entries (${entries.length + result.data.length} of ${result.total} total from 67k records)`);
+          }
+        } catch (error) {
+          console.error('Error loading more filtered entries:', error);
+          toast.error('Failed to load more filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      
+      // Otherwise, use normal pagination for global data
       const nextPage = Math.floor(entries.length / pageSize) + 1;
       const offset = entries.length;
       
@@ -524,12 +564,49 @@ const EditEntry: React.FC = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [entries.length, totalEntries, pageSize, isLoadingMore]);
+  }, [entries.length, totalEntries, pageSize, isLoadingMore, filterCompanyName, filterAccountName, filterSubAccountName]);
 
   const loadAllEntries = useCallback(async () => {
     try {
       setIsLoadingAll(true);
       setLoadingProgress({ current: 0, total: 0, message: 'Starting to load all entries...' });
+      // If company/account filters are active, load all filtered entries
+      if (filterCompanyName || filterAccountName || filterSubAccountName) {
+        console.log('🔄 Loading ALL filtered entries...');
+        setLoadingProgress({ current: 0, total: 0, message: `Loading all entries for ${filterCompanyName || 'selected filters'}...` });
+        
+        try {
+          setLoading(true);
+          console.log('🔄 Loading all filtered entries with server-side filtering...');
+          console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
+          
+          // Use getAllFilteredCashBookEntries to load all at once for filtered data
+          const filteredEntries = await supabaseDB.getAllFilteredCashBookEntries({
+            companyName: filterCompanyName || undefined,
+            accountName: filterAccountName || undefined,
+            subAccountName: filterSubAccountName || undefined,
+          });
+          
+          console.log(`📊 All filtered entries loaded: ${filteredEntries.length}`);
+          
+          setEntries(filteredEntries);
+          setTotalEntries(filteredEntries.length);
+          
+          if (filteredEntries.length === 0) {
+            toast.success(`No entries found for the selected filters`);
+          } else {
+            toast.success(`Loaded all ${filteredEntries.length} entries matching your filters from 67k records`);
+          }
+        } catch (error) {
+          console.error('Error loading all filtered entries:', error);
+          toast.error('Failed to load filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      
+      // Otherwise, load all global entries
       console.log('🔄 Loading ALL entries from database...');
       
       // First get the total count
@@ -561,30 +638,36 @@ const EditEntry: React.FC = () => {
         setLoadingProgress({ current: 0, total: 0, message: '' });
       }, 3000);
     }
-  }, []);
+  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
 
   const loadFilteredEntries = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔄 Loading filtered entries with server-side filtering...');
+      console.log('🔄 Loading filtered entries with pagination...');
       console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
+      console.log('🔍 About to call getFilteredCashBookEntries with company:', filterCompanyName);
       
-      // Use optimized server-side filtering instead of loading all data
-      const filteredEntries = await supabaseDB.getAllFilteredCashBookEntries({
+      // Use paginated server-side filtering (load first 1000 entries)
+      const result = await supabaseDB.getFilteredCashBookEntries({
         companyName: filterCompanyName || undefined,
         accountName: filterAccountName || undefined,
         subAccountName: filterSubAccountName || undefined,
-      });
+      }, pageSize, 0);
       
-      console.log(`📊 Filtered entries loaded: ${filteredEntries.length}`);
+      console.log(`📊 Filtered entries loaded: ${result.data.length} of ${result.total} total`);
+      console.log('📊 First few entries:', result.data.slice(0, 3).map(e => ({ 
+        id: e.id, 
+        company: e.company_name, 
+        date: e.c_date 
+      })));
       
-      setEntries(filteredEntries);
-      setTotalEntries(filteredEntries.length);
+      setEntries(result.data);
+      setTotalEntries(result.total);
       
-      if (filteredEntries.length === 0) {
+      if (result.data.length === 0) {
         toast.success(`No entries found for the selected filters`);
       } else {
-        toast.success(`Found ${filteredEntries.length} entries matching your filters`);
+        toast.success(`Found ${result.total} entries matching your filters from all 67k records`);
       }
     } catch (error) {
       console.error('Error loading filtered entries:', error);
@@ -592,7 +675,7 @@ const EditEntry: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
+  }, [filterCompanyName, filterAccountName, filterSubAccountName, pageSize]);
 
 
 
@@ -1799,6 +1882,14 @@ const EditEntry: React.FC = () => {
 
           {/* Load More and Load All Buttons */}
           <div className='text-center py-4 space-x-4'>
+            {/* Debug info */}
+            <div className='text-xs text-gray-500 mb-2'>
+              Debug: entries.length={entries.length}, totalEntries={totalEntries}, showButtons={entries.length < totalEntries}
+              {filterCompanyName && <div>Company Filter: {filterCompanyName}</div>}
+            </div>
+            
+            
+            {/* Show Load More button if we have more entries to load */}
             {entries.length < totalEntries && (
               <Button
                 onClick={loadMoreEntries}
@@ -1807,27 +1898,29 @@ const EditEntry: React.FC = () => {
                 icon={isLoadingMore ? RefreshCw : Plus}
                 className='min-w-[200px]'
               >
-                {isLoadingMore ? 'Loading...' : `Load More (${totalEntries - entries.length} remaining)`}
+                {isLoadingMore ? 'Loading...' : 
+                  filterCompanyName ? 
+                    `Load More (${totalEntries - entries.length} remaining for ${filterCompanyName})` : 
+                    `Load More (${totalEntries - entries.length} remaining)`
+                }
               </Button>
             )}
             
-            {entries.length < totalEntries && (
-              <Button
-                onClick={loadAllEntries}
-                disabled={isLoadingMore || isLoadingAll}
-                variant='primary'
-                icon={isLoadingAll ? RefreshCw : Database}
-                className='min-w-[200px]'
-              >
-                {isLoadingAll ? 'Loading All...' : `Load All ${totalEntries} Records`}
-              </Button>
+            {/* Show message if all entries are loaded */}
+            {totalEntries > 0 && entries.length >= totalEntries && (
+              <div className='text-green-600 font-medium'>
+                ✅ All {totalEntries} entries loaded successfully!
+                {filterCompanyName && <div className='text-sm'>for {filterCompanyName}</div>}
+              </div>
             )}
+            
           </div>
           
           {/* Pagination Info */}
           {totalEntries > 0 && (
             <div className='text-center text-sm text-gray-600 py-2'>
               Showing {entries.length} of {totalEntries} entries
+              {filterCompanyName && <div className='text-xs text-blue-600'>for {filterCompanyName}</div>}
             </div>
           )}
         </div>
@@ -2027,7 +2120,7 @@ const EditEntry: React.FC = () => {
                                   toast.success(`Found ${entriesForDate.length} entries for ${format(new Date(date), 'dd-MMM-yyyy')}. Showing filtered results.`);
                                 } else {
                                   // No entries for this date, show a message
-                                  toast.info(`No entries found for ${format(new Date(date), 'dd-MMM-yyyy')}`);
+                                  toast(`No entries found for ${format(new Date(date), 'dd-MMM-yyyy')}`);
                                 }
                               }
                               setShowCalendar(false);
