@@ -85,8 +85,13 @@ const NewEntry: React.FC = () => {
 
   // Convert React Query data to dropdown format
   const companiesOptions = companies?.data?.map(c => ({ value: c.company_name, label: c.company_name })) || [];
-  const accountsOptions = accounts?.data?.map(a => ({ value: a.acc_name, label: a.acc_name })) || [];
+  // Load account options from cash_book distincts (same as Edit Entry)
+  const [accountOptions, setAccountOptions] = useState<{ value: string; label: string }[]>([]);
+  const [dualAccountOptions, setDualAccountOptions] = useState<{ value: string; label: string }[]>([]);
   const [subAccounts, setSubAccounts] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [dualSubAccounts, setDualSubAccounts] = useState<
     { value: string; label: string }[]
   >([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
@@ -193,16 +198,83 @@ const NewEntry: React.FC = () => {
   }, [entry.date]);
 
   useEffect(() => {
-    if (entry.companyName) {
-      loadAccountsByCompany();
-    }
+    const loadAccounts = async () => {
+      try {
+        if (entry.companyName) {
+          const names = await supabaseDB.getDistinctAccountNamesByCompany(entry.companyName);
+          setAccountOptions(names.map(name => ({ value: name, label: name })));
+          setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
+          setSubAccounts([]);
+        } else {
+          setAccountOptions([]);
+        }
+      } catch (error) {
+        console.error('Error loading account names by company:', error);
+        toast.error('Failed to load account names');
+      }
+    };
+    loadAccounts();
   }, [entry.companyName]);
 
   useEffect(() => {
-    if (entry.companyName && entry.accountName) {
-      loadSubAccountsByAccount();
-    }
+    const loadDualAccounts = async () => {
+      try {
+        if (dualEntry.companyName) {
+          const names = await supabaseDB.getDistinctAccountNamesByCompany(dualEntry.companyName);
+          setDualAccountOptions(names.map(name => ({ value: name, label: name })));
+          setDualEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
+          setDualSubAccounts([]);
+        } else {
+          setDualAccountOptions([]);
+        }
+      } catch (error) {
+        console.error('Error loading dual account names by company:', error);
+        toast.error('Failed to load account names');
+      }
+    };
+    loadDualAccounts();
+  }, [dualEntry.companyName]);
+
+  useEffect(() => {
+    const loadSubs = async () => {
+      try {
+        if (entry.companyName && entry.accountName) {
+          const subs = await supabaseDB.getSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
+          const data = subs.map(name => ({ value: name, label: name }));
+          setSubAccounts(data);
+          setEntry(prev => ({ ...prev, subAccount: '' }));
+        } else {
+          setSubAccounts([]);
+        }
+      } catch (error) {
+        console.error('Error loading sub accounts:', error);
+        toast.error('Failed to load sub accounts');
+      }
+    };
+    loadSubs();
   }, [entry.companyName, entry.accountName]);
+
+  useEffect(() => {
+    const loadDualSubAccounts = async () => {
+      try {
+        if (dualEntry.companyName && dualEntry.accountName) {
+          const subs = await supabaseDB.getSubAccountsByAccountAndCompany(
+            dualEntry.accountName,
+            dualEntry.companyName
+          );
+          const data = subs.map(name => ({ value: name, label: name }));
+          setDualSubAccounts(data);
+          setDualEntry(prev => ({ ...prev, subAccount: '' }));
+        } else {
+          setDualSubAccounts([]);
+        }
+      } catch (error) {
+        console.error('Error loading dual sub accounts:', error);
+        toast.error('Failed to load sub accounts');
+      }
+    };
+    loadDualSubAccounts();
+  }, [dualEntry.companyName, dualEntry.accountName]);
 
   useEffect(() => {
     // Recent entries are now managed by React Query
@@ -255,36 +327,9 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  const loadAccountsByCompany = async () => {
-    try {
-      await supabaseDB.getAccountsByCompany(entry.companyName);
-      // Accounts data is now managed by React Query
-      // Note: Accounts are now managed by React Query, but we still need to filter by company
-      // This will be handled by the component logic
-      setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-      toast.error('Failed to load accounts');
-    }
-  };
+  // (Replaced by cash_book-based loaders above)
 
-  const loadSubAccountsByAccount = async () => {
-    try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(
-        entry.companyName,
-        entry.accountName
-      );
-      const subAccountsData = subAccounts.map(subAcc => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
-      }));
-      setSubAccounts(subAccountsData);
-      setEntry(prev => ({ ...prev, subAccount: '' }));
-    } catch (error) {
-      console.error('Error loading sub accounts:', error);
-      toast.error('Failed to load sub accounts');
-    }
-  };
+  // (Replaced by cash_book-based loaders above)
 
   const handleInputChange = (
     field: keyof NewEntryForm,
@@ -332,8 +377,8 @@ const NewEntry: React.FC = () => {
     setLoading(true);
     try {
       // Prepare main entry data
-      const mainCreditNum = parseFloat(entry.credit) || 0;
-      const mainDebitNum = parseFloat(entry.debit) || 0;
+      const mainCreditNum = Number(((parseFloat(entry.credit) || 0)).toFixed(2));
+      const mainDebitNum = Number(((parseFloat(entry.debit) || 0)).toFixed(2));
       const mainEntryData = {
         acc_name: entry.accountName,
         sub_acc_name: entry.subAccount,
@@ -358,8 +403,8 @@ const NewEntry: React.FC = () => {
 
       // If dual entry, prepare both entries for bulk operation
       if (dualEntryEnabled) {
-        const dualCreditNum = parseFloat(dualEntry.credit) || 0;
-        const dualDebitNum = parseFloat(dualEntry.debit) || 0;
+        const dualCreditNum = Number(((parseFloat(dualEntry.credit) || 0)).toFixed(2));
+        const dualDebitNum = Number(((parseFloat(dualEntry.debit) || 0)).toFixed(2));
         const dualEntryData = {
           acc_name: dualEntry.accountName,
           sub_acc_name: dualEntry.subAccount,
@@ -1259,7 +1304,7 @@ const NewEntry: React.FC = () => {
                       onChange={value =>
                         handleInputChange('accountName', value)
                       }
-                      options={accountsOptions}
+                      options={accountOptions}
                       placeholder='Select account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, subAccountRef)}
                       required
@@ -1355,6 +1400,7 @@ const NewEntry: React.FC = () => {
                     placeholder='Enter credit amount'
                     type='number'
                     min='0'
+                    step='any'
                   />
                   <Input
                     ref={debitRef}
@@ -1367,6 +1413,7 @@ const NewEntry: React.FC = () => {
                     placeholder='Enter debit amount'
                     type='number'
                     min='0'
+                    step='any'
                   />
                 </div>
 
@@ -1478,7 +1525,7 @@ const NewEntry: React.FC = () => {
                             accountName: value,
                           }))
                         }
-                        options={accountsOptions}
+                        options={dualAccountOptions}
                         placeholder='Select account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualSubAccountRef)}
                         required
@@ -1491,7 +1538,7 @@ const NewEntry: React.FC = () => {
                         onChange={value =>
                           setDualEntry(prev => ({ ...prev, subAccount: value }))
                         }
-                        options={subAccounts}
+                        options={dualSubAccounts}
                         placeholder='Select sub account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualParticularsRef)}
                         disabled={!dualEntry.accountName}
@@ -1523,6 +1570,7 @@ const NewEntry: React.FC = () => {
                         placeholder='Enter credit amount'
                         type='number'
                         min='0'
+                        step='any'
                       />
                       <Input
                         ref={dualDebitRef}
@@ -1535,6 +1583,7 @@ const NewEntry: React.FC = () => {
                         placeholder='Enter debit amount'
                         type='number'
                         min='0'
+                        step='any'
                       />
                     </div>
 

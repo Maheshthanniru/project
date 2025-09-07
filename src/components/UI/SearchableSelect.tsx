@@ -85,11 +85,26 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
           }
           break;
         case 'Enter':
-          e.preventDefault();
+          // If dropdown is open and an option is highlighted, select it
           if (isOpen && highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
+            e.preventDefault();
             handleSelect(filteredOptions[highlightedIndex].value);
           } else if (!isOpen) {
-            setIsOpen(true);
+            // When closed, allow parent to handle Enter (to move focus)
+            if (onKeyDown) {
+              onKeyDown(e);
+            } else {
+              // fallback: open the dropdown if no parent handler
+              e.preventDefault();
+              setIsOpen(true);
+            }
+          } else {
+            // Dropdown open but nothing highlighted: pass to parent for focus advance
+            if (onKeyDown) {
+              onKeyDown(e);
+            } else {
+              e.preventDefault();
+            }
           }
           break;
         case 'Escape':

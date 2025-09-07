@@ -43,7 +43,7 @@ const highlightClass = 'bg-yellow-100 font-semibold';
 
 const getFieldDisplay = (field: FieldKey, value: any) => {
   if (field === 'credit' || field === 'debit') {
-    return value ? ` 9${Number(value).toLocaleString()}` : '-';
+    return value ? `${Number(value).toLocaleString()}` : '-';
   }
   if (field === 'c_date' && value) {
     return !isNaN(new Date(value).getTime())
@@ -73,7 +73,7 @@ const EditedRecords = () => {
   const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [page, setPage] = useState(1);
 
@@ -102,6 +102,18 @@ const EditedRecords = () => {
     return map;
   }, [users]);
 
+  // Build dropdown of distinct edited dates (YYYY-MM-DD)
+  const editedDateOptions = useMemo(() => {
+    const dates = Array.from(
+      new Set(
+        auditLog
+          .map(l => (l.edited_at ? String(l.edited_at).slice(0, 10) : ''))
+          .filter(Boolean)
+      )
+    ).sort((a, b) => (a < b ? 1 : -1));
+    return [{ value: '', label: 'All Dates' }, ...dates.map(d => ({ value: d, label: d }))];
+  }, [auditLog]);
+
   // Filtered and searched log
   const filteredLog = useMemo(() => {
     return auditLog.filter(log => {
@@ -111,22 +123,15 @@ const EditedRecords = () => {
       const newObj: CashBookPartial = log.new_values
         ? JSON.parse(log.new_values)
         : {};
-      const username = userMap[log.edited_by] || log.edited_by;
-      const searchText = [
-        ...FIELDS.map(f => oldObj[f.key]),
-        ...FIELDS.map(f => newObj[f.key]),
-        username,
-      ]
-        .join(' ')
-        .toLowerCase();
-      const matchesSearch =
-        search === '' || searchText.includes(search.toLowerCase());
+      // Date-wise filter: match edited_at date (YYYY-MM-DD)
+      const editedDate = log.edited_at ? String(log.edited_at).slice(0, 10) : '';
+      const matchesDate = selectedDate === '' || editedDate === selectedDate;
       const matchesUser = userFilter === '' || log.edited_by === userFilter;
       // Exclude deletes from main table
       const isDelete = log.new_values == null && log.old_values != null;
-      return matchesSearch && matchesUser && !isDelete;
+      return matchesDate && matchesUser && !isDelete;
     });
-  }, [auditLog, search, userFilter, userMap]);
+  }, [auditLog, selectedDate, userFilter]);
 
   // Deleted records log (from deleted_cash_book)
   // No filtering for now, but you can add search/userFilter if needed
@@ -235,11 +240,11 @@ const EditedRecords = () => {
       subtitle={`Showing ${filteredLog.length} edits`}
     >
       <div className='flex flex-wrap gap-3 mb-4 items-end'>
-        <Input
-          label='Search'
-          value={search}
-          onChange={setSearch}
-          placeholder='Search by any field...'
+        <Select
+          label='Edited Date'
+          value={selectedDate}
+          onChange={setSelectedDate}
+          options={editedDateOptions}
           className='w-48'
         />
         <Select
@@ -290,7 +295,7 @@ const EditedRecords = () => {
                 const changed = getChangedFields(oldObj, newObj);
                 return (
                   <React.Fragment key={log.id}>
-                    {/* Before Edit Row */}
+                    {/* Before Edit Row (no background color) */}
                     <tr className='border-b border-gray-100 hover:bg-gray-50'>
                       <td className='px-2 py-1 text-center' rowSpan={1}>
                         {(page - 1) * PAGE_SIZE + idx + 1}
@@ -301,7 +306,7 @@ const EditedRecords = () => {
                       {FIELDS.map(f => (
                         <td
                           key={f.key + '-before'}
-                          className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}
+                          className={'px-2 py-1'}
                         >
                           {getFieldDisplay(f.key, oldObj[f.key])}
                         </td>
@@ -317,7 +322,7 @@ const EditedRecords = () => {
                       </td>
                     </tr>
                     {/* After Edit Row */}
-                    <tr className='border-b border-gray-100 hover:bg-gray-50 bg-green-50'>
+                    <tr className='border-b border-gray-100 hover:bg-gray-50'>
                       <td className='px-2 py-1 text-center'></td>
                       <td className='px-2 py-1 font-semibold text-green-700'>
                         After

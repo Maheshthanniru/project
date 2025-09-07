@@ -713,6 +713,75 @@ class SupabaseDatabase {
     return data;
   }
 
+  // Backwards-compatible wrapper used by hooks
+  async createCashBookEntry(entry: Omit<
+    CashBookEntry,
+    | 'id'
+    | 'sno'
+    | 'entry_time'
+    | 'approved'
+    | 'edited'
+    | 'e_count'
+    | 'lock_record'
+    | 'created_at'
+    | 'updated_at'
+  >): Promise<CashBookEntry> {
+    return this.addCashBookEntry(entry);
+  }
+
+  // Fetch single cash book entry by id (used by hooks)
+  async getCashBookEntry(id: string): Promise<CashBookEntry | null> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching cash book entry by id:', error);
+      return null;
+    }
+    return data as CashBookEntry;
+  }
+
+  // Fetch entries by exact date (YYYY-MM-DD) (used by hooks)
+  async getCashBookEntriesByDate(date: string): Promise<CashBookEntry[]> {
+    const { data, error } = await supabase
+      .from('cash_book')
+      .select('*')
+      .eq('c_date', date)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching entries by date:', error);
+      return [];
+    }
+    return (data || []) as CashBookEntry[];
+  }
+
+  // Bulk insert/update operations for dual entry create (used by hooks)
+  async bulkUpdateCashBookEntries(operations: Array<Partial<CashBookEntry>>): Promise<any> {
+    try {
+      if (!operations || operations.length === 0) return [];
+
+      // Filter out undefined fields to respect DB defaults
+      const sanitized = operations.map((op) =>
+        Object.fromEntries(Object.entries(op).filter(([_, v]) => v !== undefined))
+      );
+
+      const { data, error } = await supabase
+        .from('cash_book')
+        .insert(sanitized)
+        .select('*');
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error in bulkUpdateCashBookEntries:', error);
+      throw error;
+    }
+  }
+
   async updateCashBookEntry(
     id: string,
     updates: Partial<CashBookEntry>,

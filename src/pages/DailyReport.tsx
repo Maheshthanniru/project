@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,12 +18,6 @@ interface DailyReportData {
   closingBalance: number;
   grandTotal: number;
   companyBalances: { [key: string]: number };
-  onlineCredit: number;
-  offlineCredit: number;
-  onlineDebit: number;
-  offlineDebit: number;
-  totalOnline: number;
-  totalOffline: number;
 }
 
 const DailyReport: React.FC = () => {
@@ -41,12 +35,6 @@ const DailyReport: React.FC = () => {
     closingBalance: 0,
     grandTotal: 0,
     companyBalances: {},
-    onlineCredit: 0,
-    offlineCredit: 0,
-    onlineDebit: 0,
-    offlineDebit: 0,
-    totalOnline: 0,
-    totalOffline: 0,
   });
   const [companies, setCompanies] = useState<
     { value: string; label: string }[]
@@ -143,25 +131,6 @@ const DailyReport: React.FC = () => {
       const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
       const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
 
-      // Calculate online vs offline breakdown
-      let onlineCredit = 0;
-      let offlineCredit = 0;
-      let onlineDebit = 0;
-      let offlineDebit = 0;
-
-      filteredEntries.forEach(entry => {
-        // Credit amounts
-        onlineCredit += entry.credit_online || 0;
-        offlineCredit += entry.credit_offline || 0;
-
-        // Debit amounts
-        onlineDebit += entry.debit_online || 0;
-        offlineDebit += entry.debit_offline || 0;
-      });
-
-      const totalOnline = onlineCredit + onlineDebit;
-      const totalOffline = offlineCredit + offlineDebit;
-
       const closingBalance = openingBalance + (totalCredit - totalDebit);
       const grandTotal = totalCredit + totalDebit;
 
@@ -192,12 +161,6 @@ const DailyReport: React.FC = () => {
         closingBalance,
         grandTotal,
         companyBalances,
-        onlineCredit,
-        offlineCredit,
-        onlineDebit,
-        offlineDebit,
-        totalOnline,
-        totalOffline,
       });
 
       // Update total entries count for display
@@ -316,20 +279,13 @@ const DailyReport: React.FC = () => {
             />
           </div>
           <div className='flex-1'>
-            <label className='block text-sm font-medium text-gray-700 mb-1'>
-              Company
-            </label>
-            <select
+            <SearchableSelect
+              label='Company'
               value={selectedCompany}
-              onChange={e => setSelectedCompany(e.target.value)}
-              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            >
-              {companies.map(c => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+              onChange={value => setSelectedCompany(value)}
+              options={companies}
+              placeholder='Select or search company...'
+            />
           </div>
           <div className='flex-1'>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -428,61 +384,7 @@ const DailyReport: React.FC = () => {
                 </div>
               </div>
 
-              {/* Online vs Offline Transaction Breakdown */}
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
-                <div className='bg-cyan-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-cyan-900 font-semibold text-sm'>
-                    Online Transactions:
-                  </span>
-                  <span className='text-xl font-bold text-cyan-900'>
-                    ₹{reportData.totalOnline.toLocaleString()}
-                  </span>
-                  <span className='text-cyan-700 text-xs mt-1'>
-                    Credit: ₹{reportData.onlineCredit.toLocaleString()} | Debit:
-                    ₹{reportData.onlineDebit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='bg-gray-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-gray-900 font-semibold text-sm'>
-                    Offline Transactions:
-                  </span>
-                  <span className='text-xl font-bold text-gray-900'>
-                    ₹{reportData.totalOffline.toLocaleString()}
-                  </span>
-                  <span className='text-gray-700 text-xs mt-1'>
-                    Credit: ₹{reportData.offlineCredit.toLocaleString()} |
-                    Debit: ₹{reportData.offlineDebit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='bg-indigo-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-indigo-900 font-semibold text-sm'>
-                    Online Credit:
-                  </span>
-                  <span className='text-xl font-bold text-indigo-900'>
-                    ₹{reportData.onlineCredit.toLocaleString()}
-                  </span>
-                  <span className='text-indigo-700 text-xs mt-1'>
-                    {reportData.totalCredit > 0
-                      ? `${((reportData.onlineCredit / reportData.totalCredit) * 100).toFixed(1)}%`
-                      : '0%'}{' '}
-                    of total credit
-                  </span>
-                </div>
-                <div className='bg-pink-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-pink-900 font-semibold text-sm'>
-                    Online Debit:
-                  </span>
-                  <span className='text-xl font-bold text-pink-900'>
-                    ₹{reportData.onlineDebit.toLocaleString()}
-                  </span>
-                  <span className='text-pink-700 text-xs mt-1'>
-                    {reportData.totalDebit > 0
-                      ? `${((reportData.onlineDebit / reportData.totalDebit) * 100).toFixed(1)}%`
-                      : '0%'}{' '}
-                    of total debit
-                  </span>
-                </div>
-              </div>
+              {/* Online/Offline breakdown removed */}
               <table className='min-w-full text-sm'>
                 <thead className='bg-blue-100'>
                   <tr>

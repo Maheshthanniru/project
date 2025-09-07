@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -763,14 +763,15 @@ const DetailedLedger: React.FC = () => {
 
             {/* Account Filters */}
             <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-              <Select
+              <SearchableSelect
                 label='Company Name'
                 value={filters.companyName}
                 onChange={value => handleFilterChange('companyName', value)}
                 options={companies}
+                placeholder='Search company...'
               />
 
-              <Select
+              <SearchableSelect
                 label='Main Account'
                 value={filters.mainAccount}
                 onChange={value => handleFilterChange('mainAccount', value)}
@@ -779,11 +780,11 @@ const DetailedLedger: React.FC = () => {
                 placeholder={
                   !filters.companyName
                     ? 'Select a company first'
-                    : 'Select main account...'
+                    : 'Search main account...'
                 }
               />
 
-              <Select
+              <SearchableSelect
                 label='Sub Account'
                 value={filters.subAccount}
                 onChange={value => handleFilterChange('subAccount', value)}
@@ -792,34 +793,20 @@ const DetailedLedger: React.FC = () => {
                 placeholder={
                   !filters.mainAccount
                     ? 'Select a main account first'
-                    : 'Select sub account...'
+                    : 'Search sub account...'
                 }
               />
 
-              <Select
+              <SearchableSelect
                 label='Staffwise'
                 value={filters.staffwise}
                 onChange={value => handleFilterChange('staffwise', value)}
                 options={staffList}
+                placeholder='Search staff...'
               />
             </div>
 
-            {/* Filtering Guidance */}
-            <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
-              <div className='flex items-center gap-2'>
-                <div className='w-2 h-2 bg-blue-500 rounded-full'></div>
-                <span className='text-sm text-blue-800 font-medium'>
-                  Filtering Options
-                </span>
-              </div>
-              <div className='text-sm text-blue-700 mt-1 space-y-1'>
-                <p><strong>Client-side filtering:</strong> Fast filtering on currently loaded data (up to {pageSize} records)</p>
-                <p><strong>Server-side filtering:</strong> Load all matching records from the entire database (all 67k+ records)</p>
-                {!filters.companyName && (
-                  <p className='text-orange-700'><strong>Tip:</strong> Select a company first to see its specific accounts and sub-accounts.</p>
-                )}
-              </div>
-            </div>
+            {/* Filtering guidance removed as requested */}
 
             {/* Amount Filters */}
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -998,6 +985,9 @@ const DetailedLedger: React.FC = () => {
                   <th className='px-3 py-2 text-right font-medium text-gray-700'>
                     Debit
                   </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Running Balance
+                  </th>
                   <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Staff
                   </th>
@@ -1006,9 +996,6 @@ const DetailedLedger: React.FC = () => {
                   </th>
                   <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Entry Time
-                  </th>
-                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
-                    Running Balance
                   </th>
                   <th className='px-3 py-2 text-center font-medium text-gray-700'>
                     Status
@@ -1048,11 +1035,6 @@ const DetailedLedger: React.FC = () => {
                         ? `₹${entry.debit.toLocaleString()}`
                         : '-'}
                     </td>
-                    <td className='px-3 py-2'>{entry.staff}</td>
-                    <td className='px-3 py-2'>{entry.user}</td>
-                    <td className='px-3 py-2'>
-                      {format(new Date(entry.entryTime), 'HH:mm:ss')}
-                    </td>
                     <td
                       className={`px-3 py-2 text-right font-bold ${
                         entry.runningBalance >= 0
@@ -1062,6 +1044,11 @@ const DetailedLedger: React.FC = () => {
                     >
                       ₹{Math.abs(entry.runningBalance).toLocaleString()}
                       {entry.runningBalance >= 0 ? ' CR' : ' DR'}
+                    </td>
+                    <td className='px-3 py-2'>{entry.staff}</td>
+                    <td className='px-3 py-2'>{entry.user}</td>
+                    <td className='px-3 py-2'>
+                      {format(new Date(entry.entryTime), 'HH:mm:ss')}
                     </td>
                     <td className='px-3 py-2 text-center'>
                       {entry.approved ? (

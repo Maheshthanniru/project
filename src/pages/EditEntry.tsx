@@ -796,7 +796,7 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
 
     if (
-      window.confirm(`Are you sure you want to delete entry #${entry.sno}?`)
+      window.confirm(`Are you sure you want to permanently delete entry #${entry.sno}? This cannot be undone.`)
     ) {
       try {
         console.log(
@@ -2185,7 +2185,7 @@ const EditEntry: React.FC = () => {
                         label='Credit'
                         value={selectedEntry?.credit || ''}
                         onChange={val =>
-                          editMode ? handleInputChange('credit', parseFloat(val) || 0) : undefined
+                          editMode ? handleInputChange('credit', Number((parseFloat(val) || 0).toFixed(2))) : undefined
                         }
                         placeholder='Enter credit amount...'
                         disabled={!editMode || selectedEntry?.lock_record}
@@ -2194,18 +2194,24 @@ const EditEntry: React.FC = () => {
                             ? 'border-green-300 bg-green-50'
                             : ''
                         }
+                        type='number'
+                        min='0'
+                        step='any'
                       />
                       <Input
                         label='Debit'
                         value={selectedEntry?.debit || ''}
                         onChange={val =>
-                          editMode ? handleInputChange('debit', parseFloat(val) || 0) : undefined
+                          editMode ? handleInputChange('debit', Number((parseFloat(val) || 0).toFixed(2))) : undefined
                         }
                         placeholder='Enter debit amount...'
                         disabled={!editMode || selectedEntry?.lock_record}
                         className={
                           (selectedEntry?.debit || 0) > 0 ? 'border-red-300 bg-red-50' : ''
                         }
+                        type='number'
+                        min='0'
+                        step='any'
                       />
                     </div>
 

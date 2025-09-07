@@ -41,6 +41,8 @@ const ApproveRecords: React.FC = () => {
 
   const [entries, setEntries] = useState<any[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
+  const [deletedEntries, setDeletedEntries] = useState<any[]>([]);
+  const [filteredDeletedEntries, setFilteredDeletedEntries] = useState<any[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(
     new Set()
   );
@@ -66,6 +68,12 @@ const ApproveRecords: React.FC = () => {
     approvedRecords: 0,
     pendingRecords: 0,
     selectedCount: 0,
+  });
+  const [deletedSummary, setDeletedSummary] = useState({
+    totalRecords: 0,
+    approvedDeleted: 0,
+    rejectedDeleted: 0,
+    pendingDeleted: 0,
   });
 
   useEffect(() => {
@@ -131,6 +139,9 @@ const ApproveRecords: React.FC = () => {
       console.log('[ApproveRecords] Pending entries:', pendingEntries);
 
       setEntries(allEntries);
+      // Load deleted records as well
+      const deleted = await supabaseDB.getDeletedCashBook();
+      setDeletedEntries(deleted || []);
       if (!allEntries || allEntries.length === 0) {
         setFetchError('No entries found in the database.');
       }
@@ -169,8 +180,11 @@ const ApproveRecords: React.FC = () => {
       filtered = filtered.filter(entry => entry.staff === filters.staff);
     }
 
-    // Only show pending records (not approved)
-    filtered = filtered.filter(entry => {
+    // Base set for summary (date/company/staff), regardless of approval state
+    const baseFiltered = filtered;
+
+    // Only show pending records (not approved) for main table
+    const pendingFiltered = baseFiltered.filter(entry => {
       // Check if entry is not approved (false, null, undefined, or empty string)
       return (
         entry.approved === false ||
@@ -181,29 +195,40 @@ const ApproveRecords: React.FC = () => {
       );
     });
 
-    setFilteredEntries(filtered);
+    setFilteredEntries(pendingFiltered);
     setCurrentPage(1);
-    if (filtered.length === 0) {
+    if (pendingFiltered.length === 0) {
       setFetchError('No pending records found matching the selected filters.');
     } else {
       setFetchError(null);
     }
+
+    // Apply same filters to deleted records
+    let del = [...deletedEntries];
+    if (filters.date) del = del.filter(d => d.c_date === filters.date);
+    if (filters.company) del = del.filter(d => d.company_name === filters.company);
+    if (filters.staff) del = del.filter(d => d.staff === filters.staff);
+    // Pending deleted are those without approved flag
+    const pendingDeleted = del.filter(d => d.approved === null || d.approved === undefined);
+    setFilteredDeletedEntries(pendingDeleted);
+
+    // Update summaries based on base filtered sets
+    const approvedRecords = baseFiltered.filter(e => e.approved === true || e.approved === 'true').length;
+    const totalRecords = baseFiltered.length;
+    const pendingRecords = totalRecords - approvedRecords;
+    setSummary(prev => ({ ...prev, totalRecords, approvedRecords, pendingRecords }));
+
+    const totalDeleted = del.length;
+    const approvedDeleted = del.filter(d => d.approved === true).length;
+    const rejectedDeleted = del.filter(d => d.approved === false).length;
+    const pendingDeletedCount = totalDeleted - approvedDeleted - rejectedDeleted;
+    setDeletedSummary({ totalRecords: totalDeleted, approvedDeleted, rejectedDeleted, pendingDeleted: pendingDeletedCount });
   };
 
   const updateSummary = () => {
-    const totalRecords = filteredEntries.length;
-    const approvedRecords = filteredEntries.filter(
-      entry => entry.approved === true || entry.approved === 'true'
-    ).length;
-    const pendingRecords = totalRecords - approvedRecords;
+    // selected count from display list
     const selectedCount = selectedEntries.size;
-
-    setSummary({
-      totalRecords,
-      approvedRecords,
-      pendingRecords,
-      selectedCount,
-    });
+    setSummary(prev => ({ ...prev, selectedCount }));
   };
 
   const handleFilterChange = (field: keyof ApprovalFilters, value: any) => {
@@ -296,6 +321,43 @@ const ApproveRecords: React.FC = () => {
     } catch (error) {
       console.error('Error rejecting record:', error);
       toast.error('Error rejecting record');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Deleted records approve/reject handlers
+  const handleDeletedApprove = async (id: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('deleted_cash_book')
+        .update({ approved: true })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('Deleted record approved');
+      await loadEntries();
+    } catch (e) {
+      console.error('Deleted approve error:', e);
+      toast.error('Failed to approve deleted record');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletedReject = async (id: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('deleted_cash_book')
+        .update({ approved: false })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('Deleted record rejected');
+      await loadEntries();
+    } catch (e) {
+      console.error('Deleted reject error:', e);
+      toast.error('Failed to reject deleted record');
     } finally {
       setLoading(false);
     }
@@ -990,6 +1052,35 @@ const ApproveRecords: React.FC = () => {
             <Users className='w-8 h-8 text-purple-200' />
           </div>
         </Card>
+
+        {/* Deleted Records Summary */}
+        <Card className='bg-white text-gray-900'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-red-700 text-sm font-medium'>Deleted Pending</p>
+              <p className='text-2xl font-bold'>{deletedSummary.pendingDeleted}</p>
+            </div>
+            <Trash2 className='w-8 h-8 text-red-500' />
+          </div>
+        </Card>
+        <Card className='bg-white text-gray-900'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-green-700 text-sm font-medium'>Deleted Approved</p>
+              <p className='text-2xl font-bold'>{deletedSummary.approvedDeleted}</p>
+            </div>
+            <CheckCircle className='w-8 h-8 text-green-500' />
+          </div>
+        </Card>
+        <Card className='bg-white text-gray-900'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-red-700 text-sm font-medium'>Deleted Rejected</p>
+              <p className='text-2xl font-bold'>{deletedSummary.rejectedDeleted}</p>
+            </div>
+            <X className='w-8 h-8 text-red-500' />
+          </div>
+        </Card>
       </div>
 
       {/* Records Table */}
@@ -1204,6 +1295,45 @@ const ApproveRecords: React.FC = () => {
                 </nav>
               </div>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Deleted Records Approval */}
+      {!loading && !fetchError && (
+        <Card title='Deleted Records' subtitle={`Pending ${filteredDeletedEntries.length}`}>
+          <div className='overflow-x-auto'>
+            <table className='min-w-full divide-y divide-gray-200'>
+              <thead className='bg-gray-50'>
+                <tr>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Date</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Company</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Account</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Particulars</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Credit</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Debit</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Staff</th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Actions</th>
+                </tr>
+              </thead>
+              <tbody className='bg-white divide-y divide-gray-200'>
+                {filteredDeletedEntries.map(d => (
+                  <tr key={d.id}>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>{d.c_date}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.company_name}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.acc_name}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.particulars}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.credit}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.debit}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.staff}</td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                      <Button variant='secondary' className='mr-2' onClick={() => handleDeletedApprove(d.id)}>Approve</Button>
+                      <Button variant='secondary' onClick={() => handleDeletedReject(d.id)}>Reject</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}

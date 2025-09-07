@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -36,6 +36,7 @@ interface CompanySummary {
 
 interface SubAccountSummary {
   subAccount: string;
+  mainAccount: string;
   credit: number;
   debit: number;
   balance: number;
@@ -190,8 +191,13 @@ const LedgerSummary: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Get filtered entries from Supabase - use getAllCashBookEntries to get all 67k records
-      let entries = await supabaseDB.getAllCashBookEntries();
+      // Fast server-side filtering with pagination disabled for summaries
+      const { data } = await supabaseDB.getFilteredCashBookEntries({
+        companyName: filters.companyName || undefined,
+        accountName: filters.mainAccount || undefined,
+        subAccountName: filters.subAccount || undefined,
+      }, 100000, 0);
+      let entries = data || [];
 
       // Apply date filter
       if (filters.betweenDates) {
@@ -274,6 +280,7 @@ const LedgerSummary: React.FC = () => {
           if (!subAccountMap.has(subAccountKey)) {
             subAccountMap.set(subAccountKey, {
               subAccount: entry.sub_acc_name,
+              mainAccount: entry.acc_name,
               credit: 0,
               debit: 0,
               balance: 0,
@@ -329,6 +336,7 @@ const LedgerSummary: React.FC = () => {
               if (!companySubAccountMap.has(subAccountKey)) {
                 companySubAccountMap.set(subAccountKey, {
                   subAccount: entry.sub_acc_name,
+                  mainAccount: entry.acc_name,
                   credit: 0,
                   debit: 0,
                   balance: 0,
@@ -717,6 +725,9 @@ const LedgerSummary: React.FC = () => {
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
                   {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
                 </th>
+                <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                  Main Account
+                </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
                   Credit
                 </th>
@@ -738,6 +749,9 @@ const LedgerSummary: React.FC = () => {
                 >
                   <td className='px-4 py-3 font-medium text-blue-600'>
                     {subAccount.subAccount}
+                  </td>
+                  <td className='px-4 py-3'>
+                    {subAccount.mainAccount || '-'}
                   </td>
                   <td className='px-4 py-3 text-right font-medium text-green-600'>
                     ₹{subAccount.credit.toLocaleString()}
@@ -847,32 +861,38 @@ const LedgerSummary: React.FC = () => {
 
           {/* Filter Options */}
           <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-            <Select
+            <SearchableSelect
               label='Company Name'
               value={filters.companyName}
               onChange={value => handleFilterChange('companyName', value)}
               options={companies}
+              placeholder='Search company...'
             />
 
-            <Select
+            <SearchableSelect
               label='Main Account'
               value={filters.mainAccount}
               onChange={value => handleFilterChange('mainAccount', value)}
               options={accounts}
+              placeholder='Search main account...'
+              disabled={!filters.companyName}
             />
 
-            <Select
+            <SearchableSelect
               label='Sub Account'
               value={filters.subAccount}
               onChange={value => handleFilterChange('subAccount', value)}
               options={subAccounts}
+              placeholder='Search sub account...'
+              disabled={!filters.mainAccount}
             />
 
-            <Select
+            <SearchableSelect
               label='Staff'
               value={filters.staff}
               onChange={value => handleFilterChange('staff', value)}
               options={staffList}
+              placeholder='Search staff...'
             />
           </div>
 
