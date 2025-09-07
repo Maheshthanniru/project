@@ -4,7 +4,7 @@ import { queryKeys } from '../lib/queryClient';
 import toast from 'react-hot-toast';
 
 // Hook for paginated cash book entries
-export const useCashBookEntries = (page: number = 0, limit: number = 50) => {
+export const useCashBookEntries = (page: number = 0, limit: number = 1000) => {
   return useQuery({
     queryKey: queryKeys.cashBook.list(page, limit),
     queryFn: () => supabaseDB.getCashBookEntries(limit, page * limit),

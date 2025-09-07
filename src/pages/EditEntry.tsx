@@ -344,21 +344,27 @@ const EditEntry: React.FC = () => {
         .from('cash_book')
         .select('*')
         .order('c_date', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, pageSize - 1);
 
-      if (directError) {
+      if (directError || !directData) {
         console.error('❌ Direct Supabase query failed:', directError);
-        toast.error('Database access failed: ' + directError.message);
+        toast.error('Database access failed: ' + (directError?.message || 'unknown error'));
 
         // Check if it's an RLS issue
-        if (
+        if (directError && (
           directError.message.includes('permission') ||
           directError.message.includes('policy')
-        ) {
+        )) {
           toast.error(
             'RLS policies are blocking access. Please disable RLS in Supabase dashboard.'
           );
         }
+
+        // Fallback: use database service paginated fetch
+        const fallback = await supabaseDB.getCashBookEntries(pageSize, 0);
+        setEntries(fallback);
+        setEntriesForSelectedDate([]);
         return;
       }
 
@@ -462,42 +468,13 @@ const EditEntry: React.FC = () => {
           entry => String(entry.purchase_qty || '') === filterPurchaseQ
         );
       }
-      if (filterCredit) {
-        allEntries = allEntries.filter(
-          entry => String(entry.credit || '') === filterCredit
-        );
-      }
-      if (filterDebit) {
-        allEntries = allEntries.filter(
-          entry => String(entry.debit || '') === filterDebit
-        );
-      }
-      if (filterStaff) {
-        allEntries = allEntries.filter(
-          entry =>
-            entry.staff &&
-            entry.staff.toLowerCase().includes(filterStaff.toLowerCase())
-        );
-      }
-      if (filterDate) {
-        allEntries = allEntries.filter(entry => entry.c_date === filterDate);
-      }
 
-      console.log('✅ Final filtered entries:', allEntries.length);
       setEntries(allEntries);
-      setSelectedDateFilter(''); // Clear date filter when loading all entries
-
-      if (allEntries.length === 0) {
-        toast.success('No entries found in database');
-      } else {
-        toast.success(`Loaded ${allEntries.length} entries (showing first ${pageSize} of ${count || 0})`);
-      }
+      setEntriesForSelectedDate([]);
     } catch (error) {
-      console.error('Error loading entries:', error);
-      toast.error(
-        'Failed to load entries: ' +
-          (error instanceof Error ? error.message : 'Unknown error')
-      );
+      console.error('❌ Error loading entries:', error);
+      toast.error('Failed to load entries');
+      setEntries([]);
     }
   };
 
@@ -799,19 +776,16 @@ const EditEntry: React.FC = () => {
       window.confirm(`Are you sure you want to permanently delete entry #${entry.sno}? This cannot be undone.`)
     ) {
       try {
-        console.log(
-          'Attempting to delete entry:',
-          entry.id,
-          'by user:',
-          user?.username
-        );
+        // Start delete immediately
         const success = await supabaseDB.deleteCashBookEntry(
           entry.id,
           user?.username || 'admin'
         );
-        console.log('Delete result:', success);
         if (success) {
-          await loadEntries();
+          // Optimistic UI: close editor and refresh in background
+          setEditMode(false);
+          setSelectedEntry(null);
+          loadEntries();
           toast.success('Entry deleted successfully!');
           
           // Trigger dashboard refresh

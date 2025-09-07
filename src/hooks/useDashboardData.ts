@@ -16,9 +16,10 @@ export const useDashboardStats = (selectedDate?: string) => {
 export const useRecentEntries = () => {
   return useQuery({
     queryKey: queryKeys.dashboard.recentEntries,
-    queryFn: () => supabaseDB.getCashBookEntries(10, 0),
-    staleTime: 1 * 60 * 1000, // 1 minute for recent entries
-    gcTime: 3 * 60 * 1000, // 3 minutes cache
+    queryFn: () => supabaseDB.getCashBookEntries(5, 0),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    keepPreviousData: true,
   });
 };
 

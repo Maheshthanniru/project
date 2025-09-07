@@ -1331,37 +1331,16 @@ class SupabaseDatabase {
   async getDashboardStats(date?: string) {
     try {
       console.log('🔄 Fetching dashboard stats for ALL records (not just 1000)...');
-      
-      // First get the total count
+      // Count only (server-side)
       const { count: totalCount, error: countError } = await supabase
         .from('cash_book')
         .select('*', { count: 'exact', head: true });
-      
       if (countError) {
         console.error('Error getting total count:', countError);
         return this.getDashboardStatsFallback();
       }
 
-      console.log(`📊 Total records in database: ${totalCount}`);
-
-      if (totalCount === 0) {
-        console.log('⚠️ No records found in database');
-        return this.getDashboardStatsFallback();
-      }
-
-      // Try to use database aggregation for better performance - get sums directly from database
-      let aggregatedData = null;
-      let aggError = null;
-      
-      try {
-        const result = await supabase.rpc('get_dashboard_totals');
-        aggregatedData = result.data;
-        aggError = result.error;
-      } catch (error) {
-        console.log('⚠️ Database function not available, will use fallback method');
-        aggError = error;
-      }
-
+      // Aggregates via RPC if available, else via SQL aggregate
       let totalCredit = 0;
       let totalDebit = 0;
       let onlineCredit = 0;
@@ -1369,33 +1348,37 @@ class SupabaseDatabase {
       let onlineDebit = 0;
       let offlineDebit = 0;
 
-      if (aggError || !aggregatedData) {
-        console.log('⚠️ Database aggregation not available, using getAllCashBookEntries fallback...');
-        // Fallback: Use getAllCashBookEntries to get all records (handles pagination properly)
-        const allEntries = await this.getAllCashBookEntries();
-        console.log(`📊 Fetched ${allEntries.length} entries for dashboard stats (fallback method)`);
-        
-        if (allEntries.length > 0) {
-          totalCredit = allEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
-          totalDebit = allEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
-          onlineCredit = allEntries.reduce((sum, e) => sum + (e.credit_online || 0), 0);
-          offlineCredit = allEntries.reduce((sum, e) => sum + (e.credit_offline || 0), 0);
-          onlineDebit = allEntries.reduce((sum, e) => sum + (e.debit_online || 0), 0);
-          offlineDebit = allEntries.reduce((sum, e) => sum + (e.debit_offline || 0), 0);
+      try {
+        const result = await supabase.rpc('get_dashboard_totals');
+        if (result.data && !result.error) {
+          const t = result.data[0];
+          totalCredit = t.total_credit || 0;
+          totalDebit = t.total_debit || 0;
+          onlineCredit = t.total_credit_online || 0;
+          offlineCredit = t.total_credit_offline || 0;
+          onlineDebit = t.total_debit_online || 0;
+          offlineDebit = t.total_debit_offline || 0;
+        } else {
+          // SQL aggregate fallback
+          const { data: sums, error: sumsError } = await supabase
+            .from('cash_book')
+            .select('sum(credit) as total_credit, sum(debit) as total_debit, sum(credit_online) as total_credit_online, sum(credit_offline) as total_credit_offline, sum(debit_online) as total_debit_online, sum(debit_offline) as total_debit_offline')
+            .single();
+          if (sumsError) throw sumsError;
+          totalCredit = (sums as any)?.total_credit || 0;
+          totalDebit = (sums as any)?.total_debit || 0;
+          onlineCredit = (sums as any)?.total_credit_online || 0;
+          offlineCredit = (sums as any)?.total_credit_offline || 0;
+          onlineDebit = (sums as any)?.total_debit_online || 0;
+          offlineDebit = (sums as any)?.total_debit_offline || 0;
         }
-      } else {
-        console.log('✅ Using database aggregation for dashboard stats');
-        const totals = aggregatedData[0];
-        totalCredit = totals.total_credit || 0;
-        totalDebit = totals.total_debit || 0;
-        onlineCredit = totals.total_credit_online || 0;
-        offlineCredit = totals.total_credit_offline || 0;
-        onlineDebit = totals.total_debit_online || 0;
-        offlineDebit = totals.total_debit_offline || 0;
+      } catch (e) {
+        console.error('Aggregation error:', e);
+        return this.getDashboardStatsFallback();
       }
 
       const balance = totalCredit - totalDebit;
-      const totalTransactions = totalCount; // Use exact count from database
+      const totalTransactions = totalCount || 0;
       const totalOnline = onlineCredit + onlineDebit;
       const totalOffline = offlineCredit + offlineDebit;
 
@@ -1449,80 +1432,34 @@ class SupabaseDatabase {
   // Get company-wise closing balances (optimized version)
   async getCompanyClosingBalances(): Promise<Array<{companyName: string, closingBalance: number, totalCredit: number, totalDebit: number}>> {
     try {
-      console.log('🔄 Fetching company-wise closing balances...');
-      
-      // Use a more efficient approach - get only the fields we need
-      let entries;
-      const { data: initialEntries, error } = await supabase
+      console.log('🔄 Fetching company-wise closing balances (server-side)...');
+      const { data, error } = await supabase
         .from('cash_book')
         .select('company_name, credit, debit')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '');
-
       if (error) {
         console.error('Error fetching company data:', error);
         return [];
       }
+      if (!data || data.length === 0) return [];
 
-      entries = initialEntries;
-      console.log(`📊 Processing ${entries?.length || 0} entries for company balances`);
-      
-      if (!entries || entries.length === 0) {
-        console.log('⚠️ No entries found with company names, trying fallback method...');
-        
-        // Fallback: Try without filters
-        const { data: fallbackEntries, error: fallbackError } = await supabase
-          .from('cash_book')
-          .select('company_name, credit, debit')
-          .limit(1000);
-
-        if (fallbackError) {
-          console.error('Fallback query also failed:', fallbackError);
-          return [];
-        }
-
-        console.log(`📊 Fallback found ${fallbackEntries?.length || 0} entries`);
-        
-        if (!fallbackEntries || fallbackEntries.length === 0) {
-          console.log('⚠️ No entries found in database at all');
-          return [];
-        }
-
-        // Use fallback entries
-        entries = fallbackEntries;
+      const totals: Record<string, { totalCredit: number; totalDebit: number }> = {};
+      for (const row of data) {
+        const name = (row as any).company_name?.trim();
+        if (!name) continue;
+        if (!totals[name]) totals[name] = { totalCredit: 0, totalDebit: 0 };
+        totals[name].totalCredit += (row as any).credit || 0;
+        totals[name].totalDebit += (row as any).debit || 0;
       }
-
-      // Group by company and calculate totals
-      const companyTotals = new Map<string, {totalCredit: number, totalDebit: number}>();
-      
-      entries.forEach(entry => {
-        if (entry.company_name) {
-          const companyName = entry.company_name.trim();
-          
-          if (!companyTotals.has(companyName)) {
-            companyTotals.set(companyName, { totalCredit: 0, totalDebit: 0 });
-          }
-          
-          const totals = companyTotals.get(companyName)!;
-          totals.totalCredit += entry.credit || 0;
-          totals.totalDebit += entry.debit || 0;
-        }
-      });
-      
-      // Convert to array and calculate closing balances
-      const companyBalances = Array.from(companyTotals.entries()).map(([companyName, totals]) => ({
-        companyName,
-        totalCredit: totals.totalCredit,
-        totalDebit: totals.totalDebit,
-        closingBalance: totals.totalCredit - totals.totalDebit
-      }));
-      
-      // Sort by company name
-      companyBalances.sort((a, b) => a.companyName.localeCompare(b.companyName));
-      
-      console.log(`✅ Company balances calculated for ${companyBalances.length} companies`);
-      console.log('📊 Sample companies:', companyBalances.slice(0, 3));
-      
+      const companyBalances = Object.entries(totals)
+        .map(([companyName, t]) => ({
+          companyName,
+          totalCredit: t.totalCredit,
+          totalDebit: t.totalDebit,
+          closingBalance: t.totalCredit - t.totalDebit,
+        }))
+        .sort((a, b) => a.companyName.localeCompare(b.companyName));
       return companyBalances;
     } catch (error) {
       console.error('Error fetching company closing balances:', error);

@@ -3,6 +3,7 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -13,6 +14,7 @@ import {
   Users,
   CheckCircle,
   X,
+  AlertCircle,
   Eye,
   Download,
   Edit,
@@ -50,6 +52,10 @@ const ApproveRecords: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewEntry, setViewEntry] = useState<any | null>(null);
+  const [viewEditing, setViewEditing] = useState(false);
+  const [viewDraft, setViewDraft] = useState<any | null>(null);
 
   // Calculate total pages
   const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
@@ -85,6 +91,12 @@ const ApproveRecords: React.FC = () => {
     loadDropdownData();
     loadEntries();
   }, [isAdmin]);
+
+  useEffect(() => {
+    const onRefresh = () => loadEntries();
+    window.addEventListener('dashboard-refresh', onRefresh);
+    return () => window.removeEventListener('dashboard-refresh', onRefresh);
+  }, []);
 
   useEffect(() => {
     applyFilters();
@@ -124,7 +136,14 @@ const ApproveRecords: React.FC = () => {
     setLoading(true);
     setFetchError(null);
     try {
-      const allEntries = await supabaseDB.getAllCashBookEntries();
+      // Server-side filtering for speed
+      let { data: allEntries } = await supabaseDB.getFilteredCashBookEntries({
+        companyName: filters.company || undefined,
+      }, 1000, 0);
+      // Fallback to basic fetch if nothing returned (or undefined)
+      if (!allEntries || allEntries.length === 0) {
+        allEntries = await supabaseDB.getCashBookEntries(1000, 0);
+      }
       console.log('[ApproveRecords] Fetched entries:', allEntries);
 
       // Debug: Check approval status of entries
@@ -140,7 +159,16 @@ const ApproveRecords: React.FC = () => {
 
       setEntries(allEntries);
       // Load deleted records as well
-      const deleted = await supabaseDB.getDeletedCashBook();
+      let deleted = await supabaseDB.getDeletedCashBook();
+      // Fallback: if none, attempt a direct minimal fetch to ensure visibility
+      if (!deleted || deleted.length === 0) {
+        const { data, error } = await supabase
+          .from('deleted_cash_book')
+          .select('*')
+          .order('deleted_at', { ascending: false })
+          .limit(1000);
+        if (!error && data) deleted = data;
+      }
       setDeletedEntries(deleted || []);
       if (!allEntries || allEntries.length === 0) {
         setFetchError('No entries found in the database.');
@@ -931,11 +959,12 @@ const ApproveRecords: React.FC = () => {
           </div>
           {/* Company Filter */}
           <div className='w-full'>
-            <Select
+            <SearchableSelect
               label='Company'
               value={filters.company}
               onChange={value => handleFilterChange('company', value)}
               options={companies}
+              placeholder='Search company...'
               className='w-full'
             />
           </div>
@@ -1211,9 +1240,17 @@ const ApproveRecords: React.FC = () => {
                       </Button>
                       <Button
                         variant='secondary'
-                        onClick={() => {
-                          // TODO: Implement view functionality
-                          toast.success('View functionality coming soon');
+                        onClick={async () => {
+                          try {
+                            const full = await supabaseDB.getCashBookEntry(entry.id);
+                            const data = full || entry;
+                            setViewEntry(data);
+                            setViewDraft({ ...data });
+                            setViewEditing(false);
+                            setViewOpen(true);
+                          } catch (e) {
+                            toast.error('Failed to load entry details');
+                          }
                         }}
                         className='mr-2'
                       >
@@ -1300,7 +1337,7 @@ const ApproveRecords: React.FC = () => {
       )}
 
       {/* Deleted Records Approval */}
-      {!loading && !fetchError && (
+      {!loading && (
         <Card title='Deleted Records' subtitle={`Pending ${filteredDeletedEntries.length}`}>
           <div className='overflow-x-auto'>
             <table className='min-w-full divide-y divide-gray-200'>
@@ -1336,6 +1373,63 @@ const ApproveRecords: React.FC = () => {
             </table>
           </div>
         </Card>
+      )}
+      {/* View/Edit Modal */}
+      {viewOpen && viewEntry && (
+        <div className='fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4'>
+          <div className='bg-white rounded-lg w-full max-w-2xl p-4'>
+            <div className='flex items-center justify-between mb-3'>
+              <h3 className='text-lg font-semibold'>Entry Details</h3>
+              <button onClick={() => setViewOpen(false)} className='text-gray-500'>✕</button>
+            </div>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
+              <Input label='Date' value={viewDraft?.c_date || ''} onChange={v => setViewDraft((p:any)=>({ ...p, c_date: v }))} disabled={!viewEditing} />
+              <Input label='Company' value={viewDraft?.company_name || ''} onChange={v => setViewDraft((p:any)=>({ ...p, company_name: v }))} disabled={!viewEditing} />
+              <Input label='Main Account' value={viewDraft?.acc_name || ''} onChange={v => setViewDraft((p:any)=>({ ...p, acc_name: v }))} disabled={!viewEditing} />
+              <Input label='Sub Account' value={viewDraft?.sub_acc_name || ''} onChange={v => setViewDraft((p:any)=>({ ...p, sub_acc_name: v }))} disabled={!viewEditing} />
+              <Input label='Particulars' value={viewDraft?.particulars || ''} onChange={v => setViewDraft((p:any)=>({ ...p, particulars: v }))} disabled={!viewEditing} />
+              <Input label='Credit' value={viewDraft?.credit ?? ''} onChange={v => setViewDraft((p:any)=>({ ...p, credit: Number((parseFloat(v)||0).toFixed(2)) }))} disabled={!viewEditing} type='number' min='0' step='any' />
+              <Input label='Debit' value={viewDraft?.debit ?? ''} onChange={v => setViewDraft((p:any)=>({ ...p, debit: Number((parseFloat(v)||0).toFixed(2)) }))} disabled={!viewEditing} type='number' min='0' step='any' />
+              <Input label='Staff' value={viewDraft?.staff || ''} onChange={v => setViewDraft((p:any)=>({ ...p, staff: v }))} disabled={!viewEditing} />
+            </div>
+            <div className='flex justify-end gap-2 mt-4'>
+              {!viewEditing ? (
+                <>
+                  <Button variant='secondary' onClick={() => setViewOpen(false)}>Close</Button>
+                  <Button onClick={() => setViewEditing(true)}>Edit</Button>
+                </>
+              ) : (
+                <>
+                  <Button variant='secondary' onClick={() => { setViewEditing(false); setViewDraft({ ...viewEntry }); }}>Cancel</Button>
+                  <Button onClick={async () => {
+                    try {
+                      const saved = await supabaseDB.updateCashBookEntry(viewEntry.id, {
+                        c_date: viewDraft.c_date,
+                        company_name: viewDraft.company_name,
+                        acc_name: viewDraft.acc_name,
+                        sub_acc_name: viewDraft.sub_acc_name,
+                        particulars: viewDraft.particulars,
+                        credit: viewDraft.credit,
+                        debit: viewDraft.debit,
+                        staff: viewDraft.staff,
+                      }, user?.username || 'admin');
+                      if (saved) {
+                        toast.success('Entry updated');
+                        setViewEntry(saved);
+                        setViewEditing(false);
+                        await loadEntries();
+                      } else {
+                        toast.error('Failed to update');
+                      }
+                    } catch (e) {
+                      toast.error('Update failed');
+                    }
+                  }}>Save</Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
