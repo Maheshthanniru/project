@@ -198,7 +198,13 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-green-100 text-sm font-medium'>Total Credit</p>
               <p className='text-2xl font-bold'>
-                ₹{stats?.totalCredit?.toLocaleString() || '0'}
+                {statsLoading ? (
+                  <div className='animate-pulse'>Loading...</div>
+                ) : stats?.totalCredit !== undefined ? (
+                  `₹${stats.totalCredit.toLocaleString()}`
+                ) : (
+                  <span className='text-yellow-200'>Error loading</span>
+                )}
               </p>
             </div>
             <TrendingUp className='w-8 h-8 text-green-200' />
@@ -210,7 +216,13 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-red-100 text-sm font-medium'>Total Debit</p>
               <p className='text-2xl font-bold'>
-                ₹{stats?.totalDebit?.toLocaleString() || '0'}
+                {statsLoading ? (
+                  <div className='animate-pulse'>Loading...</div>
+                ) : stats?.totalDebit !== undefined ? (
+                  `₹${stats.totalDebit.toLocaleString()}`
+                ) : (
+                  <span className='text-yellow-200'>Error loading</span>
+                )}
               </p>
             </div>
             <TrendingDown className='w-8 h-8 text-red-200' />
@@ -222,7 +234,13 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='text-blue-100 text-sm font-medium'>Net Balance</p>
               <p className='text-2xl font-bold'>
-                ₹{stats?.balance?.toLocaleString() || '0'}
+                {statsLoading ? (
+                  <div className='animate-pulse'>Loading...</div>
+                ) : stats?.balance !== undefined ? (
+                  `₹${stats.balance.toLocaleString()}`
+                ) : (
+                  <span className='text-yellow-200'>Error loading</span>
+                )}
               </p>
             </div>
             <DollarSign className='w-8 h-8 text-blue-200' />
@@ -235,7 +253,15 @@ const Dashboard: React.FC = () => {
               <p className='text-purple-100 text-sm font-medium'>
                 Transactions
               </p>
-              <p className='text-2xl font-bold'>{stats?.totalTransactions || 0}</p>
+              <p className='text-2xl font-bold'>
+                {statsLoading ? (
+                  <div className='animate-pulse'>Loading...</div>
+                ) : stats?.totalTransactions !== undefined ? (
+                  stats.totalTransactions.toLocaleString()
+                ) : (
+                  <span className='text-yellow-200'>Error loading</span>
+                )}
+              </p>
             </div>
             <FileText className='w-8 h-8 text-purple-200' />
           </div>
@@ -340,34 +366,16 @@ const Dashboard: React.FC = () => {
                       </span>
                       <span>{entry.staff}</span>
                       {entry.sale_qty > 0 && <span>Qty: {entry.sale_qty}</span>}
-                      {/* Show payment mode */}
+                      {/* Show payment mode - simplified since online/offline columns don't exist */}
                       {entry.credit > 0 && (
-                        <div className='space-y-1'>
-                          {entry.credit_online > 0 && (
-                            <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                              Online: ₹{entry.credit_online.toLocaleString()}
-                            </span>
-                          )}
-                          {entry.credit_offline > 0 && (
-                            <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                              Offline: ₹{entry.credit_offline.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
+                        <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                          Credit: ₹{entry.credit.toLocaleString()}
+                        </span>
                       )}
                       {entry.debit > 0 && (
-                        <div className='space-y-1'>
-                          {entry.debit_online > 0 && (
-                            <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                              Online: ₹{entry.debit_online.toLocaleString()}
-                            </span>
-                          )}
-                          {entry.debit_offline > 0 && (
-                            <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                              Offline: ₹{entry.debit_offline.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
+                        <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                          Debit: ₹{entry.debit.toLocaleString()}
+                        </span>
                       )}
                     </div>
                   </div>

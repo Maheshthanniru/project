@@ -1262,6 +1262,14 @@ const NewEntry: React.FC = () => {
                       onChange={value =>
                         handleInputChange('companyName', value)
                       }
+                      onSelect={(value) => {
+                        // Auto-navigate to next field when company is selected
+                        setTimeout(() => {
+                          if (mainAccountRef.current) {
+                            mainAccountRef.current.focus();
+                          }
+                        }, 100);
+                      }}
                       options={companiesOptions}
                       placeholder='Select company...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, mainAccountRef)}
@@ -1304,6 +1312,14 @@ const NewEntry: React.FC = () => {
                       onChange={value =>
                         handleInputChange('accountName', value)
                       }
+                      onSelect={(value) => {
+                        // Auto-navigate to next field when account is selected
+                        setTimeout(() => {
+                          if (subAccountRef.current) {
+                            subAccountRef.current.focus();
+                          }
+                        }, 100);
+                      }}
                       options={accountOptions}
                       placeholder='Select account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, subAccountRef)}
@@ -1507,6 +1523,14 @@ const NewEntry: React.FC = () => {
                             companyName: value,
                           }))
                         }
+                        onSelect={(value) => {
+                          // Auto-navigate to next field when company is selected
+                          setTimeout(() => {
+                            if (dualMainAccountRef.current) {
+                              dualMainAccountRef.current.focus();
+                            }
+                          }, 100);
+                        }}
                         options={companiesOptions}
                         placeholder='Select company...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualMainAccountRef)}
@@ -1525,6 +1549,14 @@ const NewEntry: React.FC = () => {
                             accountName: value,
                           }))
                         }
+                        onSelect={(value) => {
+                          // Auto-navigate to next field when account is selected
+                          setTimeout(() => {
+                            if (dualSubAccountRef.current) {
+                              dualSubAccountRef.current.focus();
+                            }
+                          }, 100);
+                        }}
                         options={dualAccountOptions}
                         placeholder='Select account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualSubAccountRef)}

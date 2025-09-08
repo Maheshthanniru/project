@@ -11,6 +11,7 @@ interface SearchableSelectProps {
   disabled?: boolean;
   className?: string;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSelect?: (value: string) => void; // New callback for when an option is selected
   searchPlaceholder?: string;
   noOptionsMessage?: string;
 }
@@ -27,6 +28,7 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
       disabled = false,
       className = '',
       onKeyDown,
+      onSelect,
       searchPlaceholder = 'Search...',
       noOptionsMessage = 'No options found',
     },
@@ -131,6 +133,11 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
       setIsOpen(false);
       setSearchTerm('');
       setHighlightedIndex(-1);
+      
+      // Call onSelect callback if provided (for auto-navigation)
+      if (onSelect) {
+        onSelect(selectedValue);
+      }
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

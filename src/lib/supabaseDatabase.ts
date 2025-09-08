@@ -33,10 +33,6 @@ export interface CashBookEntry {
   c_date: string;
   credit: number;
   debit: number;
-  credit_online: number;
-  credit_offline: number;
-  debit_online: number;
-  debit_offline: number;
   lock_record: boolean;
   company_name: string;
   address: string;
@@ -1330,68 +1326,99 @@ class SupabaseDatabase {
   // Dashboard stats - All time totals (fetches ALL records, not just 1000)
   async getDashboardStats(date?: string) {
     try {
-      console.log('🔄 Fetching dashboard stats for ALL records (not just 1000)...');
-      // Count only (server-side)
-      const { count: totalCount, error: countError } = await supabase
-        .from('cash_book')
-        .select('*', { count: 'exact', head: true });
-      if (countError) {
-        console.error('Error getting total count:', countError);
-        return this.getDashboardStatsFallback();
-      }
-
-      // Aggregates via RPC if available, else via SQL aggregate
+      console.log('🔄 Fetching dashboard stats for ALL 67k+ records...');
+      
       let totalCredit = 0;
       let totalDebit = 0;
-      let onlineCredit = 0;
-      let offlineCredit = 0;
-      let onlineDebit = 0;
-      let offlineDebit = 0;
+      let totalTransactions = 0;
 
+      // Method 1: Try RPC function first (most efficient for large datasets)
       try {
+        console.log('📊 Trying RPC function for totals...');
         const result = await supabase.rpc('get_dashboard_totals');
-        if (result.data && !result.error) {
+        if (result.data && !result.error && result.data.length > 0) {
           const t = result.data[0];
-          totalCredit = t.total_credit || 0;
-          totalDebit = t.total_debit || 0;
-          onlineCredit = t.total_credit_online || 0;
-          offlineCredit = t.total_credit_offline || 0;
-          onlineDebit = t.total_debit_online || 0;
-          offlineDebit = t.total_debit_offline || 0;
+          totalCredit = Number(t.total_credit) || 0;
+          totalDebit = Number(t.total_debit) || 0;
+          totalTransactions = Number(t.total_transactions) || 0;
+          console.log(`✅ RPC result: ${totalTransactions.toLocaleString()} transactions, credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
         } else {
-          // SQL aggregate fallback
-          const { data: sums, error: sumsError } = await supabase
-            .from('cash_book')
-            .select('sum(credit) as total_credit, sum(debit) as total_debit, sum(credit_online) as total_credit_online, sum(credit_offline) as total_credit_offline, sum(debit_online) as total_debit_online, sum(debit_offline) as total_debit_offline')
-            .single();
-          if (sumsError) throw sumsError;
-          totalCredit = (sums as any)?.total_credit || 0;
-          totalDebit = (sums as any)?.total_debit || 0;
-          onlineCredit = (sums as any)?.total_credit_online || 0;
-          offlineCredit = (sums as any)?.total_credit_offline || 0;
-          onlineDebit = (sums as any)?.total_debit_online || 0;
-          offlineDebit = (sums as any)?.total_debit_offline || 0;
+          throw new Error('RPC function failed or returned no data');
         }
-      } catch (e) {
-        console.error('Aggregation error:', e);
-        return this.getDashboardStatsFallback();
+      } catch (rpcError) {
+        console.error('RPC function failed, trying SQL aggregation:', rpcError);
+        
+        // Method 2: Try SQL aggregation with proper handling for large datasets
+        try {
+          console.log('📊 Trying SQL aggregation for totals...');
+          
+          // Get total count first
+          const { count: totalCount, error: countError } = await supabase
+            .from('cash_book')
+            .select('*', { count: 'exact', head: true });
+
+          if (countError) {
+            console.error('Error getting total count:', countError);
+            throw countError;
+          }
+
+          totalTransactions = totalCount || 0;
+          console.log(`📊 Total records in database: ${totalTransactions}`);
+
+          // Use SQL aggregation with proper Supabase syntax
+          const { data: sumData, error: sumError } = await supabase
+            .from('cash_book')
+            .select('credit, debit')
+            .limit(100000); // Get all records for aggregation
+
+          if (sumError) {
+            console.error('Error getting sum data:', sumError);
+            throw sumError;
+          }
+
+          // Calculate totals from the fetched data
+          if (sumData && sumData.length > 0) {
+            totalCredit = sumData.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+            totalDebit = sumData.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+          }
+          
+          console.log(`✅ SQL aggregation result: credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
+          
+        } catch (sqlError) {
+          console.error('SQL aggregation failed, trying pagination method:', sqlError);
+          
+          // Method 3: Fallback to pagination (slower but works)
+          console.log('📊 Using pagination method to fetch all records...');
+          const allEntries = await this.getAllCashBookEntries();
+          totalTransactions = allEntries.length;
+          
+          if (allEntries.length > 0) {
+            totalCredit = allEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+            totalDebit = allEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+          }
+          
+          console.log(`✅ Pagination result: ${totalTransactions} records, credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
+        }
       }
 
       const balance = totalCredit - totalDebit;
-      const totalTransactions = totalCount || 0;
-      const totalOnline = onlineCredit + onlineDebit;
-      const totalOffline = offlineCredit + offlineDebit;
 
       // Get today's entries count
       const today = date || new Date().toISOString().split('T')[0];
-      const { count: todayCount } = await supabase
-        .from('cash_book')
-        .select('*', { count: 'exact', head: true })
-        .eq('c_date', today);
+      let todayEntries = 0;
       
-      const todayEntries = todayCount || 0;
+      try {
+        const { count: todayCount } = await supabase
+          .from('cash_book')
+          .select('*', { count: 'exact', head: true })
+          .eq('c_date', today);
+        todayEntries = todayCount || 0;
+      } catch (todayError) {
+        console.error('Error getting today entries count:', todayError);
+        todayEntries = 0;
+      }
 
-      console.log(`✅ Dashboard stats calculated: ${totalTransactions} total transactions, ₹${totalCredit.toLocaleString()} credit, ₹${totalDebit.toLocaleString()} debit`);
+      console.log(`🎉 Dashboard stats calculated: ${totalTransactions.toLocaleString()} total transactions, ₹${totalCredit.toLocaleString()} credit, ₹${totalDebit.toLocaleString()} debit, balance: ₹${balance.toLocaleString()}`);
 
       return {
         totalCredit,
@@ -1399,12 +1426,13 @@ class SupabaseDatabase {
         balance,
         totalTransactions,
         todayEntries: todayEntries,
-        onlineCredit,
-        offlineCredit,
-        onlineDebit,
-        offlineDebit,
-        totalOnline,
-        totalOffline,
+        // Set online/offline values to 0 since these columns don't exist in the current schema
+        onlineCredit: 0,
+        offlineCredit: 0,
+        onlineDebit: 0,
+        offlineDebit: 0,
+        totalOnline: 0,
+        totalOffline: 0,
       };
     } catch (error) {
       console.error('Error in getDashboardStats:', error);
@@ -1414,6 +1442,7 @@ class SupabaseDatabase {
 
   // Fallback method for dashboard stats
   private getDashboardStatsFallback() {
+    console.warn('⚠️ Using fallback dashboard stats - check database connection and table structure');
     return {
       totalCredit: 0,
       totalDebit: 0,
@@ -1471,9 +1500,7 @@ class SupabaseDatabase {
   async getDashboardStatsForDate(date: string) {
     const { data, error } = await supabase
       .from('cash_book')
-      .select(
-        'credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline'
-      )
+      .select('credit, debit, c_date')
       .eq('c_date', date);
 
     if (error) {
@@ -1502,25 +1529,13 @@ class SupabaseDatabase {
     const balance = totalCredit - totalDebit;
     const totalTransactions = entries.length;
 
-    const onlineCredit = entries.reduce(
-      (sum, e) => sum + (e.credit_online || 0),
-      0
-    );
-    const offlineCredit = entries.reduce(
-      (sum, e) => sum + (e.credit_offline || 0),
-      0
-    );
-    const onlineDebit = entries.reduce(
-      (sum, e) => sum + (e.debit_online || 0),
-      0
-    );
-    const offlineDebit = entries.reduce(
-      (sum, e) => sum + (e.debit_offline || 0),
-      0
-    );
-
-    const totalOnline = onlineCredit + onlineDebit;
-    const totalOffline = offlineCredit + offlineDebit;
+    // Set online/offline values to 0 since these columns don't exist in the current schema
+    const onlineCredit = 0;
+    const offlineCredit = 0;
+    const onlineDebit = 0;
+    const offlineDebit = 0;
+    const totalOnline = 0;
+    const totalOffline = 0;
 
     return {
       totalCredit,
