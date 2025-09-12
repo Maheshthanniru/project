@@ -1702,146 +1702,148 @@ const EditEntry: React.FC = () => {
               No entries found matching your criteria.
             </div>
           ) : (
-            filteredEntries.map(entry => (
-              <div
-                key={entry.id}
-                className={`group border rounded-xl shadow-md px-4 py-3 transition-shadow hover:shadow-lg bg-white relative min-w-full ${entry.lock_record ? 'opacity-80 bg-gray-50 border-gray-300' : 'bg-white border-gray-200'}`}
-                style={{ cursor: 'pointer' }}
-              >
-                {/* Horizontal layout - elements arranged side by side */}
-                <div className='flex flex-wrap items-center gap-4'>
-                  {/* S.No */}
-                  <span className='font-bold text-blue-700 min-w-[60px]'>
-                    #{entry.sno}
-                  </span>
-                  
-                  {/* Date */}
-                  <span className='text-sm text-gray-600 min-w-[120px]'>
-                    <Calendar className='w-4 h-4 inline mr-1' />
-                    {format(new Date(entry.c_date), 'MMM dd, yyyy')}
-                  </span>
-                  
-                  {/* Company */}
-                  <span
-                    className='font-bold text-blue-900 bg-blue-50 rounded px-2 py-1 text-sm min-w-[150px]'
-                    title={entry.company_name}
-                  >
-                    <Building className='w-4 h-4 mr-1 inline' />
-                    {entry.company_name}
-                  </span>
-                  
-                  {/* Account */}
-                  <span
-                    className='font-semibold text-indigo-900 bg-indigo-50 rounded px-2 py-1 text-sm min-w-[150px]'
-                    title={entry.acc_name}
-                  >
-                    <FileText className='w-4 h-4 mr-1 inline' />
-                    {entry.acc_name}
-                  </span>
-                  
-                  {/* Sub Account */}
-                  <span
-                    className='font-semibold text-purple-900 bg-purple-50 rounded px-2 py-1 text-sm min-w-[150px]'
-                    title={entry.sub_acc_name}
-                  >
-                    <User className='w-4 h-4 mr-1 inline' />
-                    {entry.sub_acc_name}
-                  </span>
-                  
-                  {/* Particulars */}
-                  <span
-                    className='text-gray-800 font-medium max-w-[200px] truncate text-sm min-w-[150px]'
-                    title={entry.particulars}
-                  >
-                    {entry.particulars}
-                  </span>
-                  
-                  {/* Credit Amount */}
-                  <span className='text-green-700 font-semibold text-sm min-w-[100px]'>
-                    <Calculator className='w-4 h-4 inline mr-1' />
-                    ₹{entry.credit.toLocaleString()}
-                  </span>
-                  
-                  {/* Debit Amount */}
-                  <span className='text-red-700 font-semibold text-sm min-w-[100px]'>
-                    <Calculator className='w-4 h-4 inline mr-1' />
-                    ₹{entry.debit.toLocaleString()}
-                  </span>
-                  
-                  {/* Staff */}
-                  <span className='text-sm text-gray-700 min-w-[100px]'>{entry.staff}</span>
-                  
-                  {/* Status badges */}
-                  <div className='flex flex-wrap gap-1 min-w-[200px]'>
-                    {entry.lock_record && (
-                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                        <Lock className='w-3 h-3 mr-1' />
-                        Locked
-                      </span>
-                    )}
-                    {entry.edited && (
-                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
-                        Edited ({entry.editCount}x)
-                      </span>
-                    )}
-                    {entry.approved ? (
-                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                        Approved
-                      </span>
-                    ) : (
-                      <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                  
-                  {/* Action buttons */}
-                  <div className='flex flex-wrap gap-2 min-w-[200px]'>
-                    {isAdmin && (
-                      <Button
-                        size='sm'
-                        variant='secondary'
-                        icon={entry.lock_record ? Unlock : Lock}
-                        onClick={() => {
-                          toggleLock(entry);
-                        }}
-                      >
-                        {entry.lock_record ? 'Unlock' : 'Lock'}
-                      </Button>
-                    )}
-                    <Button
-                      size='sm'
-                      variant='secondary'
-                      onClick={() => printVoucher(entry)}
+            <div className='overflow-x-auto'>
+              <table className='w-full text-sm'>
+                <thead className='bg-gray-50 border-b border-gray-200'>
+                  <tr>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      S.No
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Date
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Company
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Account
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Sub Account
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Particulars
+                    </th>
+                    <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                      Credit
+                    </th>
+                    <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                      Debit
+                    </th>
+                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                      Staff
+                    </th>
+                    <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                      Status
+                    </th>
+                    <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((entry, index) => (
+                    <tr
+                      key={entry.id}
+                      className={`border-b hover:bg-gray-50 transition-colors cursor-pointer ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                      } ${entry.lock_record ? 'opacity-80' : ''}`}
+                      onClick={() => setSelectedEntry(entry)}
                     >
-                      Voucher
-                    </Button>
-                    <Button
-                      size='sm'
-                      icon={Edit}
-                      onClick={() => {
-                        handleEdit(entry);
-                      }}
-                      disabled={entry.lock_record && !isAdmin}
-                    >
-                      <span className='sr-only'>Edit</span>
-                    </Button>
-                    {isAdmin && (
-                      <Button
-                        size='sm'
-                        variant='danger'
-                        onClick={() => {
-                          handleDelete(entry);
-                        }}
-                        disabled={entry.lock_record}
+                      <td className='px-3 py-2 font-medium'>{index + 1}</td>
+                      <td className='px-3 py-2'>
+                        {format(new Date(entry.c_date), 'dd-MMM-yy')}
+                      </td>
+                      <td className='px-3 py-2 font-medium text-blue-600'>
+                        {entry.company_name}
+                      </td>
+                      <td className='px-3 py-2'>{entry.acc_name}</td>
+                      <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
+                      <td
+                        className='px-3 py-2 max-w-xs truncate'
+                        title={entry.particulars}
                       >
-                        <span className='sr-only'>Delete</span>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
+                        {entry.particulars}
+                      </td>
+                      <td className='px-3 py-2 text-right font-medium text-green-600'>
+                        {entry.credit > 0
+                          ? `₹${entry.credit.toLocaleString()}`
+                          : '-'}
+                      </td>
+                      <td className='px-3 py-2 text-right font-medium text-red-600'>
+                        {entry.debit > 0
+                          ? `₹${entry.debit.toLocaleString()}`
+                          : '-'}
+                      </td>
+                      <td className='px-3 py-2'>{entry.staff}</td>
+                      <td className='px-3 py-2 text-center'>
+                        <div className='flex flex-col gap-1'>
+                          {entry.lock_record && (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
+                              <Lock className='w-3 h-3 mr-1' />
+                              Locked
+                            </span>
+                          )}
+                          {entry.edited && (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
+                              Edited ({entry.editCount}x)
+                            </span>
+                          )}
+                          {entry.approved ? (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                              Approved
+                            </span>
+                          ) : (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className='px-3 py-2 text-center'>
+                        <div className='flex gap-1 justify-center' onClick={(e) => e.stopPropagation()}>
+                          {isAdmin && (
+                            <Button
+                              size='sm'
+                              variant='secondary'
+                              icon={entry.lock_record ? Unlock : Lock}
+                              onClick={() => toggleLock(entry)}
+                            >
+                              {entry.lock_record ? 'Unlock' : 'Lock'}
+                            </Button>
+                          )}
+                          <Button
+                            size='sm'
+                            variant='secondary'
+                            onClick={() => printVoucher(entry)}
+                          >
+                            Voucher
+                          </Button>
+                          <Button
+                            size='sm'
+                            icon={Edit}
+                            onClick={() => handleEdit(entry)}
+                            disabled={entry.lock_record && !isAdmin}
+                          >
+                            <span className='sr-only'>Edit</span>
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              size='sm'
+                              variant='danger'
+                              onClick={() => handleDelete(entry)}
+                              disabled={entry.lock_record}
+                            >
+                              <span className='sr-only'>Delete</span>
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           
           {/* Progress Indicator */}

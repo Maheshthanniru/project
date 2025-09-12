@@ -7,7 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCreateCashBookEntry, useBulkCashBookOperations } from '../hooks/useCashBookData';
-import { useDropdownData } from '../hooks/useDashboardData';
+import { useDropdownData, useRecentEntries } from '../hooks/useDashboardData';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { importFromFile } from '../utils/excel';
@@ -45,6 +45,7 @@ const NewEntry: React.FC = () => {
   const createEntryMutation = useCreateCashBookEntry();
   const bulkOperationsMutation = useBulkCashBookOperations();
   const { companies, accounts } = useDropdownData();
+  const { data: recentEntries, isLoading: recentLoading } = useRecentEntries();
 
   const [entry, setEntry] = useState<NewEntryForm>({
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -108,6 +109,7 @@ const NewEntry: React.FC = () => {
   const [deleteType, setDeleteType] = useState<
     'company' | 'account' | 'subAccount'
   >('company');
+
 
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newCompanyAddress, setNewCompanyAddress] = useState('');
@@ -301,8 +303,8 @@ const NewEntry: React.FC = () => {
 
   const updateTotalEntryCount = async () => {
     try {
-      const allEntries = await supabaseDB.getCashBookEntries();
-      setTotalEntryCount(allEntries.length);
+      const totalCount = await supabaseDB.getCashBookEntriesCount();
+      setTotalEntryCount(totalCount);
     } catch (error) {
       console.error('Error updating total entry count:', error);
       setTotalEntryCount(0);
@@ -377,8 +379,8 @@ const NewEntry: React.FC = () => {
     setLoading(true);
     try {
       // Prepare main entry data
-      const mainCreditNum = Number(((parseFloat(entry.credit) || 0)).toFixed(2));
-      const mainDebitNum = Number(((parseFloat(entry.debit) || 0)).toFixed(2));
+      const mainCreditNum = parseFloat(entry.credit) || 0;
+      const mainDebitNum = parseFloat(entry.debit) || 0;
       const mainEntryData = {
         acc_name: entry.accountName,
         sub_acc_name: entry.subAccount,
@@ -403,8 +405,8 @@ const NewEntry: React.FC = () => {
 
       // If dual entry, prepare both entries for bulk operation
       if (dualEntryEnabled) {
-        const dualCreditNum = Number(((parseFloat(dualEntry.credit) || 0)).toFixed(2));
-        const dualDebitNum = Number(((parseFloat(dualEntry.debit) || 0)).toFixed(2));
+        const dualCreditNum = parseFloat(dualEntry.credit) || 0;
+        const dualDebitNum = parseFloat(dualEntry.debit) || 0;
         const dualEntryData = {
           acc_name: dualEntry.accountName,
           sub_acc_name: dualEntry.subAccount,
@@ -452,7 +454,7 @@ const NewEntry: React.FC = () => {
         creditOffline: '',
         debitOnline: '',
         debitOffline: '',
-        staff: user?.username || '',
+        staff: entry.staff, // Preserve the current staff selection
         quantityChecked: false,
       });
       // Accounts are now managed by React Query
@@ -471,7 +473,7 @@ const NewEntry: React.FC = () => {
         creditOffline: '',
         debitOnline: '',
         debitOffline: '',
-        staff: user?.username || '',
+        staff: entry.staff, // Preserve the current staff selection
         quantityChecked: false,
       });
       setDualEntryEnabled(false);
@@ -1715,7 +1717,7 @@ const NewEntry: React.FC = () => {
                         creditOffline: '',
                         debitOnline: '',
                         debitOffline: '',
-                        staff: user?.username || '',
+                        staff: entry.staff, // Preserve the current staff selection
                         quantityChecked: false,
                       });
                       // Accounts are now managed by React Query
@@ -1727,6 +1729,115 @@ const NewEntry: React.FC = () => {
                   </Button>
                 </div>
               </form>
+            </Card>
+          </div>
+
+          {/* Recent Transactions Section */}
+          <div className='w-full mt-4'>
+            <Card
+              title='Recent Transactions'
+              subtitle='Latest entries from your cash book'
+              className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
+            >
+              {recentLoading ? (
+                <div className='text-center py-8'>
+                  <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+                  <p className='mt-2 text-gray-600'>Loading transactions...</p>
+                </div>
+              ) : !recentEntries || recentEntries.length === 0 ? (
+                <div className='text-center py-8 text-gray-500'>
+                  No transactions found.
+                </div>
+              ) : (
+                <div className='overflow-x-auto'>
+                  <div className='max-h-48 overflow-y-auto'>
+                    <table className='w-full text-sm'>
+                      <thead className='sticky top-0 bg-gray-50 z-10'>
+                        <tr className='border-b border-gray-200'>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            S.No
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Date
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Company
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Account
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Sub Account
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Particulars
+                          </th>
+                          <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                            Credit
+                          </th>
+                          <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                            Debit
+                          </th>
+                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                            Staff
+                          </th>
+                          <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentEntries?.map((entry, index) => (
+                          <tr
+                            key={entry.id}
+                            className={`border-b hover:bg-gray-50 transition-colors ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                            }`}
+                          >
+                            <td className='px-3 py-2 font-medium'>{index + 1}</td>
+                            <td className='px-3 py-2'>
+                              {format(new Date(entry.c_date), 'dd-MMM-yy')}
+                            </td>
+                            <td className='px-3 py-2 font-medium text-blue-600'>
+                              {entry.company_name}
+                            </td>
+                            <td className='px-3 py-2'>{entry.acc_name}</td>
+                            <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
+                            <td
+                              className='px-3 py-2 max-w-xs truncate'
+                              title={entry.particulars}
+                            >
+                              {entry.particulars}
+                            </td>
+                            <td className='px-3 py-2 text-right font-medium text-green-600'>
+                              {entry.credit > 0
+                                ? `₹${entry.credit.toLocaleString()}`
+                                : '-'}
+                            </td>
+                            <td className='px-3 py-2 text-right font-medium text-red-600'>
+                              {entry.debit > 0
+                                ? `₹${entry.debit.toLocaleString()}`
+                                : '-'}
+                            </td>
+                            <td className='px-3 py-2'>{entry.staff}</td>
+                            <td className='px-3 py-2 text-center'>
+                              {entry.approved ? (
+                                <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                                  Approved
+                                </span>
+                              ) : (
+                                <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
 

@@ -320,104 +320,6 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Recent Transactions */}
-      <Card
-        title='Recent Transactions'
-        subtitle='Latest entries from your cash book'
-      >
-        {loading ? (
-          <div className='text-center py-8'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
-            <p className='mt-2 text-gray-600'>Loading transactions...</p>
-          </div>
-        ) : !recentEntries || recentEntries.length === 0 ? (
-          <div className='text-center py-8 text-gray-500'>
-            No transactions found.
-          </div>
-        ) : (
-          <div className='space-y-3'>
-            {recentEntries?.map(entry => (
-              <div
-                key={entry.id}
-                className={`p-4 rounded-lg border ${getTransactionBg(entry.credit, entry.debit)} hover:shadow-sm transition-shadow`}
-              >
-                <div className='flex items-center justify-between'>
-                  <div className='flex-1'>
-                    <div className='flex items-center gap-2 mb-1'>
-                      <span className='font-semibold text-gray-900 text-xs'>
-                        #{entry.sno}
-                      </span>
-                      <h4 className='font-medium text-gray-900 text-xs'>
-                        {entry.acc_name}
-                      </h4>
-                      {entry.sub_acc_name && (
-                        <span className='text-xs text-gray-500'>
-                          → {entry.sub_acc_name}
-                        </span>
-                      )}
-                    </div>
-                    <p className='text-sm text-gray-600 mb-2'>
-                      {entry.particulars}
-                    </p>
-                    <div className='flex items-center gap-4 text-sm text-gray-500'>
-                      <span>{entry.company_name}</span>
-                      <span>
-                        {format(new Date(entry.c_date), 'MMM dd, yyyy')}
-                      </span>
-                      <span>{entry.staff}</span>
-                      {entry.sale_qty > 0 && <span>Qty: {entry.sale_qty}</span>}
-                      {/* Show payment mode - simplified since online/offline columns don't exist */}
-                      {entry.credit > 0 && (
-                        <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                          Credit: ₹{entry.credit.toLocaleString()}
-                        </span>
-                      )}
-                      {entry.debit > 0 && (
-                        <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                          Debit: ₹{entry.debit.toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className='text-right'>
-                    {entry.credit > 0 && (
-                      <p
-                        className={`font-semibold ${getTransactionColor(entry.credit, entry.debit)}`}
-                      >
-                        +₹{entry.credit.toLocaleString()}
-                      </p>
-                    )}
-                    {entry.debit > 0 && (
-                      <p
-                        className={`font-semibold ${getTransactionColor(entry.credit, entry.debit)}`}
-                      >
-                        -₹{entry.debit.toLocaleString()}
-                      </p>
-                    )}
-                    <div className='flex items-center gap-2 mt-1'>
-                      {entry.approved ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                          Approved
-                        </span>
-                      ) : (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
-                          Pending
-                        </span>
-                      )}
-                      {entry.edited && (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800'>
-                          Edited
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {/* Company Closing Balances Table */}
       <Card
         title='Company Closing Balances'
@@ -434,24 +336,25 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <div className='overflow-x-auto'>
-            <table className='w-full text-xs'>
-              <thead>
-                <tr className='border-b border-gray-200 bg-gray-50'>
-                  <th className='text-left py-3 px-4 font-semibold text-gray-700'>
-                    Company Name
-                  </th>
-                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
-                    Total Credit
-                  </th>
-                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
-                    Total Debit
-                  </th>
-                  <th className='text-right py-3 px-4 font-semibold text-gray-700'>
-                    Closing Balance
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <div className='max-h-48 overflow-y-auto'>
+              <table className='w-full text-xs'>
+                <thead className='sticky top-0 bg-gray-50 z-10'>
+                  <tr className='border-b border-gray-200'>
+                    <th className='text-left py-3 px-4 font-semibold text-gray-700'>
+                      Company Name
+                    </th>
+                    <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                      Total Credit
+                    </th>
+                    <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                      Total Debit
+                    </th>
+                    <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                      Closing Balance
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
                 {companyBalances?.map((company, index) => (
                   <tr
                     key={company.companyName}
@@ -483,33 +386,139 @@ const Dashboard: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr className='border-t-2 border-gray-300 bg-gray-100 font-semibold'>
-                  <td className='py-3 px-4 text-gray-900'>
-                    Total Companies: {companyBalances?.length || 0}
-                  </td>
-                  <td className='py-3 px-4 text-right text-green-600'>
-                    ₹{companyBalances?.reduce((sum, c) => sum + c.totalCredit, 0)?.toLocaleString() || '0'}
-                  </td>
-                  <td className='py-3 px-4 text-right text-red-600'>
-                    ₹{companyBalances?.reduce((sum, c) => sum + c.totalDebit, 0)?.toLocaleString() || '0'}
-                  </td>
-                  <td className='py-3 px-4 text-right'>
-                    <span
-                      className={`px-2 py-1 rounded-full text-sm font-bold ${
-                        (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) > 0
-                          ? 'bg-green-100 text-green-800'
-                          : (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) < 0
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      ₹{companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0)?.toLocaleString() || '0'}
-                    </span>
-                  </td>
+                </tbody>
+              </table>
+            </div>
+            {/* Summary Footer */}
+            <div className='mt-4 p-4 bg-gray-100 rounded-lg border'>
+              <div className='grid grid-cols-4 gap-4 text-sm'>
+                <div className='font-semibold text-gray-900'>
+                  Total Companies: {companyBalances?.length || 0}
+                </div>
+                <div className='text-right text-green-600 font-semibold'>
+                  ₹{companyBalances?.reduce((sum, c) => sum + c.totalCredit, 0)?.toLocaleString() || '0'}
+                </div>
+                <div className='text-right text-red-600 font-semibold'>
+                  ₹{companyBalances?.reduce((sum, c) => sum + c.totalDebit, 0)?.toLocaleString() || '0'}
+                </div>
+                <div className='text-right'>
+                  <span
+                    className={`px-2 py-1 rounded-full text-sm font-bold ${
+                      (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) > 0
+                        ? 'bg-green-100 text-green-800'
+                        : (companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0) || 0) < 0
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    ₹{companyBalances?.reduce((sum, c) => sum + c.closingBalance, 0)?.toLocaleString() || '0'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Recent Transactions */}
+      <Card
+        title='Recent Transactions'
+        subtitle='Latest entries from your cash book'
+      >
+        {loading ? (
+          <div className='text-center py-8'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
+            <p className='mt-2 text-gray-600'>Loading transactions...</p>
+          </div>
+        ) : !recentEntries || recentEntries.length === 0 ? (
+          <div className='text-center py-8 text-gray-500'>
+            No transactions found.
+          </div>
+        ) : (
+          <div className='overflow-x-auto'>
+            <table className='w-full text-sm'>
+              <thead className='bg-gray-50 border-b border-gray-200'>
+                <tr>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    S.No
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Date
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Company
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Account
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Sub Account
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Particulars
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Credit
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Debit
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Staff
+                  </th>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    Status
+                  </th>
                 </tr>
-              </tfoot>
+              </thead>
+              <tbody>
+                {recentEntries?.map((entry, index) => (
+                  <tr
+                    key={entry.id}
+                    className={`border-b hover:bg-gray-50 transition-colors ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                    }`}
+                  >
+                    <td className='px-3 py-2 font-medium'>{index + 1}</td>
+                    <td className='px-3 py-2'>
+                      {format(new Date(entry.c_date), 'dd-MMM-yy')}
+                    </td>
+                    <td className='px-3 py-2 font-medium text-blue-600'>
+                      {entry.company_name}
+                    </td>
+                    <td className='px-3 py-2'>{entry.acc_name}</td>
+                    <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
+                    <td
+                      className='px-3 py-2 max-w-xs truncate'
+                      title={entry.particulars}
+                    >
+                      {entry.particulars}
+                    </td>
+                    <td className='px-3 py-2 text-right font-medium text-green-600'>
+                      {entry.credit > 0
+                        ? `₹${entry.credit.toLocaleString()}`
+                        : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right font-medium text-red-600'>
+                      {entry.debit > 0
+                        ? `₹${entry.debit.toLocaleString()}`
+                        : '-'}
+                    </td>
+                    <td className='px-3 py-2'>{entry.staff}</td>
+                    <td className='px-3 py-2 text-center'>
+                      {entry.approved ? (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                          Approved
+                        </span>
+                      ) : (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         )}

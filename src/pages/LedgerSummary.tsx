@@ -67,7 +67,7 @@ const LedgerSummary: React.FC = () => {
   >([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'company' | 'mainAccount' | 'subAccount' | 'subAccountGrand'
+    'company' | 'mainAccount' | 'subAccount'
   >('company');
 
   // Dropdown data
@@ -454,8 +454,8 @@ const LedgerSummary: React.FC = () => {
         filename = 'main-account-summary';
         break;
       case 'subAccount':
-      case 'subAccountGrand':
         exportData = subAccountSummaries.map(subAccount => ({
+          'Main Account': subAccount.mainAccount || '-',
           'Sub Account': subAccount.subAccount,
           Credit: subAccount.credit,
           Debit: subAccount.debit,
@@ -537,7 +537,10 @@ const LedgerSummary: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th>${activeTab === 'company' ? 'Company Name' : activeTab === 'mainAccount' ? 'Main Account' : 'Sub Account'}</th>
+                ${activeTab === 'subAccount' ? 
+                  '<th>Main Account</th><th>Sub Account</th>' : 
+                  `<th>${activeTab === 'company' ? 'Company Name' : 'Main Account'}</th>`
+                }
                 <th class="text-right">Credit</th>
                 <th class="text-right">Debit</th>
                 <th class="text-right">Balance</th>
@@ -547,16 +550,30 @@ const LedgerSummary: React.FC = () => {
               ${currentData
                 .map(
                   item => {
-                    const name = activeTab === 'company' ? (item as CompanySummary).companyName : 
-                                 activeTab === 'mainAccount' ? (item as AccountSummary).accountName : 
-                                 (item as SubAccountSummary).subAccount;
                     const credit = activeTab === 'company' ? (item as CompanySummary).totalCredit : 
                                   (item as AccountSummary | SubAccountSummary).credit;
                     const debit = activeTab === 'company' ? (item as CompanySummary).totalDebit : 
                                  (item as AccountSummary | SubAccountSummary).debit;
                     const balance = item.balance;
                     
-                    return `
+                    if (activeTab === 'subAccount') {
+                      const subAccount = item as SubAccountSummary;
+                      return `
+                <tr>
+                  <td>${subAccount.mainAccount || '-'}</td>
+                  <td>${subAccount.subAccount}</td>
+                  <td class="text-right text-green">₹${credit.toLocaleString()}</td>
+                  <td class="text-right text-red">₹${debit.toLocaleString()}</td>
+                  <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
+                    ₹${Math.abs(balance).toLocaleString()}
+                    ${balance >= 0 ? ' CR' : ' DR'}
+                  </td>
+                </tr>
+              `;
+                    } else {
+                      const name = activeTab === 'company' ? (item as CompanySummary).companyName : 
+                                   (item as AccountSummary).accountName;
+                      return `
                 <tr>
                   <td>${name}</td>
                   <td class="text-right text-green">₹${credit.toLocaleString()}</td>
@@ -567,6 +584,7 @@ const LedgerSummary: React.FC = () => {
                   </td>
                 </tr>
               `;
+                    }
                   }
                 )
                 .join('')}
@@ -600,7 +618,6 @@ const LedgerSummary: React.FC = () => {
       case 'mainAccount':
         return mainAccountSummaries;
       case 'subAccount':
-      case 'subAccountGrand':
         return subAccountSummaries;
       default:
         return [];
@@ -716,17 +733,17 @@ const LedgerSummary: React.FC = () => {
       );
     }
 
-    if (activeTab === 'subAccount' || activeTab === 'subAccountGrand') {
+    if (activeTab === 'subAccount') {
       return (
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
-                  {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
+                  Main Account
                 </th>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
-                  Main Account
+                  {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
                 </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
                   Credit
@@ -747,11 +764,11 @@ const LedgerSummary: React.FC = () => {
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                   }`}
                 >
-                  <td className='px-4 py-3 font-medium text-blue-600'>
-                    {subAccount.subAccount}
-                  </td>
                   <td className='px-4 py-3'>
                     {subAccount.mainAccount || '-'}
+                  </td>
+                  <td className='px-4 py-3 font-medium text-blue-600'>
+                    {subAccount.subAccount}
                   </td>
                   <td className='px-4 py-3 text-right font-medium text-green-600'>
                     ₹{subAccount.credit.toLocaleString()}
@@ -990,17 +1007,7 @@ const LedgerSummary: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {filters.companyName ? `${filters.companyName} - Sub Account Totals` : 'Sub Account wise totals'}
-            </button>
-            <button
-              onClick={() => setActiveTab('subAccountGrand')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'subAccountGrand'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {filters.companyName ? `${filters.companyName} - Sub Account Grand Totals` : 'Sub Account Wise Grand Totals'}
+              {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
             </button>
           </nav>
         </div>

@@ -106,3 +106,4 @@ The Dashboard now correctly displays:
 - ✅ Fallback messages when data cannot be loaded
 
 All totals are now calculated dynamically from the Supabase database and update automatically when entries are modified.
+

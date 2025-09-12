@@ -104,7 +104,7 @@ const ApproveRecords: React.FC = () => {
 
   useEffect(() => {
     updateSummary();
-  }, [filteredEntries, selectedEntries]);
+  }, [entries, filters, selectedEntries]);
 
   const loadDropdownData = async () => {
     try {
@@ -240,11 +240,7 @@ const ApproveRecords: React.FC = () => {
     const pendingDeleted = del.filter(d => d.approved === null || d.approved === undefined);
     setFilteredDeletedEntries(pendingDeleted);
 
-    // Update summaries based on base filtered sets
-    const approvedRecords = baseFiltered.filter(e => e.approved === true || e.approved === 'true').length;
-    const totalRecords = baseFiltered.length;
-    const pendingRecords = totalRecords - approvedRecords;
-    setSummary(prev => ({ ...prev, totalRecords, approvedRecords, pendingRecords }));
+    // Summary will be updated by updateSummary function
 
     const totalDeleted = del.length;
     const approvedDeleted = del.filter(d => d.approved === true).length;
@@ -254,9 +250,31 @@ const ApproveRecords: React.FC = () => {
   };
 
   const updateSummary = () => {
-    // selected count from display list
+    // Calculate summary from all entries (not just pending ones)
+    let baseFiltered = [...entries];
+    
+    // Apply same filters as in applyFilters
+    if (filters.date) {
+      baseFiltered = baseFiltered.filter(entry => entry.c_date === filters.date);
+    }
+    if (filters.company) {
+      baseFiltered = baseFiltered.filter(entry => entry.company_name === filters.company);
+    }
+    if (filters.staff) {
+      baseFiltered = baseFiltered.filter(entry => entry.staff === filters.staff);
+    }
+    
+    const approvedRecords = baseFiltered.filter(e => e.approved === true || e.approved === 'true').length;
+    const totalRecords = baseFiltered.length;
+    const pendingRecords = totalRecords - approvedRecords;
     const selectedCount = selectedEntries.size;
-    setSummary(prev => ({ ...prev, selectedCount }));
+    
+    setSummary({
+      totalRecords,
+      approvedRecords,
+      pendingRecords,
+      selectedCount
+    });
   };
 
   const handleFilterChange = (field: keyof ApprovalFilters, value: any) => {
@@ -308,17 +326,28 @@ const ApproveRecords: React.FC = () => {
   const handleDirectApprove = async (entryId: string) => {
     try {
       setLoading(true);
-      const success = await supabaseDB.toggleApproval(entryId);
-      if (success) {
+      
+      // Directly set approved to true instead of toggling
+      const { error } = await supabase
+        .from('cash_book')
+        .update({
+          approved: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', entryId);
+
+      if (error) {
+        console.error('Error approving record:', error);
+        toast.error('Failed to approve record');
+        return;
+      }
+
       toast.success('Record approved successfully!');
       await loadEntries(); // Reload to get updated data
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      } else {
-        toast.error('Failed to approve record');
-      }
     } catch (error) {
       console.error('Error approving record:', error);
       toast.error('Error approving record');
@@ -402,8 +431,15 @@ const ApproveRecords: React.FC = () => {
       let approvedCount = 0;
 
       for (const entryId of selectedEntries) {
-        const result = await supabaseDB.toggleApproval(entryId);
-        if (result) {
+        const { error } = await supabase
+          .from('cash_book')
+          .update({
+            approved: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', entryId);
+
+        if (!error) {
           approvedCount++;
         }
       }
@@ -452,8 +488,15 @@ const ApproveRecords: React.FC = () => {
         let approvedCount = 0;
 
         for (const entry of companyEntries) {
-          const result = await supabaseDB.toggleApproval(entry.id);
-          if (result) {
+          const { error } = await supabase
+            .from('cash_book')
+            .update({
+              approved: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', entry.id);
+
+          if (!error) {
             approvedCount++;
           }
         }
@@ -502,8 +545,15 @@ const ApproveRecords: React.FC = () => {
         let approvedCount = 0;
 
         for (const entry of staffEntries) {
-          const result = await supabaseDB.toggleApproval(entry.id);
-          if (result) {
+          const { error } = await supabase
+            .from('cash_book')
+            .update({
+              approved: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', entry.id);
+
+          if (!error) {
             approvedCount++;
           }
         }
@@ -542,8 +592,15 @@ const ApproveRecords: React.FC = () => {
       let approvedCount = 0;
 
       for (const entry of pendingEntries) {
-        const result = await supabaseDB.toggleApproval(entry.id);
-        if (result) {
+        const { error } = await supabase
+          .from('cash_book')
+          .update({
+            approved: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', entry.id);
+
+        if (!error) {
           approvedCount++;
         }
       }
@@ -582,8 +639,15 @@ const ApproveRecords: React.FC = () => {
         let approvedCount = 0;
 
         for (const entry of pendingEntries) {
-          const result = await supabaseDB.toggleApproval(entry.id);
-          if (result) {
+          const { error } = await supabase
+            .from('cash_book')
+            .update({
+              approved: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', entry.id);
+
+          if (!error) {
             approvedCount++;
           }
         }

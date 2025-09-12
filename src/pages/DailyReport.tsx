@@ -264,7 +264,7 @@ const DailyReport: React.FC = () => {
 
   return (
     <div className='min-h-screen flex flex-col'>
-      <div className='max-w-6xl w-full mx-auto space-y-6'>
+      <div className='w-full px-4 space-y-6'>
         {/* Responsive filter bar */}
         <div className='flex flex-col md:flex-row gap-4 items-end'>
           <div className='flex-1'>
@@ -385,7 +385,7 @@ const DailyReport: React.FC = () => {
               </div>
 
               {/* Online/Offline breakdown removed */}
-              <table className='min-w-full text-sm'>
+              <table className='w-full text-sm'>
                 <thead className='bg-blue-100'>
                   <tr>
                     <th className='px-3 py-2 text-left'>S.No</th>
@@ -407,7 +407,7 @@ const DailyReport: React.FC = () => {
                       key={entry.sno}
                       className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}
                     >
-                      <td className='px-3 py-2'>{entry.sno}</td>
+                      <td className='px-3 py-2'>{idx + 1}</td>
                       <td className='px-3 py-2'>{entry.c_date}</td>
                       <td className='px-3 py-2'>{entry.company_name}</td>
                       <td className='px-3 py-2'>{entry.acc_name}</td>
@@ -477,6 +477,105 @@ const DailyReport: React.FC = () => {
             </>
           )}
         </Card>
+
+        {/* Company Closing Balances */}
+        {reportData.entries.length > 0 && (
+          <Card
+            title='Company Closing Balances'
+            subtitle={`Current balance for each company (Credit - Debit) for ${format(new Date(selectedDate), 'dd-MMM-yyyy')}`}
+            className='bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+          >
+            <div className='overflow-x-auto'>
+              <div className='max-h-48 overflow-y-auto'>
+                <table className='w-full text-xs'>
+                  <thead className='sticky top-0 bg-gray-50 z-10'>
+                    <tr className='border-b border-gray-200'>
+                      <th className='text-left py-3 px-4 font-semibold text-gray-700'>
+                        Company Name
+                      </th>
+                      <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                        Total Credit
+                      </th>
+                      <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                        Total Debit
+                      </th>
+                      <th className='text-right py-3 px-4 font-semibold text-gray-700'>
+                        Closing Balance
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(reportData.companyBalances).map(([companyName, balance], index) => {
+                      // Calculate credit and debit for this company
+                      const companyEntries = reportData.entries.filter(entry => entry.company_name === companyName);
+                      const totalCredit = companyEntries.reduce((sum, entry) => sum + entry.credit, 0);
+                      const totalDebit = companyEntries.reduce((sum, entry) => sum + entry.debit, 0);
+                      
+                      return (
+                        <tr
+                          key={companyName}
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                          }`}
+                        >
+                          <td className='py-3 px-4 font-medium text-gray-900'>
+                            {companyName}
+                          </td>
+                          <td className='py-3 px-4 text-right text-green-600 font-medium'>
+                            ₹{totalCredit.toLocaleString()}
+                          </td>
+                          <td className='py-3 px-4 text-right text-red-600 font-medium'>
+                            ₹{totalDebit.toLocaleString()}
+                          </td>
+                          <td className='py-3 px-4 text-right font-semibold'>
+                            <span
+                              className={`px-2 py-1 rounded-full text-sm ${
+                                balance > 0
+                                  ? 'bg-green-100 text-green-800'
+                                  : balance < 0
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              ₹{balance.toLocaleString()}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Summary Footer */}
+              <div className='mt-4 p-4 bg-gray-100 rounded-lg border'>
+                <div className='grid grid-cols-4 gap-4 text-sm'>
+                  <div className='font-semibold text-gray-900'>
+                    Total Companies: {Object.keys(reportData.companyBalances).length}
+                  </div>
+                  <div className='text-right text-green-600 font-semibold'>
+                    ₹{reportData.totalCredit.toLocaleString()}
+                  </div>
+                  <div className='text-right text-red-600 font-semibold'>
+                    ₹{reportData.totalDebit.toLocaleString()}
+                  </div>
+                  <div className='text-right'>
+                    <span
+                      className={`px-2 py-1 rounded-full text-sm font-bold ${
+                        reportData.closingBalance > 0
+                          ? 'bg-green-100 text-green-800'
+                          : reportData.closingBalance < 0
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      ₹{reportData.closingBalance.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -79,3 +79,6 @@ The auto-navigation can be tested by:
 ## Result
 
 Users can now enter data much faster in the New Entry form without needing to manually navigate between fields after making dropdown selections. This significantly improves the data entry workflow efficiency.
+
+
+
