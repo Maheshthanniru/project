@@ -7,7 +7,7 @@ import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import {
   FileText,
@@ -15,12 +15,7 @@ import {
   CheckCircle,
   X,
   AlertCircle,
-  Eye,
-  Download,
-  Edit,
   Trash2,
-  Search,
-  Filter,
   Clock,
 } from 'lucide-react';
 
@@ -72,6 +67,7 @@ const ApproveRecords: React.FC = () => {
   const [summary, setSummary] = useState({
     totalRecords: 0,
     approvedRecords: 0,
+    rejectedRecords: 0,
     pendingRecords: 0,
     selectedCount: 0,
   });
@@ -83,17 +79,26 @@ const ApproveRecords: React.FC = () => {
   });
 
   useEffect(() => {
+    console.log('[ApproveRecords] useEffect triggered, isAdmin:', isAdmin, 'user:', user);
     if (!isAdmin) {
+      console.log('[ApproveRecords] User is not admin, setting access denied error');
       setFetchError('Access denied. Only admins can approve records.');
       toast.error('Access denied. Only admins can approve records.');
       return;
     }
+    console.log('[ApproveRecords] User is admin, loading data...');
     loadDropdownData();
     loadEntries();
   }, [isAdmin]);
 
   useEffect(() => {
-    const onRefresh = () => loadEntries();
+    const onRefresh = () => {
+      // Add a small delay to ensure database operations are complete
+      setTimeout(() => {
+        console.log('[ApproveRecords] Dashboard refresh triggered, reloading entries...');
+        loadEntries();
+      }, 500);
+    };
     window.addEventListener('dashboard-refresh', onRefresh);
     return () => window.removeEventListener('dashboard-refresh', onRefresh);
   }, []);
@@ -104,7 +109,7 @@ const ApproveRecords: React.FC = () => {
 
   useEffect(() => {
     updateSummary();
-  }, [entries, filters, selectedEntries]);
+  }, [entries, deletedEntries, filters, selectedEntries]);
 
   const loadDropdownData = async () => {
     try {
@@ -132,43 +137,73 @@ const ApproveRecords: React.FC = () => {
     }
   };
 
+
   const loadEntries = async () => {
+    console.log('[ApproveRecords] loadEntries called');
     setLoading(true);
     setFetchError(null);
+    
     try {
+      console.log('[ApproveRecords] Starting to load entries...');
       // Server-side filtering for speed
+      console.log('[ApproveRecords] Calling getFilteredCashBookEntries with filters:', filters);
       let { data: allEntries } = await supabaseDB.getFilteredCashBookEntries({
         companyName: filters.company || undefined,
       }, 1000, 0);
+      console.log('[ApproveRecords] getFilteredCashBookEntries result:', allEntries);
+      
       // Fallback to basic fetch if nothing returned (or undefined)
       if (!allEntries || allEntries.length === 0) {
+        console.log('[ApproveRecords] No entries from filtered query, trying basic fetch...');
         allEntries = await supabaseDB.getCashBookEntries(1000, 0);
+        console.log('[ApproveRecords] getCashBookEntries result:', allEntries);
       }
-      console.log('[ApproveRecords] Fetched entries:', allEntries);
+      console.log('[ApproveRecords] Final fetched entries:', allEntries?.length || 0, 'entries');
 
       // Debug: Check approval status of entries
       const pendingEntries = allEntries.filter(
-        entry =>
-          entry.approved === false ||
-          entry.approved === null ||
-          entry.approved === undefined ||
-          entry.approved === '' ||
-          entry.approved === 'false'
+        entry => {
+          const approved = entry.approved;
+          if (approved === null || approved === undefined) return true;
+          if (typeof approved === 'boolean') return !approved;
+          if (typeof approved === 'string') return approved === '' || approved === 'false';
+          return false;
+        }
       );
       console.log('[ApproveRecords] Pending entries:', pendingEntries);
 
       setEntries(allEntries);
       // Load deleted records as well
+      console.log('[ApproveRecords] Fetching deleted records...');
       let deleted = await supabaseDB.getDeletedCashBook();
+      console.log('[ApproveRecords] getDeletedCashBook result:', deleted);
+      
       // Fallback: if none, attempt a direct minimal fetch to ensure visibility
       if (!deleted || deleted.length === 0) {
-        const { data, error } = await supabase
-          .from('deleted_cash_book')
-          .select('*')
-          .order('deleted_at', { ascending: false })
-          .limit(1000);
-        if (!error && data) deleted = data;
+        console.log('[ApproveRecords] No deleted records from getDeletedCashBook, trying direct fetch...');
+        try {
+          const { data, error } = await supabase
+            .from('deleted_cash_book')
+            .select('*')
+            .order('deleted_at', { ascending: false })
+            .limit(1000);
+          console.log('[ApproveRecords] Direct fetch result:', { data, error });
+          if (error) {
+            console.error('[ApproveRecords] Direct fetch error:', error);
+            console.error('[ApproveRecords] Error details:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
+          } else if (data) {
+            deleted = data;
+          }
+        } catch (err) {
+          console.error('[ApproveRecords] Exception in direct fetch:', err);
+        }
       }
+      console.log('[ApproveRecords] Final deleted entries:', deleted);
       setDeletedEntries(deleted || []);
       if (!allEntries || allEntries.length === 0) {
         setFetchError('No entries found in the database.');
@@ -211,16 +246,17 @@ const ApproveRecords: React.FC = () => {
     // Base set for summary (date/company/staff), regardless of approval state
     const baseFiltered = filtered;
 
-    // Only show pending records (not approved) for main table
+    // Only show pending records (not approved and not rejected) for main table
     const pendingFiltered = baseFiltered.filter(entry => {
-      // Check if entry is not approved (false, null, undefined, or empty string)
+      // Check if entry is truly pending (null, undefined, empty string, or 'false' string)
+      // Exclude records that are explicitly approved (true or 'true') or rejected ('rejected')
       return (
-        entry.approved === false ||
         entry.approved === null ||
         entry.approved === undefined ||
         entry.approved === '' ||
-        entry.approved === 'false'
-      );
+        entry.approved === 'false' ||
+        entry.approved === false
+      ) && entry.approved !== 'rejected';
     });
 
     setFilteredEntries(pendingFiltered);
@@ -236,8 +272,13 @@ const ApproveRecords: React.FC = () => {
     if (filters.date) del = del.filter(d => d.c_date === filters.date);
     if (filters.company) del = del.filter(d => d.company_name === filters.company);
     if (filters.staff) del = del.filter(d => d.staff === filters.staff);
-    // Pending deleted are those without approved flag
-    const pendingDeleted = del.filter(d => d.approved === null || d.approved === undefined);
+    // Show all deleted records that haven't been approved yet
+    const pendingDeleted = del.filter(d => 
+      d.approved !== true && 
+      d.approved !== 'true' && 
+      d.approved !== 'rejected'
+    );
+    console.log('[ApproveRecords] Filtered deleted entries:', pendingDeleted);
     setFilteredDeletedEntries(pendingDeleted);
 
     // Summary will be updated by updateSummary function
@@ -265,15 +306,55 @@ const ApproveRecords: React.FC = () => {
     }
     
     const approvedRecords = baseFiltered.filter(e => e.approved === true || e.approved === 'true').length;
+    const rejectedRecords = baseFiltered.filter(e => e.approved === 'rejected').length;
     const totalRecords = baseFiltered.length;
-    const pendingRecords = totalRecords - approvedRecords;
+    const pendingRecords = baseFiltered.filter(e => 
+      (e.approved === null || 
+      e.approved === undefined || 
+      e.approved === '' ||
+      e.approved === 'false' ||
+      e.approved === false) && e.approved !== 'rejected'
+    ).length;
     const selectedCount = selectedEntries.size;
     
     setSummary({
       totalRecords,
       approvedRecords,
+      rejectedRecords,
       pendingRecords,
       selectedCount
+    });
+
+    // Calculate deleted records summary
+    let deletedFiltered = [...deletedEntries];
+    
+    // Apply same filters to deleted records
+    if (filters.date) {
+      deletedFiltered = deletedFiltered.filter(d => d.c_date === filters.date);
+    }
+    if (filters.company) {
+      deletedFiltered = deletedFiltered.filter(d => d.company_name === filters.company);
+    }
+    if (filters.staff) {
+      deletedFiltered = deletedFiltered.filter(d => d.staff === filters.staff);
+    }
+    
+    const approvedDeleted = deletedFiltered.filter(d => d.approved === true || d.approved === 'true').length;
+    const rejectedDeleted = deletedFiltered.filter(d => d.approved === 'rejected').length;
+    const totalDeleted = deletedFiltered.length;
+    const pendingDeleted = deletedFiltered.filter(d => 
+      (d.approved === null || 
+      d.approved === undefined || 
+      d.approved === '' ||
+      d.approved === 'false' ||
+      d.approved === false) && d.approved !== 'rejected'
+    ).length;
+    
+    setDeletedSummary({
+      totalRecords: totalDeleted,
+      approvedDeleted,
+      rejectedDeleted,
+      pendingDeleted
     });
   };
 
@@ -359,14 +440,20 @@ const ApproveRecords: React.FC = () => {
   const handleDirectReject = async (entryId: string) => {
     try {
       setLoading(true);
-      // For rejection, we'll set approved to false
+      
+      // Set approved to 'rejected' to distinguish from pending
       const { error } = await supabase
         .from('cash_book')
-        .update({ approved: false })
+        .update({
+          approved: 'rejected',
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', entryId);
 
       if (error) {
-        throw error;
+        console.error('Error rejecting record:', error);
+        toast.error('Failed to reject record');
+        return;
       }
 
       toast.success('Record rejected successfully!');
@@ -393,7 +480,11 @@ const ApproveRecords: React.FC = () => {
         .eq('id', id);
       if (error) throw error;
       toast.success('Deleted record approved');
-      await loadEntries();
+      await loadEntries(); // Reload to get updated data
+      
+      // Trigger dashboard refresh
+      localStorage.setItem('dashboard-refresh', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (e) {
       console.error('Deleted approve error:', e);
       toast.error('Failed to approve deleted record');
@@ -407,11 +498,15 @@ const ApproveRecords: React.FC = () => {
       setLoading(true);
       const { error } = await supabase
         .from('deleted_cash_book')
-        .update({ approved: false })
+        .update({ approved: 'rejected' })
         .eq('id', id);
       if (error) throw error;
       toast.success('Deleted record rejected');
-      await loadEntries();
+      await loadEntries(); // Reload to get updated data
+      
+      // Trigger dashboard refresh
+      localStorage.setItem('dashboard-refresh', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (e) {
       console.error('Deleted reject error:', e);
       toast.error('Failed to reject deleted record');
@@ -750,7 +845,7 @@ const ApproveRecords: React.FC = () => {
 
             <div class="summary">
               <h3>Summary</h3>
-              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Pending: ${summary.pendingRecords}</p>
+              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Rejected: ${summary.rejectedRecords} | Pending: ${summary.pendingRecords}</p>
             </div>
 
             <table>
@@ -770,7 +865,7 @@ const ApproveRecords: React.FC = () => {
               <tbody>
                 ${currentPageEntries
                   .map(
-                    (entry, index) => `
+                    (entry, _) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${entry.sno}</td>
                     <td>${entry.c_date}</td>
@@ -856,7 +951,7 @@ const ApproveRecords: React.FC = () => {
 
             <div class="summary">
               <h3>Summary</h3>
-              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Pending: ${summary.pendingRecords}</p>
+              <p>Total Records: ${summary.totalRecords} | Approved: ${summary.approvedRecords} | Rejected: ${summary.rejectedRecords} | Pending: ${summary.pendingRecords}</p>
             </div>
 
             <table>
@@ -876,7 +971,7 @@ const ApproveRecords: React.FC = () => {
               <tbody>
                 ${filteredEntries
                   .map(
-                    (entry, index) => `
+                    (entry, _) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${entry.sno}</td>
                     <td>${entry.c_date}</td>
@@ -930,11 +1025,6 @@ const ApproveRecords: React.FC = () => {
     return filteredEntries.slice(startIndex, endIndex);
   };
 
-  const getRowColor = (entry: any) => {
-    if (entry.approved === true || entry.approved === 'true')
-      return 'bg-green-50 border-green-200';
-    return 'bg-yellow-50 border-yellow-300';
-  };
 
   if (!isAdmin) {
     return (
@@ -954,6 +1044,7 @@ const ApproveRecords: React.FC = () => {
 
   return (
     <div className='space-y-6'>
+
       {loading && (
         <div className='text-center py-8 text-blue-600 font-semibold'>
           Loading records...
@@ -1105,14 +1196,14 @@ const ApproveRecords: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-        <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white'>
+      <div className='grid grid-cols-1 md:grid-cols-5 gap-4'>
+        <Card className='bg-gradient-to-r from-gray-500 to-gray-600 text-white'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-blue-100 text-sm font-medium'>Total Records</p>
+              <p className='text-gray-100 text-sm font-medium'>Total Records</p>
               <p className='text-2xl font-bold'>{summary.totalRecords}</p>
             </div>
-            <FileText className='w-8 h-8 text-blue-200' />
+            <FileText className='w-8 h-8 text-gray-200' />
           </div>
         </Card>
 
@@ -1123,6 +1214,16 @@ const ApproveRecords: React.FC = () => {
               <p className='text-2xl font-bold'>{summary.approvedRecords}</p>
             </div>
             <CheckCircle className='w-8 h-8 text-green-500' />
+          </div>
+        </Card>
+
+        <Card className='bg-white text-gray-900'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-red-700 text-sm font-medium'>Rejected</p>
+              <p className='text-2xl font-bold'>{summary.rejectedRecords}</p>
+            </div>
+            <X className='w-8 h-8 text-red-500' />
           </div>
         </Card>
 
@@ -1183,10 +1284,10 @@ const ApproveRecords: React.FC = () => {
           subtitle={`Showing ${getCurrentPageEntries().length} of ${filteredEntries.length} records`}
         >
           <div className='overflow-x-auto'>
-            <table className='min-w-full divide-y divide-gray-200'>
-              <thead className='bg-gray-50'>
+            <table className='w-full text-sm'>
+              <thead className='bg-gray-50 border-b border-gray-200'>
                 <tr>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     <input
                       type='checkbox'
                       checked={
@@ -1197,34 +1298,56 @@ const ApproveRecords: React.FC = () => {
                       className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
                     />
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    S.No
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Date
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Company
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Account
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Sub Account
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Particulars
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Credit
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    Debit
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Staff
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                    Amount
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    User
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                    Type
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    Entry Time
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
                     Status
                   </th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className='bg-white divide-y divide-gray-200'>
-                {getCurrentPageEntries().map(entry => (
+              <tbody>
+                {getCurrentPageEntries().map((entry, index) => (
                   <tr
                     key={entry.id}
-                    className={`${getRowColor(entry)} cursor-pointer hover:bg-gray-50 transition-colors`}
+                    className={`border-b hover:bg-gray-50 transition-colors ${
+                      entry.approved !== true && entry.approved !== 'true' && entry.approved !== 'rejected'
+                        ? 'bg-orange-50' // Orange background for pending records
+                        : index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                    }`}
                     onClick={e => {
                       // Don't trigger row click if clicking on checkbox or buttons
                       if (
@@ -1238,7 +1361,7 @@ const ApproveRecords: React.FC = () => {
                       handleSelectEntry(entry.id);
                     }}
                   >
-                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                    <td className='px-3 py-2'>
                       <input
                         type='checkbox'
                         checked={selectedEntries.has(entry.id)}
@@ -1249,77 +1372,101 @@ const ApproveRecords: React.FC = () => {
                         className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
                       />
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                      {entry.c_date}
+                    <td className='px-3 py-2 font-medium'>{index + 1}</td>
+                    <td className='px-3 py-2'>
+                      {format(new Date(entry.c_date), 'dd-MMM-yy')}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                    <td className='px-3 py-2 font-medium text-blue-600'>
                       {entry.company_name}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
-                      {entry.staff}
+                    <td className='px-3 py-2'>{entry.acc_name}</td>
+                    <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
+                    <td
+                      className='px-3 py-2 max-w-xs truncate'
+                      title={entry.particulars}
+                    >
+                      {entry.particulars}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                    <td className='px-3 py-2 text-right font-medium text-green-600'>
                       {entry.credit > 0
                         ? `₹${entry.credit.toLocaleString()}`
-                        : `₹${entry.debit.toLocaleString()}`}
+                        : '-'}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
-                      {entry.credit > 0 ? 'Credit' : 'Debit'}
+                    <td className='px-3 py-2 text-right font-medium text-red-600'>
+                      {entry.debit > 0
+                        ? `₹${entry.debit.toLocaleString()}`
+                        : '-'}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
-                      {entry.approved === true ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                          Approved
-                        </span>
-                      ) : entry.approved === false ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                          Rejected
-                        </span>
-                      ) : (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                          Pending
-                        </span>
-                      )}
+                    <td className='px-3 py-2'>{entry.staff}</td>
+                    <td className='px-3 py-2'>{entry.users}</td>
+                    <td className='px-3 py-2'>
+                      {format(new Date(entry.entry_time), 'HH:mm:ss')}
                     </td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
-                      <Button
-                        variant='secondary'
-                        onClick={() => {
-                          handleDirectApprove(entry.id);
-                        }}
-                        className='mr-2'
-                        disabled={entry.approved === true}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant='secondary'
-                        onClick={() => {
-                          handleDirectReject(entry.id);
-                        }}
-                        className='mr-2'
-                        disabled={entry.approved === false}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        variant='secondary'
-                        onClick={async () => {
-                          try {
-                            const full = await supabaseDB.getCashBookEntry(entry.id);
-                            const data = full || entry;
-                            setViewEntry(data);
-                            setViewDraft({ ...data });
-                            setViewEditing(false);
-                            setViewOpen(true);
-                          } catch (e) {
-                            toast.error('Failed to load entry details');
-                          }
-                        }}
-                        className='mr-2'
-                      >
-                        View
-                      </Button>
+                    <td className='px-3 py-2 text-center'>
+                      {(() => {
+                        console.log('Entry approved value:', entry.approved, 'Type:', typeof entry.approved);
+                        if (entry.approved === true || entry.approved === 'true') {
+                          return (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                              Approved
+                            </span>
+                          );
+                        } else if (entry.approved === 'rejected') {
+                          return (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                              Rejected
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                              Pending
+                            </span>
+                          );
+                        }
+                      })()}
+                    </td>
+                    <td className='px-3 py-2'>
+                      <div className='flex flex-row gap-2'>
+                        <Button
+                          variant='secondary'
+                          onClick={() => {
+                            handleDirectApprove(entry.id);
+                          }}
+                          disabled={entry.approved === true}
+                          className='text-xs px-2 py-1'
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant='secondary'
+                          onClick={async () => {
+                            try {
+                              const full = await supabaseDB.getCashBookEntry(entry.id);
+                              const data = full || entry;
+                              setViewEntry(data);
+                              setViewDraft({ ...data });
+                              setViewEditing(false);
+                              setViewOpen(true);
+                            } catch (e) {
+                              toast.error('Failed to load entry details');
+                            }
+                          }}
+                          className='text-xs px-2 py-1'
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant='secondary'
+                          onClick={() => {
+                            handleDirectReject(entry.id);
+                          }}
+                          disabled={entry.approved === false}
+                          className='text-xs px-2 py-1'
+                        >
+                          Reject
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1402,34 +1549,86 @@ const ApproveRecords: React.FC = () => {
 
       {/* Deleted Records Approval */}
       {!loading && (
-        <Card title='Deleted Records' subtitle={`Pending ${filteredDeletedEntries.length}`}>
+        <Card title='Deleted Records' subtitle={`Showing ${filteredDeletedEntries.length} of ${deletedSummary.totalRecords} deleted records`}>
           <div className='overflow-x-auto'>
-            <table className='min-w-full divide-y divide-gray-200'>
-              <thead className='bg-gray-50'>
+            <table className='w-full text-sm'>
+              <thead className='bg-gray-50 border-b border-gray-200'>
                 <tr>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Date</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Company</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Account</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Particulars</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Credit</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Debit</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Staff</th>
-                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Actions</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>S.No</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Date</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Company</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Account</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Sub Account</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Particulars</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Credit</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Debit</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Staff</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>User</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Deleted At</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Status</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Actions</th>
                 </tr>
               </thead>
               <tbody className='bg-white divide-y divide-gray-200'>
-                {filteredDeletedEntries.map(d => (
-                  <tr key={d.id}>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>{d.c_date}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.company_name}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.acc_name}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.particulars}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.credit}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.debit}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>{d.staff}</td>
-                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
-                      <Button variant='secondary' className='mr-2' onClick={() => handleDeletedApprove(d.id)}>Approve</Button>
-                      <Button variant='secondary' onClick={() => handleDeletedReject(d.id)}>Reject</Button>
+                {filteredDeletedEntries.map((d, index) => (
+                  <tr key={d.id} className={`border-b hover:bg-gray-50 transition-colors ${
+                    d.approved !== true && d.approved !== 'true' && d.approved !== 'rejected' ? 'bg-orange-50' : ''
+                  }`}>
+                    <td className='px-3 py-2'>{index + 1}</td>
+                    <td className='px-3 py-2'>{format(new Date(d.c_date), 'dd-MMM-yy')}</td>
+                    <td className='px-3 py-2 font-medium text-blue-600'>{d.company_name}</td>
+                    <td className='px-3 py-2'>{d.acc_name}</td>
+                    <td className='px-3 py-2'>{d.sub_acc_name || '-'}</td>
+                    <td className='px-3 py-2 max-w-xs truncate' title={d.particulars}>
+                      {d.particulars}
+                    </td>
+                    <td className='px-3 py-2 text-right font-medium text-green-600'>
+                      {d.credit ? `₹${Number(d.credit).toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right font-medium text-red-600'>
+                      {d.debit ? `₹${Number(d.debit).toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2'>{d.staff}</td>
+                    <td className='px-3 py-2'>{d.users}</td>
+                    <td className='px-3 py-2'>{format(new Date(d.deleted_at), 'HH:mm:ss')}</td>
+                    <td className='px-3 py-2'>
+                      {d.approved === true || d.approved === 'true' ? (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                          Approved
+                        </span>
+                      ) : d.approved === 'rejected' ? (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                          Rejected
+                        </span>
+                      ) : (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className='px-3 py-2'>
+                      <div className='flex flex-row gap-2'>
+                        <Button
+                          variant='secondary'
+                          onClick={() => {
+                            handleDeletedApprove(d.id);
+                          }}
+                          disabled={d.approved === true || d.approved === 'true'}
+                          className='text-xs px-2 py-1'
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant='secondary'
+                          onClick={() => {
+                            handleDeletedReject(d.id);
+                          }}
+                          disabled={d.approved === 'rejected'}
+                          className='text-xs px-2 py-1'
+                        >
+                          Reject
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -1705,17 +1705,30 @@ class SupabaseDatabase {
   }
 
   async getDeletedCashBook(): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('deleted_cash_book')
-      .select('*')
-      .order('deleted_at', { ascending: false });
+    try {
+      console.log('[supabaseDatabase] Fetching deleted cash book entries...');
+      const { data, error } = await supabase
+        .from('deleted_cash_book')
+        .select('*')
+        .order('deleted_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching deleted cash book entries:', error);
+      if (error) {
+        console.error('Error fetching deleted cash book entries:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        return [];
+      }
+
+      console.log('[supabaseDatabase] Successfully fetched deleted entries:', data?.length || 0);
+      return data || [];
+    } catch (err) {
+      console.error('Exception in getDeletedCashBook:', err);
       return [];
     }
-
-    return data || [];
   }
 
   // Get unique values for dropdowns in Edit Entry page
