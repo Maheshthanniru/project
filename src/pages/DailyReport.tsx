@@ -18,6 +18,12 @@ interface DailyReportData {
   closingBalance: number;
   grandTotal: number;
   companyBalances: { [key: string]: number };
+  companyOpeningBalances: Array<{
+    companyName: string;
+    openingBalance: number;
+    totalCredit: number;
+    totalDebit: number;
+  }>;
 }
 
 const DailyReport: React.FC = () => {
@@ -35,6 +41,7 @@ const DailyReport: React.FC = () => {
     closingBalance: 0,
     grandTotal: 0,
     companyBalances: {},
+    companyOpeningBalances: [],
   });
   const [companies, setCompanies] = useState<
     { value: string; label: string }[]
@@ -46,6 +53,7 @@ const DailyReport: React.FC = () => {
   // Data loading states
   const [totalEntries, setTotalEntries] = useState(0);
   const [allLoadedEntries, setAllLoadedEntries] = useState<any[]>([]);
+  
 
   useEffect(() => {
     loadCompanies();
@@ -208,6 +216,48 @@ const DailyReport: React.FC = () => {
         companyBalances[company.value] = companyCredit - companyDebit;
       });
 
+      // Calculate company-wise opening balances (closing balances from previous day)
+      const companyOpeningBalances = [];
+      console.log('🔄 Calculating company opening balances for', allCompanies.length, 'companies');
+      
+      for (const company of allCompanies) {
+        // Get all entries for this company before the selected date
+        const { data: companyPreviousEntries, error: companyPrevError } = await supabase
+          .from('cash_book')
+          .select('credit, debit')
+          .eq('company_name', company.value)
+          .lt('c_date', selectedDate)
+          .not('acc_name', 'like', '[DELETED]%');
+
+        if (companyPrevError) {
+          console.error(`Error fetching previous entries for ${company.value}:`, companyPrevError);
+          continue;
+        }
+
+        const companyOpeningBalance = (companyPreviousEntries || []).reduce(
+          (sum, entry) => sum + (entry.credit - entry.debit),
+          0
+        );
+
+        // Get today's entries for this company
+        const companyTodayEntries = filteredEntries.filter(
+          entry => entry.company_name === company.value
+        );
+        const companyTodayCredit = companyTodayEntries.reduce((sum, entry) => sum + entry.credit, 0);
+        const companyTodayDebit = companyTodayEntries.reduce((sum, entry) => sum + entry.debit, 0);
+
+        companyOpeningBalances.push({
+          companyName: company.value,
+          openingBalance: companyOpeningBalance,
+          totalCredit: companyTodayCredit,
+          totalDebit: companyTodayDebit,
+        });
+        
+        console.log(`📊 Company ${company.value}: Opening=${companyOpeningBalance}, Credit=${companyTodayCredit}, Debit=${companyTodayDebit}`);
+      }
+      
+      console.log('✅ Company opening balances calculated:', companyOpeningBalances.length, 'companies');
+
       setReportData({
         entries: filteredEntries,
         totalCredit,
@@ -216,6 +266,7 @@ const DailyReport: React.FC = () => {
         closingBalance,
         grandTotal,
         companyBalances,
+        companyOpeningBalances,
       });
 
       // Update total entries count for display
@@ -322,6 +373,8 @@ const DailyReport: React.FC = () => {
     return 'bg-white border-gray-200';
   };
 
+
+
   return (
     <div className='min-h-screen flex flex-col'>
       <div className='w-full px-4 space-y-6'>
@@ -382,6 +435,130 @@ const DailyReport: React.FC = () => {
           </div>
         </div>
         
+        {/* Debug Info */}
+        {!loading && (
+          <Card className='p-2 bg-yellow-50 border-yellow-200'>
+            <div className='text-xs text-gray-600'>
+              Debug: loading={loading}, entries={reportData.entries.length}, 
+              companyOpeningBalances={reportData.companyOpeningBalances.length}
+            </div>
+          </Card>
+        )}
+
+        {/* Company-wise Opening Balances */}
+        {!loading && reportData.entries.length > 0 && (
+          <Card className='p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
+            <div className='text-center mb-4'>
+              <h2 className='text-lg font-bold text-blue-800'>Company-wise Opening Balances</h2>
+              <p className='text-sm text-blue-600'>
+                Opening balances for {selectedDate} (Previous day's closing balances)
+              </p>
+            </div>
+            
+            <div className='overflow-x-auto'>
+              <div className='max-h-48 overflow-y-auto'>
+                {reportData.companyOpeningBalances.length > 0 ? (
+                  <table className='w-full text-xs'>
+                    <thead className='sticky top-0 bg-gray-50 z-10'>
+                      <tr className='border-b border-gray-200'>
+                        <th className='text-left py-3 px-4 font-semibold text-gray-700'>Company Name</th>
+                        <th className='text-right py-3 px-4 font-semibold text-gray-700'>Opening Balance</th>
+                        <th className='text-right py-3 px-4 font-semibold text-gray-700'>Today's Credit</th>
+                        <th className='text-right py-3 px-4 font-semibold text-gray-700'>Today's Debit</th>
+                        <th className='text-right py-3 px-4 font-semibold text-gray-700'>Closing Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.companyOpeningBalances.map((company, index) => {
+                        const closingBalance = company.openingBalance + (company.totalCredit - company.totalDebit);
+                        return (
+                          <tr
+                            key={company.companyName}
+                            className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                            }`}
+                          >
+                            <td className='py-3 px-4 font-medium text-gray-900'>
+                              {company.companyName}
+                            </td>
+                            <td className='py-3 px-4 text-right font-semibold'>
+                              <span
+                                className={`px-2 py-1 rounded-full text-sm ${
+                                  company.openingBalance > 0
+                                    ? 'bg-green-100 text-green-800'
+                                    : company.openingBalance < 0
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}
+                              >
+                                ₹{company.openingBalance.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className='py-3 px-4 text-right text-green-600 font-medium'>
+                              ₹{company.totalCredit.toLocaleString()}
+                            </td>
+                            <td className='py-3 px-4 text-right text-red-600 font-medium'>
+                              ₹{company.totalDebit.toLocaleString()}
+                            </td>
+                            <td className='py-3 px-4 text-right font-semibold'>
+                              <span
+                                className={`px-2 py-1 rounded-full text-sm ${
+                                  closingBalance > 0
+                                    ? 'bg-green-100 text-green-800'
+                                    : closingBalance < 0
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}
+                              >
+                                ₹{closingBalance.toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className='text-center py-8 text-gray-500'>
+                    No company opening balances found for {selectedDate}
+                  </div>
+                )}
+              </div>
+              
+              {/* Summary Footer */}
+              <div className='mt-4 p-4 bg-gray-100 rounded-lg border'>
+                <div className='grid grid-cols-5 gap-4 text-sm'>
+                  <div className='font-semibold text-gray-900'>
+                    Total Companies: {reportData.companyOpeningBalances.length}
+                  </div>
+                  <div className='text-right text-gray-600 font-semibold'>
+                    Opening: ₹{reportData.companyOpeningBalances.reduce((sum, c) => sum + c.openingBalance, 0).toLocaleString()}
+                  </div>
+                  <div className='text-right text-green-600 font-semibold'>
+                    Credit: ₹{reportData.totalCredit.toLocaleString()}
+                  </div>
+                  <div className='text-right text-red-600 font-semibold'>
+                    Debit: ₹{reportData.totalDebit.toLocaleString()}
+                  </div>
+                  <div className='text-right font-semibold'>
+                    <span
+                      className={`px-2 py-1 rounded-full text-sm font-bold ${
+                        reportData.closingBalance > 0
+                          ? 'bg-green-100 text-green-800'
+                          : reportData.closingBalance < 0
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      Closing: ₹{reportData.closingBalance.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         
         {/* Responsive table/card layout */}
         <Card className='overflow-x-auto p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'>
@@ -418,38 +595,6 @@ const DailyReport: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className='flex flex-col md:flex-row gap-4 mb-6'>
-                <div className='flex-1 bg-green-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-green-900 font-semibold text-sm'>
-                    Total Credit:
-                  </span>
-                  <span className='text-2xl font-bold text-green-900'>
-                    ₹{reportData.totalCredit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='flex-1 bg-red-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-red-700 font-semibold text-sm'>
-                    Total Debit:
-                  </span>
-                  <span className='text-2xl font-bold text-red-700'>
-                    ₹{reportData.totalDebit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='flex-1 bg-blue-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-blue-800 font-semibold text-sm'>
-                    Balance:
-                  </span>
-                  <span className='text-2xl font-bold text-blue-800'>
-                    ₹
-                    {Math.abs(
-                      reportData.totalCredit - reportData.totalDebit
-                    ).toLocaleString()}{' '}
-                    {reportData.totalCredit - reportData.totalDebit >= 0
-                      ? 'CR'
-                      : 'DR'}
-                  </span>
-                </div>
-              </div>
 
               {/* Online/Offline breakdown removed */}
               <table className='w-full text-sm'>
@@ -472,7 +617,13 @@ const DailyReport: React.FC = () => {
                   {reportData.entries.map((entry: any, idx: number) => (
                     <tr
                       key={entry.sno}
-                      className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}
+                      className={
+                        !entry.approved 
+                          ? 'bg-orange-50 border-orange-200' 
+                          : idx % 2 === 0 
+                            ? 'bg-white' 
+                            : 'bg-blue-50'
+                      }
                     >
                       <td className='px-3 py-2'>{idx + 1}</td>
                       <td className='px-3 py-2'>{entry.c_date}</td>

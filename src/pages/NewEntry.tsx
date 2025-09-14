@@ -100,6 +100,7 @@ const NewEntry: React.FC = () => {
   const [currentDailyEntryNo, setCurrentDailyEntryNo] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   // Recent entries are now managed by React Query
+  
 
   // Modal states for creating new items
   const [showNewCompany, setShowNewCompany] = useState(false);
@@ -287,6 +288,7 @@ const NewEntry: React.FC = () => {
     fetchRecentEntries();
   }, []);
 
+
   const updateDailyEntryNumber = async () => {
     try {
       // Get today's entries count for daily entry number
@@ -403,6 +405,7 @@ const NewEntry: React.FC = () => {
         cb: 'CB',
       };
 
+
       // If dual entry, prepare both entries for bulk operation
       if (dualEntryEnabled) {
         const dualCreditNum = parseFloat(dualEntry.credit) || 0;
@@ -430,6 +433,7 @@ const NewEntry: React.FC = () => {
             : 0,
           cb: 'CB',
         };
+
 
         // Use bulk operations for dual entries
         await bulkOperationsMutation.mutateAsync([mainEntryData, dualEntryData]);
@@ -479,6 +483,7 @@ const NewEntry: React.FC = () => {
       setDualEntryEnabled(false);
       updateDailyEntryNumber();
       await updateTotalEntryCount();
+      
     } catch (error) {
       console.error('Error saving entry:', error);
       toast.error(
@@ -1217,6 +1222,7 @@ const NewEntry: React.FC = () => {
           </div>
         </div>
       </div>
+
 
       {/* Main Content - Vertical Layout */}
       <div className='flex-1 p-1'>

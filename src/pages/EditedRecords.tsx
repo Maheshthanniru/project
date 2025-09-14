@@ -7,6 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
+import { RotateCcw, Trash2 } from 'lucide-react';
 // Fix for jsPDF autotable type
 // @ts-ignore
 import 'jspdf-autotable';
@@ -76,6 +77,8 @@ const EditedRecords = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -85,11 +88,25 @@ const EditedRecords = () => {
       supabaseDB.getDeletedCashBook(),
     ])
       .then(([log, users, deleted]) => {
+        console.log('📊 Edited Records - Loaded data:', {
+          auditLog: log?.length || 0,
+          users: users?.length || 0,
+          deletedRecords: deleted?.length || 0
+        });
+        console.log('🗑️ Deleted records data:', deleted);
+        console.log('🔍 Deleted records type:', typeof deleted);
+        console.log('🔍 Deleted records is array:', Array.isArray(deleted));
+        if (deleted && deleted.length > 0) {
+          console.log('📝 First deleted record:', deleted[0]);
+        }
         setAuditLog(log as AuditLogEntry[]);
         setUsers(users as User[]);
         setDeletedRecords(deleted as any[]);
       })
-      .catch(() => toast.error('Failed to load edit audit log'))
+      .catch((error) => {
+        console.error('❌ Error loading Edited Records data:', error);
+        toast.error('Failed to load edit audit log');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -133,13 +150,12 @@ const EditedRecords = () => {
     });
   }, [auditLog, selectedDate, userFilter]);
 
-  // Deleted records log (from deleted_cash_book)
-  // No filtering for now, but you can add search/userFilter if needed
+  // Deleted records log (from getDeletedCashBook - these are raw cash book records with [DELETED] prefix)
   const deletedLog = useMemo(() => {
-    return deletedRecords.filter(log => {
-      // Consider as deleted if new_values is null and old_values is present
-      return log.new_values == null && log.old_values != null;
-    });
+    console.log('🔍 Processing deleted records:', deletedRecords);
+    // The deletedRecords from getDeletedCashBook() are already filtered records with [DELETED] prefix
+    // So we can return them directly
+    return deletedRecords;
   }, [deletedRecords]);
 
   // Pagination
@@ -148,6 +164,72 @@ const EditedRecords = () => {
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE
   );
+
+  // Restore deleted record
+  const handleRestoreRecord = async (record: any) => {
+    if (!window.confirm(`Are you sure you want to restore entry #${record.sno}?`)) {
+      return;
+    }
+
+    setRestoring(record.id);
+    try {
+      console.log('🔄 Restoring deleted record:', record.id);
+      
+      const success = await supabaseDB.restoreCashBookEntry(record.id);
+
+      if (success) {
+        // Refresh the deleted records list
+        const deleted = await supabaseDB.getDeletedCashBook();
+        setDeletedRecords(deleted as any[]);
+        toast.success(`Entry #${record.sno} restored successfully!`);
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      } else {
+        toast.error('Failed to restore record');
+      }
+      
+    } catch (error) {
+      console.error('Error restoring record:', error);
+      toast.error('Failed to restore record');
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  // Permanently delete record
+  const handlePermanentDelete = async (record: any) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete entry #${record.sno}? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeleting(record.id);
+    try {
+      console.log('🗑️ Permanently deleting record:', record.id);
+      
+      const success = await supabaseDB.permanentlyDeleteCashBookEntry(record.id);
+
+      if (success) {
+        // Refresh the deleted records list
+        const deleted = await supabaseDB.getDeletedCashBook();
+        setDeletedRecords(deleted as any[]);
+        toast.success(`Entry #${record.sno} permanently deleted!`);
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      } else {
+        toast.error('Failed to permanently delete record');
+      }
+      
+    } catch (error) {
+      console.error('Error permanently deleting record:', error);
+      toast.error('Failed to permanently delete record');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -379,10 +461,78 @@ const EditedRecords = () => {
 
       {/* Deleted Records Table */}
       <div className='mt-10'>
-        <h3 className='text-lg font-semibold mb-2'>Deleted Records</h3>
-        {deletedRecords.length === 0 ? (
-          <div className='text-center py-8 text-gray-500'>
-            No deleted records found.
+        <div className='flex items-center justify-between mb-4'>
+          <h3 className='text-lg font-semibold text-red-700 flex items-center gap-2'>
+            🗑️ Deleted Records ({deletedLog.length})
+          </h3>
+          <div className='flex gap-2'>
+            <Button
+              size='sm'
+              variant='secondary'
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  console.log('🔄 Manually refreshing deleted records...');
+                  const deleted = await supabaseDB.getDeletedCashBook();
+                  console.log('🔄 Refresh result:', deleted);
+                  console.log('🔄 Refresh result length:', deleted?.length || 0);
+                  setDeletedRecords(deleted as any[]);
+                  toast.success(`Refreshed ${deleted?.length || 0} deleted records`);
+                } catch (error) {
+                  console.error('❌ Refresh error:', error);
+                  toast.error('Failed to refresh deleted records');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className='flex items-center gap-1'
+            >
+              Refresh
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={async () => {
+                console.log('🔍 Manual debug triggered...');
+                await supabaseDB.debugDeletedRecords();
+                toast.success('Debug info logged to console');
+              }}
+              className='flex items-center gap-1'
+            >
+              Debug
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={async () => {
+                console.log('🧪 Testing getDeletedCashBook function...');
+                try {
+                  const deletedRecords = await supabaseDB.getDeletedCashBook();
+                  console.log('🧪 getDeletedCashBook result:', deletedRecords);
+                  console.log('🧪 Result type:', typeof deletedRecords);
+                  console.log('🧪 Result length:', deletedRecords?.length || 0);
+                  if (deletedRecords && deletedRecords.length > 0) {
+                    console.log('🧪 First record:', deletedRecords[0]);
+                    toast.success(`Found ${deletedRecords.length} deleted records`);
+                  } else {
+                    toast.error('No deleted records found');
+                  }
+                } catch (error) {
+                  console.error('❌ Test error:', error);
+                  toast.error('Test failed - check console');
+                }
+              }}
+              className='flex items-center gap-1'
+            >
+              Test
+            </Button>
+          </div>
+        </div>
+        {deletedLog.length === 0 ? (
+          <div className='text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200'>
+            <div className='text-lg font-medium mb-2'>No deleted records found</div>
+            <div className='text-sm'>Deleted records from Edit Entry will appear here</div>
           </div>
         ) : (
           <div className='overflow-x-auto'>
@@ -397,10 +547,11 @@ const EditedRecords = () => {
                   ))}
                   <th className='px-2 py-1'>Deleted By</th>
                   <th className='px-2 py-1'>Deleted At</th>
+                  <th className='px-2 py-1'>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {deletedRecords.map((rec, idx) => (
+                {deletedLog.map((rec, idx) => (
                   <tr
                     key={rec.id}
                     className='border-b border-gray-100 hover:bg-red-50'
@@ -411,12 +562,41 @@ const EditedRecords = () => {
                         {getFieldDisplay(f.key, rec[f.key])}
                       </td>
                     ))}
-                    <td className='px-2 py-1'>{rec.deleted_by}</td>
+                    <td className='px-2 py-1'>{rec.deleted_by || rec.users || 'Unknown'}</td>
                     <td className='px-2 py-1'>
                       {rec.deleted_at &&
                       !isNaN(new Date(rec.deleted_at).getTime())
                         ? format(new Date(rec.deleted_at), 'dd/MM/yyyy HH:mm')
+                        : rec.updated_at &&
+                        !isNaN(new Date(rec.updated_at).getTime())
+                        ? format(new Date(rec.updated_at), 'dd/MM/yyyy HH:mm')
                         : ''}
+                    </td>
+                    <td className='px-2 py-1'>
+                      <div className='flex gap-1 justify-center'>
+                        <Button
+                          size='sm'
+                          variant='secondary'
+                          onClick={() => handleRestoreRecord(rec)}
+                          disabled={restoring === rec.id}
+                          className='flex items-center gap-1 text-green-700 hover:text-green-800'
+                          title='Restore Record'
+                        >
+                          <RotateCcw className='w-3 h-3' />
+                          Restore
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='danger'
+                          onClick={() => handlePermanentDelete(rec)}
+                          disabled={deleting === rec.id}
+                          className='flex items-center gap-1'
+                          title='Permanently Delete'
+                        >
+                          <Trash2 className='w-3 h-3' />
+                          Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -238,6 +238,10 @@ const DeletedRecords: React.FC = () => {
         // Refresh the list
         await loadDeletedRecords();
         toast.success(`Entry #${record.sno} permanently deleted!`);
+        
+        // Trigger dashboard refresh
+        localStorage.setItem('dashboard-refresh', Date.now().toString());
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         toast.error('Failed to permanently delete record');
       }

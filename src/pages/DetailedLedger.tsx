@@ -1007,7 +1007,11 @@ const DetailedLedger: React.FC = () => {
                   <tr
                     key={entry.id}
                     className={`border-b hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                      !entry.approved 
+                        ? 'bg-orange-50 border-orange-200' 
+                        : index % 2 === 0 
+                          ? 'bg-white' 
+                          : 'bg-gray-25'
                     }`}
                   >
                     <td className='px-3 py-2 font-medium'>{index + 1}</td>

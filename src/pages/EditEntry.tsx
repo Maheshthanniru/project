@@ -635,9 +635,11 @@ const EditEntry: React.FC = () => {
       console.log('🔍 Page size:', pageSize);
 
       // First, try direct Supabase query to check if RLS is blocking access
+      // Exclude deleted records (those with [DELETED] prefix)
       const { data: directData, error: directError } = await supabase
         .from('cash_book')
         .select('*')
+        .not('acc_name', 'like', '[DELETED]%')
         .order('c_date', { ascending: false })
         .order('created_at', { ascending: false })
         .range(0, pageSize - 1);
@@ -974,7 +976,7 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
 
     if (
-      window.confirm(`Are you sure you want to permanently delete entry #${entry.sno}? This cannot be undone.`)
+      window.confirm(`Are you sure you want to delete entry #${entry.sno}? This will move it to the Deleted Records section where you can restore it later.`)
     ) {
       try {
         // Start delete immediately
@@ -987,7 +989,7 @@ const EditEntry: React.FC = () => {
           setEditMode(false);
           setSelectedEntry(null);
           loadEntries();
-          toast.success('Entry deleted successfully!');
+          toast.success('Entry moved to Deleted Records successfully!');
           
           // Trigger dashboard refresh
           localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -1911,7 +1913,11 @@ const EditEntry: React.FC = () => {
                     <tr
                       key={entry.id}
                       className={`border-b hover:bg-gray-50 transition-colors cursor-pointer ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                        !entry.approved 
+                          ? 'bg-orange-50 border-orange-200' 
+                          : index % 2 === 0 
+                            ? 'bg-white' 
+                            : 'bg-gray-25'
                       } ${entry.lock_record ? 'opacity-80' : ''}`}
                       onClick={() => setSelectedEntry(entry)}
                     >
