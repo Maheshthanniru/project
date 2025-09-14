@@ -33,6 +33,17 @@ export const useCompanyBalances = () => {
   });
 };
 
+// Hook for company daily balances (closing and opening)
+export const useCompanyDailyBalances = (selectedDate: string) => {
+  return useQuery({
+    queryKey: [...queryKeys.dashboard.companyBalances, 'daily', selectedDate],
+    queryFn: () => supabaseDB.getCompanyDailyBalances(selectedDate),
+    staleTime: 2 * 60 * 1000, // 2 minutes for daily balances
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
+    enabled: !!selectedDate, // Only run if date is provided
+  });
+};
+
 // Hook for dropdown data (companies, accounts, users)
 export const useDropdownData = () => {
   const companiesQuery = useQuery({

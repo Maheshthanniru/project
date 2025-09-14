@@ -1799,6 +1799,94 @@ class SupabaseDatabase {
     };
   }
 
+  // Get company-wise daily closing and opening balances for dashboard
+  async getCompanyDailyBalances(date: string): Promise<Array<{
+    companyName: string;
+    todayClosingBalance: number;
+    tomorrowOpeningBalance: number;
+    todayCredit: number;
+    todayDebit: number;
+  }>> {
+    try {
+      console.log('🔄 Fetching company-wise daily balances for date:', date);
+      
+      // Get all companies that have transactions
+      const { data: companies, error: companiesError } = await supabase
+        .from('cash_book')
+        .select('company_name')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '')
+        .not('acc_name', 'like', '[DELETED]%');
+
+      if (companiesError) {
+        console.error('Error fetching companies:', companiesError);
+        return [];
+      }
+
+      // Get unique company names
+      const uniqueCompanies = [...new Set(companies?.map(c => c.company_name?.trim()).filter(Boolean) || [])];
+      
+      const companyBalances = [];
+
+      for (const companyName of uniqueCompanies) {
+        // Get all transactions for this company up to the selected date (for closing balance)
+        const { data: allTransactions, error: allError } = await supabase
+          .from('cash_book')
+          .select('credit, debit')
+          .eq('company_name', companyName)
+          .lte('c_date', date)
+          .not('acc_name', 'like', '[DELETED]%');
+
+        if (allError) {
+          console.error(`Error fetching transactions for ${companyName}:`, allError);
+          continue;
+        }
+
+        // Calculate closing balance (all transactions up to and including the date)
+        const todayClosingBalance = (allTransactions || []).reduce(
+          (sum, entry) => sum + (entry.credit - entry.debit),
+          0
+        );
+
+        // Get today's transactions only
+        const { data: todayTransactions, error: todayError } = await supabase
+          .from('cash_book')
+          .select('credit, debit')
+          .eq('company_name', companyName)
+          .eq('c_date', date)
+          .not('acc_name', 'like', '[DELETED]%');
+
+        if (todayError) {
+          console.error(`Error fetching today's transactions for ${companyName}:`, todayError);
+          continue;
+        }
+
+        const todayCredit = (todayTransactions || []).reduce((sum, entry) => sum + entry.credit, 0);
+        const todayDebit = (todayTransactions || []).reduce((sum, entry) => sum + entry.debit, 0);
+
+        // Tomorrow's opening balance is the same as today's closing balance
+        const tomorrowOpeningBalance = todayClosingBalance;
+
+        companyBalances.push({
+          companyName,
+          todayClosingBalance,
+          tomorrowOpeningBalance,
+          todayCredit,
+          todayDebit,
+        });
+      }
+
+      // Sort by company name
+      companyBalances.sort((a, b) => a.companyName.localeCompare(b.companyName));
+      
+      console.log(`✅ Company daily balances calculated for ${companyBalances.length} companies`);
+      return companyBalances;
+    } catch (error) {
+      console.error('Error fetching company daily balances:', error);
+      return [];
+    }
+  }
+
   // Optimized Balance Sheet API - Server-side aggregation
   async getOptimizedBalanceSheet(filters: {
     companyName?: string;

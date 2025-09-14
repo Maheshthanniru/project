@@ -3,10 +3,11 @@ import { format } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import Card from '../components/UI/Card';
 import Select from '../components/UI/Select';
+import DailyReportCard from '../components/Dashboard/DailyReportCard';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useDashboardStats, useRecentEntries, useCompanyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
+import { useDashboardStats, useRecentEntries, useCompanyBalances, useCompanyDailyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
 import toast from 'react-hot-toast';
 import {
   TrendingUp,
@@ -31,12 +32,13 @@ const Dashboard: React.FC = () => {
   const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
   const { data: recentEntries, isLoading: recentLoading, isFetching: recentFetching } = useRecentEntries();
   const { data: companyBalances, isLoading: companyLoading, isFetching: companyFetching } = useCompanyBalances();
+  const { data: dailyBalances, isLoading: dailyLoading, isFetching: dailyFetching } = useCompanyDailyBalances(selectedDate);
   const { companies, accounts, users, pendingApprovals, isLoading: dropdownLoading } = useDropdownData();
   const { invalidateAll, invalidateStats, invalidateRecentEntries } = useInvalidateDashboard();
 
   // Combined loading states
-  const loading = statsLoading || recentLoading || companyLoading || dropdownLoading;
-  const autoUpdating = statsFetching || recentFetching || companyFetching;
+  const loading = statsLoading || recentLoading || companyLoading || dailyLoading || dropdownLoading;
+  const autoUpdating = statsFetching || recentFetching || companyFetching || dailyFetching;
 
   // Listen for storage events to refresh when new entries are created
   useEffect(() => {
@@ -338,6 +340,13 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Daily Report Card */}
+      <DailyReportCard 
+        data={dailyBalances || []} 
+        selectedDate={selectedDate}
+        isLoading={dailyLoading}
+      />
 
       {/* Company Closing Balances Table */}
       <Card
