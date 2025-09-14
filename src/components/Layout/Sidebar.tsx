@@ -7,6 +7,7 @@ import {
   Book,
   BookOpen,
   FileEdit,
+  Trash2,
   Replace,
   Upload,
   Truck,
@@ -65,6 +66,12 @@ const Sidebar: React.FC = () => {
       label: 'Edited Records',
       path: '/edited-records',
       key: 'edited_records',
+    },
+    {
+      icon: Trash2,
+      label: 'Deleted Records',
+      path: '/deleted-records',
+      key: 'deleted_records',
     },
     {
       icon: Replace,

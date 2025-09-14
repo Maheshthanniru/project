@@ -191,6 +191,8 @@ const LedgerSummary: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      console.log('🔄 Generating summary with filters:', filters);
+
       // Fast server-side filtering with pagination disabled for summaries
       const { data } = await supabaseDB.getFilteredCashBookEntries({
         companyName: filters.companyName || undefined,
@@ -198,6 +200,8 @@ const LedgerSummary: React.FC = () => {
         subAccountName: filters.subAccount || undefined,
       }, 100000, 0);
       let entries = data || [];
+      
+      console.log('📊 Loaded entries:', entries.length);
 
       // Apply date filter
       if (filters.betweenDates) {
@@ -233,6 +237,9 @@ const LedgerSummary: React.FC = () => {
       const companyMap = new Map<string, CompanySummary>();
       const accountMap = new Map<string, AccountSummary>();
       const subAccountMap = new Map<string, SubAccountSummary>();
+      
+      // Create a map for main accounts with company names (for when no company filter is applied)
+      const mainAccountWithCompanyMap = new Map<string, AccountSummary & { companyName: string }>();
 
       let totalCredit = 0;
       let totalDebit = 0;
@@ -273,6 +280,26 @@ const LedgerSummary: React.FC = () => {
         accountSummary.debit += entry.debit;
         accountSummary.balance = accountSummary.credit - accountSummary.debit;
         accountSummary.transactionCount++;
+
+        // Main account with company name (for when no company filter is applied)
+        if (!filters.companyName) {
+          const mainAccountKey = entry.acc_name;
+          if (!mainAccountWithCompanyMap.has(mainAccountKey)) {
+            mainAccountWithCompanyMap.set(mainAccountKey, {
+              accountName: entry.acc_name,
+              companyName: entry.company_name,
+              credit: 0,
+              debit: 0,
+              balance: 0,
+              transactionCount: 0,
+            });
+          }
+          const mainAccountSummary = mainAccountWithCompanyMap.get(mainAccountKey)!;
+          mainAccountSummary.credit += entry.credit;
+          mainAccountSummary.debit += entry.debit;
+          mainAccountSummary.balance = mainAccountSummary.credit - mainAccountSummary.debit;
+          mainAccountSummary.transactionCount++;
+        }
 
         // Sub Account summary
         if (entry.sub_acc_name) {
@@ -360,8 +387,8 @@ const LedgerSummary: React.FC = () => {
           (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
         );
       } else {
-        // When no company filter, use all data
-        mainAccountSummariesArray = Array.from(accountMap.values()).sort(
+        // When no company filter, use main accounts with company names
+        mainAccountSummariesArray = Array.from(mainAccountWithCompanyMap.values()).sort(
           (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
         );
         
@@ -370,6 +397,10 @@ const LedgerSummary: React.FC = () => {
         );
       }
 
+      console.log('📊 Company summaries:', companySummariesArray.length);
+      console.log('📊 Main account summaries:', mainAccountSummariesArray.length);
+      console.log('📊 Sub account summaries:', subAccountSummariesArray.length);
+      
       setCompanySummaries(companySummariesArray);
       setMainAccountSummaries(mainAccountSummariesArray);
       setSubAccountSummaries(subAccountSummariesArray);
@@ -444,13 +475,25 @@ const LedgerSummary: React.FC = () => {
         filename = 'company-wise-summary';
         break;
       case 'mainAccount':
-        exportData = mainAccountSummaries.map(account => ({
-          'Account Name': account.accountName,
-          Credit: account.credit,
-          Debit: account.debit,
-          Balance: account.balance,
-          'Transaction Count': account.transactionCount,
-        }));
+        exportData = mainAccountSummaries.map(account => {
+          const baseData = {
+            'Account Name': account.accountName,
+            Credit: account.credit,
+            Debit: account.debit,
+            Balance: account.balance,
+            'Transaction Count': account.transactionCount,
+          };
+          
+          // Add company name column if no company filter is applied
+          if (!filters.companyName && (account as any).companyName) {
+            return {
+              'Company Name': (account as any).companyName,
+              ...baseData,
+            };
+          }
+          
+          return baseData;
+        });
         filename = 'main-account-summary';
         break;
       case 'subAccount':
@@ -539,7 +582,11 @@ const LedgerSummary: React.FC = () => {
               <tr>
                 ${activeTab === 'subAccount' ? 
                   '<th>Main Account</th><th>Sub Account</th>' : 
-                  `<th>${activeTab === 'company' ? 'Company Name' : 'Main Account'}</th>`
+                  activeTab === 'company' ? 
+                    '<th>Company Name</th>' :
+                    !filters.companyName ? 
+                      '<th>Company Name</th><th>Main Account</th>' :
+                      '<th>Main Account</th>'
                 }
                 <th class="text-right">Credit</th>
                 <th class="text-right">Debit</th>
@@ -571,19 +618,48 @@ const LedgerSummary: React.FC = () => {
                 </tr>
               `;
                     } else {
-                      const name = activeTab === 'company' ? (item as CompanySummary).companyName : 
-                                   (item as AccountSummary).accountName;
-                      return `
-                <tr>
-                  <td>${name}</td>
-                  <td class="text-right text-green">₹${credit.toLocaleString()}</td>
-                  <td class="text-right text-red">₹${debit.toLocaleString()}</td>
-                  <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
-                    ₹${Math.abs(balance).toLocaleString()}
-                    ${balance >= 0 ? ' CR' : ' DR'}
-                  </td>
-                </tr>
-              `;
+                      if (activeTab === 'company') {
+                        const company = item as CompanySummary;
+                        return `
+                  <tr>
+                    <td>${company.companyName}</td>
+                    <td class="text-right text-green">₹${credit.toLocaleString()}</td>
+                    <td class="text-right text-red">₹${debit.toLocaleString()}</td>
+                    <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
+                      ₹${Math.abs(balance).toLocaleString()}
+                      ${balance >= 0 ? ' CR' : ' DR'}
+                    </td>
+                  </tr>
+                `;
+                      } else {
+                        const account = item as AccountSummary;
+                        if (!filters.companyName && (account as any).companyName) {
+                          return `
+                    <tr>
+                      <td>${(account as any).companyName}</td>
+                      <td>${account.accountName}</td>
+                      <td class="text-right text-green">₹${credit.toLocaleString()}</td>
+                      <td class="text-right text-red">₹${debit.toLocaleString()}</td>
+                      <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
+                        ₹${Math.abs(balance).toLocaleString()}
+                        ${balance >= 0 ? ' CR' : ' DR'}
+                      </td>
+                    </tr>
+                  `;
+                        } else {
+                          return `
+                    <tr>
+                      <td>${account.accountName}</td>
+                      <td class="text-right text-green">₹${credit.toLocaleString()}</td>
+                      <td class="text-right text-red">₹${debit.toLocaleString()}</td>
+                      <td class="text-right ${balance >= 0 ? 'text-green' : 'text-red'}">
+                        ₹${Math.abs(balance).toLocaleString()}
+                        ${balance >= 0 ? ' CR' : ' DR'}
+                      </td>
+                    </tr>
+                  `;
+                        }
+                      }
                     }
                   }
                 )
@@ -686,6 +762,11 @@ const LedgerSummary: React.FC = () => {
           <table className='w-full text-sm'>
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
+                {!filters.companyName && (
+                  <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                    Company Name
+                  </th>
+                )}
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
                   {filters.companyName ? `${filters.companyName} - Main Account` : 'Main Account'}
                 </th>
@@ -708,6 +789,11 @@ const LedgerSummary: React.FC = () => {
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                   }`}
                 >
+                  {!filters.companyName && (
+                    <td className='px-4 py-3 font-medium text-gray-700'>
+                      {(account as any).companyName || ''}
+                    </td>
+                  )}
                   <td className='px-4 py-3 font-medium text-blue-600'>
                     {account.accountName}
                   </td>
@@ -892,7 +978,6 @@ const LedgerSummary: React.FC = () => {
               onChange={value => handleFilterChange('mainAccount', value)}
               options={accounts}
               placeholder='Search main account...'
-              disabled={!filters.companyName}
             />
 
             <SearchableSelect
@@ -901,7 +986,6 @@ const LedgerSummary: React.FC = () => {
               onChange={value => handleFilterChange('subAccount', value)}
               options={subAccounts}
               placeholder='Search sub account...'
-              disabled={!filters.mainAccount}
             />
 
             <SearchableSelect

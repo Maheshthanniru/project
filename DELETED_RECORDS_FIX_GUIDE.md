@@ -190,3 +190,4 @@ If you encounter issues:
 ---
 
 **Status**: ✅ Fix available - Run `fix-deleted-records-complete.sql` in Supabase SQL Editor
+

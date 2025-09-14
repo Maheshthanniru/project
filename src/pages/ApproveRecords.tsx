@@ -852,30 +852,24 @@ const ApproveRecords: React.FC = () => {
               <thead>
                 <tr>
                   <th>S.No</th>
-                  <th>Date</th>
                   <th>Company</th>
                   <th>Account</th>
                   <th>Particulars</th>
                   <th>Credit</th>
                   <th>Debit</th>
-                  <th>Staff</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 ${currentPageEntries
                   .map(
-                    (entry, _) => `
+                    (entry, index) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
-                    <td>${entry.sno}</td>
-                    <td>${entry.c_date}</td>
+                    <td>${index + 1}</td>
                     <td>${entry.company_name || ''}</td>
                     <td>${entry.acc_name || ''}</td>
                     <td>${entry.particulars || ''}</td>
                     <td>${entry.credit || 0}</td>
                     <td>${entry.debit || 0}</td>
-                    <td>${entry.staff || ''}</td>
-                    <td>${entry.approved ? 'Approved' : 'Pending'}</td>
                   </tr>
                 `
                   )

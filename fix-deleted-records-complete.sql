@@ -117,3 +117,4 @@ FROM deleted_cash_book;
 
 -- Success message
 SELECT 'SUCCESS: Deleted records should now be visible in Approve Records page!' as status;
+

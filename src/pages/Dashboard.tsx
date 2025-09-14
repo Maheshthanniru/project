@@ -17,6 +17,7 @@ import {
   Building,
   Users,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -274,6 +275,24 @@ const Dashboard: React.FC = () => {
               <p className='text-2xl font-bold'>{pendingApprovals?.data || 0}</p>
             </div>
             <AlertTriangle className='w-8 h-8 text-orange-200' />
+          </div>
+        </Card>
+
+        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-red-100 text-sm font-medium'>Deleted Records</p>
+              <p className='text-2xl font-bold'>
+                {statsLoading ? (
+                  <div className='animate-pulse'>Loading...</div>
+                ) : stats?.deletedRecords !== undefined ? (
+                  stats.deletedRecords.toLocaleString()
+                ) : (
+                  <span className='text-yellow-200'>Error loading</span>
+                )}
+              </p>
+            </div>
+            <Trash2 className='w-8 h-8 text-red-200' />
           </div>
         </Card>
       </div>

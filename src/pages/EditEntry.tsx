@@ -55,7 +55,6 @@ const EditEntry: React.FC = () => {
   const [entriesForSelectedDate, setEntriesForSelectedDate] = useState<any[]>([]);
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -73,11 +72,65 @@ const EditEntry: React.FC = () => {
   const [filterParticulars, setFilterParticulars] = useState('');
   const [filterSaleQ, setFilterSaleQ] = useState('');
   const [filterPurchaseQ, setFilterPurchaseQ] = useState('');
+  const [filterCredit, setFilterCredit] = useState('');
+  const [filterDebit, setFilterDebit] = useState('');
+  const [filterStaff, setFilterStaff] = useState('');
+  const [filterDate, setFilterDate] = useState('');
   
   // Memoized filtered entries for better performance
-  // Note: Company/Account filters are handled in loadFilteredEntries, not here
   const filteredEntries = useMemo(() => {
     let filtered = entries;
+    
+    // Apply company filter
+    if (filterCompanyName) {
+      filtered = filtered.filter(entry => 
+        entry.company_name?.toLowerCase().includes(filterCompanyName.toLowerCase())
+      );
+    }
+    
+    // Apply account filter
+    if (filterAccountName) {
+      filtered = filtered.filter(entry => 
+        entry.acc_name?.toLowerCase().includes(filterAccountName.toLowerCase())
+      );
+    }
+    
+    // Apply sub-account filter
+    if (filterSubAccountName) {
+      filtered = filtered.filter(entry => 
+        entry.sub_acc_name?.toLowerCase().includes(filterSubAccountName.toLowerCase())
+      );
+    }
+    
+    // Apply particulars filter
+    if (filterParticulars) {
+      filtered = filtered.filter(entry => 
+        entry.particulars?.toLowerCase().includes(filterParticulars.toLowerCase())
+      );
+    }
+    
+    // Apply credit filter
+    if (filterCredit) {
+      const creditValue = parseFloat(filterCredit);
+      if (!isNaN(creditValue)) {
+        filtered = filtered.filter(entry => entry.credit === creditValue);
+      }
+    }
+    
+    // Apply debit filter
+    if (filterDebit) {
+      const debitValue = parseFloat(filterDebit);
+      if (!isNaN(debitValue)) {
+        filtered = filtered.filter(entry => entry.debit === debitValue);
+      }
+    }
+    
+    // Apply staff filter
+    if (filterStaff) {
+      filtered = filtered.filter(entry => 
+        entry.staff?.toLowerCase().includes(filterStaff.toLowerCase())
+      );
+    }
     
     // Apply date filter from calendar selection (priority over other date filters)
     if (selectedDateFilter) {
@@ -99,11 +152,11 @@ const EditEntry: React.FC = () => {
       );
     }
     
-    if (dateFilter && !selectedDateFilter) {
-      const filterDate = new Date(dateFilter);
+    if (filterDate && !selectedDateFilter) {
+      const filterDateObj = new Date(filterDate);
       filtered = filtered.filter(entry => {
         const entryDate = new Date(entry.c_date);
-        return entryDate.toDateString() === filterDate.toDateString();
+        return entryDate.toDateString() === filterDateObj.toDateString();
       });
     }
     
@@ -119,11 +172,8 @@ const EditEntry: React.FC = () => {
       }
     }
     
-    // Company/Account filters are handled in loadFilteredEntries function
-    // to ensure we load from all 67k records, not just the initially loaded subset
-    
     return filtered;
-  }, [entries, selectedDateFilter, searchTerm, dateFilter, statusFilter]);
+  }, [entries, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff, selectedDateFilter, searchTerm, filterDate, statusFilter]);
   
   const [showHistory, setShowHistory] = useState(false);
   const [entryHistory] = useState<EditHistory[]>([]);
@@ -138,6 +188,12 @@ const EditEntry: React.FC = () => {
   const [particularsOptions, setParticularsOptions] = useState<
     { value: string; label: string }[]
   >([]);
+  const [creditOptions, setCreditOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [debitOptions, setDebitOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // New state for dependent dropdowns
   const [distinctAccountNames, setDistinctAccountNames] = useState<
@@ -150,11 +206,6 @@ const EditEntry: React.FC = () => {
     { value: string; label: string }[]
   >([]);
 
-  const [filterCredit, setFilterCredit] = useState('');
-  const [filterDebit, setFilterDebit] = useState('');
-  const [filterStaff, setFilterStaff] = useState('');
-  const [filterDate, setFilterDate] = useState('');
-
 
   useEffect(() => {
     const initializeData = async () => {
@@ -166,22 +217,73 @@ const EditEntry: React.FC = () => {
     initializeData();
   }, []); // Remove dependencies to prevent re-initialization on filter changes
 
-  // Separate useEffect for filter changes
+  // Single useEffect for all filter changes - now using client-side filtering only
   useEffect(() => {
     console.log('🔄 Filters changed, reloading entries...');
     loadEntries();
-  }, [searchTerm, dateFilter, statusFilter]);
+  }, [searchTerm, filterDate, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff]);
 
-  // Separate useEffect for company/account filters - these need to load filtered data
+  // useEffect to load filter options when date filter changes
   useEffect(() => {
-    if (filterCompanyName || filterAccountName || filterSubAccountName) {
-      console.log('🔄 Company/Account filters changed, loading filtered data...');
-      loadFilteredEntries();
+    const activeDate = selectedDateFilter || filterDate;
+    
+    if (activeDate) {
+      console.log('🔄 Date changed, loading filter options for date:', activeDate);
+      loadFilterOptionsByDate(activeDate);
     } else {
-      console.log('🔄 No company/account filters, loading all entries...');
-      loadEntries();
+      // If no date filter, load all options
+      console.log('🔄 No date filter, loading all filter options...');
+      loadDropdownData();
     }
-  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
+  }, [filterDate, selectedDateFilter]);
+
+  // useEffect to load related options when company filter changes
+  useEffect(() => {
+    if (filterCompanyName) {
+      console.log('🔄 Company filter changed, loading related options for company:', filterCompanyName);
+      loadRelatedFilterOptions('company', filterCompanyName);
+    }
+  }, [filterCompanyName]);
+
+  // useEffect to load related options when account filter changes
+  useEffect(() => {
+    if (filterAccountName) {
+      console.log('🔄 Account filter changed, loading related options for account:', filterAccountName);
+      loadRelatedFilterOptions('account', filterAccountName);
+    }
+  }, [filterAccountName]);
+
+  // useEffect to load related options when sub-account filter changes
+  useEffect(() => {
+    if (filterSubAccountName) {
+      console.log('🔄 Sub-account filter changed, loading related options for sub-account:', filterSubAccountName);
+      loadRelatedFilterOptions('subAccount', filterSubAccountName);
+    }
+  }, [filterSubAccountName]);
+
+  // useEffect to load related options when particulars filter changes
+  useEffect(() => {
+    if (filterParticulars) {
+      console.log('🔄 Particulars filter changed, loading related options for particulars:', filterParticulars);
+      loadRelatedFilterOptions('particulars', filterParticulars);
+    }
+  }, [filterParticulars]);
+
+  // useEffect to load related options when credit filter changes
+  useEffect(() => {
+    if (filterCredit) {
+      console.log('🔄 Credit filter changed, loading related options for credit:', filterCredit);
+      loadRelatedFilterOptions('credit', filterCredit);
+    }
+  }, [filterCredit]);
+
+  // useEffect to load related options when debit filter changes
+  useEffect(() => {
+    if (filterDebit) {
+      console.log('🔄 Debit filter changed, loading related options for debit:', filterDebit);
+      loadRelatedFilterOptions('debit', filterDebit);
+    }
+  }, [filterDebit]);
 
   // Note: Removed useEffect hooks for company-based account loading
   // Now using global cash_book data for dependent dropdowns
@@ -250,8 +352,23 @@ const EditEntry: React.FC = () => {
       }));
       setParticularsOptions(particularsData);
 
-      // Note: Sale quantity, purchase quantity, credit amount, and debit amount options
-      // are not currently used in the UI, so we skip loading them for performance
+      // Load unique credit and debit amounts
+      const { data: amountsData, error: amountsError } = await supabase
+        .from('cash_book')
+        .select('credit, debit')
+        .not('credit', 'is', null)
+        .not('debit', 'is', null);
+
+      if (!amountsError && amountsData) {
+        const uniqueCredits = [...new Set(amountsData.map(entry => entry.credit).filter(val => val !== null && val !== undefined))];
+        const uniqueDebits = [...new Set(amountsData.map(entry => entry.debit).filter(val => val !== null && val !== undefined))];
+        
+        console.log('💰 Credit amounts loaded:', uniqueCredits.length);
+        console.log('💰 Debit amounts loaded:', uniqueDebits.length);
+        
+        setCreditOptions(uniqueCredits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+        setDebitOptions(uniqueDebits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      }
       
       console.log('✅ All dropdown data loaded successfully');
     } catch (error) {
@@ -335,9 +452,187 @@ const EditEntry: React.FC = () => {
     }
   };
 
+  const loadFilterOptionsByDate = async (date: string) => {
+    try {
+      console.log('🔍 Loading filter options for date:', date);
+      
+      // Clear current filters when date changes
+      setFilterCompanyName('');
+      setFilterAccountName('');
+      setFilterSubAccountName('');
+      setFilterParticulars('');
+      setFilterCredit('');
+      setFilterDebit('');
+      
+      // Get all entries for the specific date
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('company_name, acc_name, sub_acc_name, particulars, credit, debit')
+        .eq('c_date', date);
+
+      if (error) {
+        console.error('Error loading filter options by date:', error);
+        return;
+      }
+
+      // Extract unique values for each field
+      const uniqueCompanies = [...new Set(data.map(entry => entry.company_name).filter(Boolean))];
+      const uniqueAccounts = [...new Set(data.map(entry => entry.acc_name).filter(Boolean))];
+      const uniqueSubAccounts = [...new Set(data.map(entry => entry.sub_acc_name).filter(Boolean))];
+      const uniqueParticulars = [...new Set(data.map(entry => entry.particulars).filter(Boolean))];
+      const uniqueCredits = [...new Set(data.map(entry => entry.credit).filter(val => val !== null && val !== undefined))];
+      const uniqueDebits = [...new Set(data.map(entry => entry.debit).filter(val => val !== null && val !== undefined))];
+      
+      console.log(`📊 Found for date ${date}:`, {
+        companies: uniqueCompanies.length,
+        accounts: uniqueAccounts.length,
+        subAccounts: uniqueSubAccounts.length,
+        particulars: uniqueParticulars.length,
+        credits: uniqueCredits.length,
+        debits: uniqueDebits.length
+      });
+      
+      // Update dropdowns with date-specific options
+      setCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      setDistinctAccountNames(uniqueAccounts.map(name => ({ value: name, label: name })));
+      setDependentSubAccounts(uniqueSubAccounts.map(name => ({ value: name, label: name })));
+      setParticularsOptions(uniqueParticulars.map(name => ({ value: name, label: name })));
+      setCreditOptions(uniqueCredits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      setDebitOptions(uniqueDebits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      
+      // Show toast with summary
+      const summary = [
+        `${uniqueCompanies.length} companies`,
+        `${uniqueAccounts.length} accounts`,
+        `${uniqueSubAccounts.length} sub-accounts`,
+        `${uniqueParticulars.length} particulars`,
+        `${uniqueCredits.length} credit amounts`,
+        `${uniqueDebits.length} debit amounts`
+      ].join(', ');
+      
+      if (data.length > 0) {
+        toast.success(`Found ${data.length} entries on ${date} with ${summary}`);
+      } else {
+        toast.info(`No entries found on ${date}`);
+      }
+      
+    } catch (error) {
+      console.error('Error loading filter options by date:', error);
+      toast.error('Failed to load filter options for selected date');
+    }
+  };
+
+  const loadRelatedFilterOptions = async (filterType: string, filterValue: string) => {
+    try {
+      console.log(`🔍 Loading related options for ${filterType}:`, filterValue);
+      
+      // Clear dependent filters when a filter changes
+      if (filterType === 'company') {
+        setFilterAccountName('');
+        setFilterSubAccountName('');
+        setFilterParticulars('');
+        setFilterCredit('');
+        setFilterDebit('');
+      } else if (filterType === 'account') {
+        setFilterSubAccountName('');
+        setFilterParticulars('');
+        setFilterCredit('');
+        setFilterDebit('');
+      } else if (filterType === 'subAccount') {
+        setFilterParticulars('');
+        setFilterCredit('');
+        setFilterDebit('');
+      } else if (filterType === 'particulars') {
+        setFilterCredit('');
+        setFilterDebit('');
+      }
+      
+      // Build query based on active filters
+      let query = supabase.from('cash_book').select('company_name, acc_name, sub_acc_name, particulars, credit, debit');
+      
+      // Apply active filters
+      if (filterDate || selectedDateFilter) {
+        const activeDate = selectedDateFilter || filterDate;
+        query = query.eq('c_date', activeDate);
+      }
+      if (filterCompanyName) {
+        query = query.eq('company_name', filterCompanyName);
+      }
+      if (filterAccountName) {
+        query = query.eq('acc_name', filterAccountName);
+      }
+      if (filterSubAccountName) {
+        query = query.eq('sub_acc_name', filterSubAccountName);
+      }
+      if (filterParticulars) {
+        query = query.eq('particulars', filterParticulars);
+      }
+      if (filterCredit) {
+        query = query.eq('credit', parseFloat(filterCredit));
+      }
+      if (filterDebit) {
+        query = query.eq('debit', parseFloat(filterDebit));
+      }
+      
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error loading related filter options:', error);
+        return;
+      }
+
+      // Extract unique values for each field
+      const uniqueCompanies = [...new Set(data.map(entry => entry.company_name).filter(Boolean))];
+      const uniqueAccounts = [...new Set(data.map(entry => entry.acc_name).filter(Boolean))];
+      const uniqueSubAccounts = [...new Set(data.map(entry => entry.sub_acc_name).filter(Boolean))];
+      const uniqueParticulars = [...new Set(data.map(entry => entry.particulars).filter(Boolean))];
+      const uniqueCredits = [...new Set(data.map(entry => entry.credit).filter(val => val !== null && val !== undefined))];
+      const uniqueDebits = [...new Set(data.map(entry => entry.debit).filter(val => val !== null && val !== undefined))];
+      
+      console.log(`📊 Found related options for ${filterType}:`, {
+        companies: uniqueCompanies.length,
+        accounts: uniqueAccounts.length,
+        subAccounts: uniqueSubAccounts.length,
+        particulars: uniqueParticulars.length,
+        credits: uniqueCredits.length,
+        debits: uniqueDebits.length
+      });
+      
+      // Update dropdowns with related options
+      setCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      setDistinctAccountNames(uniqueAccounts.map(name => ({ value: name, label: name })));
+      setDependentSubAccounts(uniqueSubAccounts.map(name => ({ value: name, label: name })));
+      setParticularsOptions(uniqueParticulars.map(name => ({ value: name, label: name })));
+      setCreditOptions(uniqueCredits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      setDebitOptions(uniqueDebits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      
+      // Show toast with summary
+      const summary = [
+        `${uniqueCompanies.length} companies`,
+        `${uniqueAccounts.length} accounts`,
+        `${uniqueSubAccounts.length} sub-accounts`,
+        `${uniqueParticulars.length} particulars`,
+        `${uniqueCredits.length} credit amounts`,
+        `${uniqueDebits.length} debit amounts`
+      ].join(', ');
+      
+      if (data.length > 0) {
+        toast.success(`Found ${data.length} entries matching ${filterType} "${filterValue}" with ${summary}`);
+      } else {
+        toast.info(`No entries found matching ${filterType} "${filterValue}"`);
+      }
+      
+    } catch (error) {
+      console.error('Error loading related filter options:', error);
+      toast.error(`Failed to load related options for ${filterType}`);
+    }
+  };
+
   const loadEntries = async () => {
     try {
       console.log('🔍 Loading entries from database...');
+      console.log('🔍 Supabase URL:', import.meta.env.VITE_SUPABASE_URL || 'https://pmqeegdmcrktccszgbwu.supabase.co');
+      console.log('🔍 Page size:', pageSize);
 
       // First, try direct Supabase query to check if RLS is blocking access
       const { data: directData, error: directError } = await supabase
@@ -398,8 +693,8 @@ const EditEntry: React.FC = () => {
       }
 
       // Apply date filter
-      if (dateFilter) {
-        allEntries = allEntries.filter(entry => entry.c_date === dateFilter);
+      if (filterDate) {
+        allEntries = allEntries.filter(entry => entry.c_date === filterDate);
       }
 
       // Apply status filter
@@ -473,7 +768,22 @@ const EditEntry: React.FC = () => {
       setEntriesForSelectedDate([]);
     } catch (error) {
       console.error('❌ Error loading entries:', error);
-      toast.error('Failed to load entries');
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          toast.error('Network error: Unable to connect to database. Please check your internet connection.');
+        } else if (error.message.includes('permission') || error.message.includes('policy')) {
+          toast.error('Permission error: RLS policies are blocking access. Please contact administrator.');
+        } else if (error.message.includes('timeout')) {
+          toast.error('Timeout error: Database request timed out. Please try again.');
+        } else {
+          toast.error(`Failed to load entries: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to load entries: Unknown error occurred');
+      }
+      
       setEntries([]);
     }
   };
@@ -484,48 +794,10 @@ const EditEntry: React.FC = () => {
     try {
       setIsLoadingMore(true);
       
-      // If company/account filters are active, load more filtered entries with pagination
-      if (filterCompanyName || filterAccountName || filterSubAccountName) {
-        console.log('🔄 Company/Account filters active, loading more filtered entries...');
-        
-        try {
-          setLoading(true);
-          console.log('🔄 Loading more filtered entries with pagination...');
-          console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
-          console.log('🔍 Current entries:', entries.length, 'Total available:', totalEntries);
-          
-          // Load next batch of filtered entries
-          const result = await supabaseDB.getFilteredCashBookEntries({
-            companyName: filterCompanyName || undefined,
-            accountName: filterAccountName || undefined,
-            subAccountName: filterSubAccountName || undefined,
-          }, pageSize, entries.length);
-          
-          console.log(`📊 More filtered entries loaded: ${result.data.length}`);
-          
-          // Append new entries to existing ones
-          setEntries(prevEntries => [...prevEntries, ...result.data]);
-          setTotalEntries(result.total);
-          
-          if (result.data.length === 0) {
-            toast.success(`No more entries found for the selected filters`);
-          } else {
-            toast.success(`Loaded ${result.data.length} more entries (${entries.length + result.data.length} of ${result.total} total from 67k records)`);
-          }
-        } catch (error) {
-          console.error('Error loading more filtered entries:', error);
-          toast.error('Failed to load more filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-      
-      // Otherwise, use normal pagination for global data
-      const nextPage = Math.floor(entries.length / pageSize) + 1;
+      // Use normal pagination for all data (client-side filtering will handle the rest)
       const offset = entries.length;
       
-      console.log(`🔄 Loading more entries - Page: ${nextPage}, Offset: ${offset}`);
+      console.log(`🔄 Loading more entries - Offset: ${offset}`);
       
       const moreEntries = await supabaseDB.getCashBookEntries(pageSize, offset);
       console.log(`✅ Loaded ${moreEntries.length} more entries`);
@@ -541,49 +813,14 @@ const EditEntry: React.FC = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [entries.length, totalEntries, pageSize, isLoadingMore, filterCompanyName, filterAccountName, filterSubAccountName]);
+  }, [entries.length, totalEntries, pageSize, isLoadingMore]);
 
   const loadAllEntries = useCallback(async () => {
     try {
       setIsLoadingAll(true);
       setLoadingProgress({ current: 0, total: 0, message: 'Starting to load all entries...' });
-      // If company/account filters are active, load all filtered entries
-      if (filterCompanyName || filterAccountName || filterSubAccountName) {
-        console.log('🔄 Loading ALL filtered entries...');
-        setLoadingProgress({ current: 0, total: 0, message: `Loading all entries for ${filterCompanyName || 'selected filters'}...` });
-        
-        try {
-          setLoading(true);
-          console.log('🔄 Loading all filtered entries with server-side filtering...');
-          console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
-          
-          // Use getAllFilteredCashBookEntries to load all at once for filtered data
-          const filteredEntries = await supabaseDB.getAllFilteredCashBookEntries({
-            companyName: filterCompanyName || undefined,
-            accountName: filterAccountName || undefined,
-            subAccountName: filterSubAccountName || undefined,
-          });
-          
-          console.log(`📊 All filtered entries loaded: ${filteredEntries.length}`);
-          
-          setEntries(filteredEntries);
-          setTotalEntries(filteredEntries.length);
-          
-          if (filteredEntries.length === 0) {
-            toast.success(`No entries found for the selected filters`);
-          } else {
-            toast.success(`Loaded all ${filteredEntries.length} entries matching your filters from 67k records`);
-          }
-        } catch (error) {
-          console.error('Error loading all filtered entries:', error);
-          toast.error('Failed to load filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
       
-      // Otherwise, load all global entries
+      // Load all global entries (client-side filtering will handle the rest)
       console.log('🔄 Loading ALL entries from database...');
       
       // First get the total count
@@ -615,44 +852,8 @@ const EditEntry: React.FC = () => {
         setLoadingProgress({ current: 0, total: 0, message: '' });
       }, 3000);
     }
-  }, [filterCompanyName, filterAccountName, filterSubAccountName]);
+  }, []);
 
-  const loadFilteredEntries = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('🔄 Loading filtered entries with pagination...');
-      console.log('🔍 Filters:', { filterCompanyName, filterAccountName, filterSubAccountName });
-      console.log('🔍 About to call getFilteredCashBookEntries with company:', filterCompanyName);
-      
-      // Use paginated server-side filtering (load first 1000 entries)
-      const result = await supabaseDB.getFilteredCashBookEntries({
-        companyName: filterCompanyName || undefined,
-        accountName: filterAccountName || undefined,
-        subAccountName: filterSubAccountName || undefined,
-      }, pageSize, 0);
-      
-      console.log(`📊 Filtered entries loaded: ${result.data.length} of ${result.total} total`);
-      console.log('📊 First few entries:', result.data.slice(0, 3).map(e => ({ 
-        id: e.id, 
-        company: e.company_name, 
-        date: e.c_date 
-      })));
-      
-      setEntries(result.data);
-      setTotalEntries(result.total);
-      
-      if (result.data.length === 0) {
-        toast.success(`No entries found for the selected filters`);
-      } else {
-        toast.success(`Found ${result.total} entries matching your filters from all 67k records`);
-      }
-    } catch (error) {
-      console.error('Error loading filtered entries:', error);
-      toast.error('Failed to load filtered entries: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  }, [filterCompanyName, filterAccountName, filterSubAccountName, pageSize]);
 
 
 
@@ -793,6 +994,7 @@ const EditEntry: React.FC = () => {
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
           toast.error('Failed to delete entry - check console for details');
+          console.error('Delete operation returned false - check supabaseDatabase.ts logs');
         }
       } catch (error) {
         console.error('Error deleting entry:', error);
@@ -1483,21 +1685,7 @@ const EditEntry: React.FC = () => {
             <SearchableSelect
               label='Company Name'
               value={filterCompanyName}
-              onChange={async (value) => {
-                setFilterCompanyName(value);
-                setFilterAccountName('');
-                setFilterSubAccountName('');
-                // Load account names for the selected company
-                if (value) {
-                  await loadAccountNamesByCompany(value);
-                } else {
-                  // If no company selected, load all account names
-                  await loadDistinctAccountNames();
-                }
-                // Clear dependent dropdowns
-                setDependentSubAccounts([]);
-                setDependentParticulars([]);
-              }}
+              onChange={setFilterCompanyName}
               options={companies}
               placeholder='Select company...'
             />
@@ -1508,21 +1696,7 @@ const EditEntry: React.FC = () => {
             <SearchableSelect
               label='Account Name'
               value={filterAccountName}
-              onChange={async (value) => {
-                setFilterAccountName(value);
-                setFilterSubAccountName('');
-                // Load sub accounts for the selected account and company
-                if (value && filterCompanyName) {
-                  await loadSubAccountsByAccountAndCompany(value, filterCompanyName);
-                } else if (value) {
-                  // Fallback to global sub accounts if no company
-                  await loadDependentSubAccounts(value);
-                } else {
-                  // Clear sub accounts if no account selected
-                  setDependentSubAccounts([]);
-                }
-                setDependentParticulars([]);
-              }}
+              onChange={setFilterAccountName}
               options={distinctAccountNames}
               placeholder='Select account...'
             />
@@ -1533,16 +1707,7 @@ const EditEntry: React.FC = () => {
             <SearchableSelect
               label='Sub Account'
               value={filterSubAccountName}
-              onChange={async (value) => {
-                setFilterSubAccountName(value);
-                // Load particulars for the selected account and sub account
-                if (value && filterAccountName) {
-                  await loadDependentParticulars(filterAccountName, value);
-                } else {
-                  // Clear particulars if no sub account selected
-                  setDependentParticulars([]);
-                }
-              }}
+              onChange={setFilterSubAccountName}
               options={dependentSubAccounts}
               placeholder='Select sub account...'
             />
@@ -1572,23 +1737,23 @@ const EditEntry: React.FC = () => {
           
           {/* Credit */}
           <div className='col-span-1'>
-            <Input
+            <SearchableSelect
               label='Credit'
-              type='number'
               value={filterCredit}
               onChange={setFilterCredit}
-              placeholder='Enter credit amount'
+              options={creditOptions}
+              placeholder='Select credit amount'
             />
           </div>
           
           {/* Debit */}
           <div className='col-span-1'>
-            <Input
+            <SearchableSelect
               label='Debit'
-              type='number'
               value={filterDebit}
               onChange={setFilterDebit}
-              placeholder='Enter debit amount'
+              options={debitOptions}
+              placeholder='Select debit amount'
             />
           </div>
           
@@ -1613,7 +1778,7 @@ const EditEntry: React.FC = () => {
             <Button
               onClick={async () => {
                 setSearchTerm('');
-                setDateFilter('');
+                setFilterDate('');
                 setStatusFilter('');
                 setFilterCompanyName('');
                 setFilterAccountName('');

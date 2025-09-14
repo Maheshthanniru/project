@@ -3,7 +3,7 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
-import { supabaseDB } from '../lib/supabaseDatabase';
+import { supabaseDB, BalanceSheetAccount } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
@@ -17,16 +17,7 @@ interface BalanceSheetFilters {
   bothYesNo: string;
 }
 
-interface BalanceSheetAccount {
-  accountName: string;
-  credit: number;
-  debit: number;
-  balance: number;
-  plYesNo: string;
-  bothYesNo: string;
-  result: string;
-  isSelectedForPL?: boolean;
-}
+// BalanceSheetAccount interface is now imported from supabaseDatabase
 
 const BalanceSheet: React.FC = () => {
   const { user } = useAuth();
@@ -45,10 +36,21 @@ const BalanceSheet: React.FC = () => {
   >([]);
   const [loading, setLoading] = useState(false);
   const [showFinalReport, setShowFinalReport] = useState(false);
+  const [usingOptimizedAPI, setUsingOptimizedAPI] = useState(true);
   
   // State for P&L selection and custom content
   const [selectedAccountsForPL, setSelectedAccountsForPL] = useState<Set<string>>(new Set());
-  const [customContent, setCustomContent] = useState('');
+  const [customRows, setCustomRows] = useState<BalanceSheetAccount[]>([]);
+  const [showAddRow, setShowAddRow] = useState(true);
+  const [newRowData, setNewRowData] = useState({
+    accountName: '',
+    credit: '',
+    debit: '',
+    balance: '',
+    result: 'CREDIT',
+    plYesNo: 'NO',
+    bothYesNo: 'NO',
+  });
 
   // Dropdown data
   const [companies, setCompanies] = useState<
@@ -86,7 +88,7 @@ const BalanceSheet: React.FC = () => {
         value: company.company_name,
         label: company.company_name,
       }));
-      setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
+      setCompanies(companiesData);
     } catch (error) {
       console.error('Error loading companies:', error);
       toast.error('Failed to load companies');
@@ -96,6 +98,57 @@ const BalanceSheet: React.FC = () => {
   const generateBalanceSheet = async () => {
     setLoading(true);
     try {
+      // Validate that a company is selected
+      if (!filters.companyName) {
+        toast.error('Please select a company first');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🚀 Generating optimized balance sheet...');
+      
+      // Use the new optimized API endpoint
+      const result = await supabaseDB.getOptimizedBalanceSheet({
+        companyName: filters.companyName,
+        fromDate: filters.betweenDates ? filters.fromDate : undefined,
+        toDate: filters.betweenDates ? filters.toDate : undefined,
+        plYesNo: filters.plYesNo || undefined,
+        bothYesNo: filters.bothYesNo || undefined,
+        betweenDates: filters.betweenDates
+      });
+
+      setBalanceSheetData(result.balanceSheetData);
+      setTotals(result.totals);
+
+      console.log(`✅ Optimized balance sheet generated: ${result.balanceSheetData.length} accounts from ${result.recordCount} transactions${result.cached ? ' (served from cache)' : ''}`);
+      
+      const message = result.cached 
+        ? `Balance sheet loaded from cache (${result.balanceSheetData.length} accounts)`
+        : `Balance sheet generated with ${result.balanceSheetData.length} accounts from ${result.recordCount} transactions`;
+      
+      toast.success(message);
+      setUsingOptimizedAPI(true);
+    } catch (error) {
+      console.error('❌ Error generating balance sheet:', error);
+      toast.error('Failed to generate balance sheet: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      
+      // Fallback to old method if API fails
+      console.log('🔄 Falling back to client-side processing...');
+      await generateBalanceSheetFallback();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fallback method using the old client-side approach
+  const generateBalanceSheetFallback = async () => {
+    try {
+      // Validate that a company is selected
+      if (!filters.companyName) {
+        toast.error('Please select a company first');
+        return;
+      }
+
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Get filtered entries - use getAllCashBookEntries to get all 67k records
@@ -180,11 +233,13 @@ const BalanceSheet: React.FC = () => {
         totalDebit,
         balanceRs,
       });
+
+      console.log(`✅ Fallback balance sheet generated: ${balanceSheetAccounts.length} accounts`);
+      toast.success(`Balance sheet generated (fallback method) with ${balanceSheetAccounts.length} accounts`);
+      setUsingOptimizedAPI(false);
     } catch (error) {
-      console.error('Error generating balance sheet:', error);
-      toast.error('Failed to generate balance sheet');
-    } finally {
-      setLoading(false);
+      console.error('❌ Error in fallback balance sheet generation:', error);
+      toast.error('Failed to generate balance sheet (fallback method)');
     }
   };
 
@@ -225,6 +280,51 @@ const BalanceSheet: React.FC = () => {
     });
   };
 
+  const handleNewRowDataChange = (field: string, value: string | number) => {
+    setNewRowData(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const addCustomRow = () => {
+    if (!newRowData.accountName.trim()) {
+      toast.error('Please enter an account name');
+      return;
+    }
+
+    const customRow: BalanceSheetAccount = {
+      accountName: newRowData.accountName.trim(),
+      credit: parseFloat(newRowData.credit.toString()) || 0,
+      debit: parseFloat(newRowData.debit.toString()) || 0,
+      balance: parseFloat(newRowData.balance.toString()) || 0,
+      result: newRowData.result,
+      plYesNo: newRowData.plYesNo,
+      bothYesNo: newRowData.bothYesNo,
+    };
+
+    setCustomRows(prev => [...prev, customRow]);
+    
+    // Reset form
+    setNewRowData({
+      accountName: '',
+      credit: '',
+      debit: '',
+      balance: '',
+      result: 'CREDIT',
+      plYesNo: 'NO',
+      bothYesNo: 'NO',
+    });
+    setShowAddRow(false);
+    
+    toast.success('Custom row added successfully!');
+  };
+
+  const removeCustomRow = (index: number) => {
+    setCustomRows(prev => prev.filter((_, i) => i !== index));
+    toast.success('Custom row removed successfully!');
+  };
+
   const refreshData = () => {
     generateBalanceSheet();
     toast.success('Balance sheet refreshed successfully!');
@@ -248,7 +348,8 @@ const BalanceSheet: React.FC = () => {
   };
 
   const exportToExcel = () => {
-    const exportData = balanceSheetData.map(account => ({
+    const allAccounts = [...balanceSheetData, ...customRows];
+    const exportData = allAccounts.map(account => ({
       'Account Name': account.accountName,
       Credit: account.credit,
       Debit: account.debit,
@@ -283,10 +384,12 @@ const BalanceSheet: React.FC = () => {
     toast.success('Print dialog opened');
   };
 
+
   const printCustomReport = () => {
-    // Separate accounts into P&L and Balance Sheet
-    const plAccounts = balanceSheetData.filter(acc => selectedAccountsForPL.has(acc.accountName));
-    const balanceSheetAccounts = balanceSheetData.filter(acc => !selectedAccountsForPL.has(acc.accountName));
+    // Separate accounts into P&L and Balance Sheet (including custom rows)
+    const allAccounts = [...balanceSheetData, ...customRows];
+    const plAccounts = allAccounts.filter(acc => selectedAccountsForPL.has(acc.accountName));
+    const balanceSheetAccounts = allAccounts.filter(acc => !selectedAccountsForPL.has(acc.accountName));
 
     // Calculate totals
     const plTotals = {
@@ -458,12 +561,6 @@ const BalanceSheet: React.FC = () => {
             </table>
           </div>
 
-          ${customContent ? `
-            <div class="custom-content">
-              <h4>Additional Information:</h4>
-              <p>${customContent}</p>
-            </div>
-          ` : ''}
 
           <div class="footer">
             <p>Generated by Thirumala Group Business Management System</p>
@@ -518,6 +615,20 @@ const BalanceSheet: React.FC = () => {
   return (
     <div className='min-h-screen flex flex-col'>
       <div className='max-w-6xl w-full mx-auto space-y-6'>
+        {/* Performance Status Indicator */}
+        <div className={`p-3 rounded-lg border ${usingOptimizedAPI ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+          <div className='flex items-center gap-2'>
+            <div className={`w-3 h-3 rounded-full ${usingOptimizedAPI ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <span className={`text-sm font-medium ${usingOptimizedAPI ? 'text-green-800' : 'text-yellow-800'}`}>
+              {usingOptimizedAPI ? '🚀 Using Optimized Server-Side API' : '⚠️ Using Fallback Client-Side Processing'}
+            </span>
+            {usingOptimizedAPI && (
+              <span className='text-xs text-green-600'>
+                (Faster loading with server-side aggregation & caching)
+              </span>
+            )}
+          </div>
+        </div>
         {/* Responsive filter bar */}
         <div className='flex flex-col md:flex-row gap-4 items-end'>
           <div className='flex-1'>
@@ -574,22 +685,12 @@ const BalanceSheet: React.FC = () => {
             <Button variant='secondary' onClick={resetFilters}>
               Reset
             </Button>
+            <Button variant='secondary' onClick={() => setCustomRows([])}>
+              Clear Custom Rows
+            </Button>
           </div>
         </div>
 
-        {/* Custom Content Field */}
-        <div className='bg-white p-4 rounded-lg border border-gray-200'>
-          <label className='block text-sm font-medium text-gray-700 mb-2'>
-            Additional Information (will be included in P&L Report)
-          </label>
-          <textarea
-            value={customContent}
-            onChange={(e) => setCustomContent(e.target.value)}
-            placeholder='Enter any additional information, notes, or comments for the report...'
-            className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            rows={3}
-          />
-        </div>
 
         {/* Selection Summary */}
         <div className='bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200'>
@@ -601,6 +702,9 @@ const BalanceSheet: React.FC = () => {
               </p>
               <p className='text-sm text-green-600'>
                 {balanceSheetData.length - selectedAccountsForPL.size} account(s) will appear in Balance Sheet section
+              </p>
+              <p className='text-sm text-blue-600'>
+                {customRows.length} custom row(s) added for printing
               </p>
             </div>
             <div className='text-right'>
@@ -676,6 +780,133 @@ const BalanceSheet: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                
+                {/* Custom Rows */}
+                {customRows.map((customRow, idx) => (
+                  <tr key={`custom-${idx}`}>
+                    <td className='px-3 py-2 text-center'>
+                      <input
+                        type='checkbox'
+                        checked={selectedAccountsForPL.has(customRow.accountName)}
+                        onChange={(e) => handlePLSelectionChange(customRow.accountName, e.target.checked)}
+                        className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2'
+                      />
+                    </td>
+                    <td className='px-3 py-2 font-semibold'>
+                      {customRow.accountName}
+                    </td>
+                    <td className='px-3 py-2 text-right text-green-700'>
+                      {customRow.credit > 0 ? `₹${customRow.credit.toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right text-red-700'>
+                      {customRow.debit > 0 ? `₹${customRow.debit.toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right font-semibold'>
+                      {customRow.balance > 0 ? `₹${customRow.balance.toLocaleString()}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 text-center font-bold'>
+                      {customRow.result}
+                    </td>
+                  </tr>
+                ))}
+                
+                {/* Add Custom Row Button */}
+                {/* Add Custom Row Form - Always Visible */}
+                <tr className='bg-blue-50 border-2 border-blue-300'>
+                  <td colSpan={6} className='px-3 py-2 text-center font-semibold text-blue-800'>
+                    📝 Add Custom Row for Printing (Data not stored in database)
+                  </td>
+                </tr>
+                <tr className='bg-blue-50 border-2 border-blue-300'>
+                    <td className='px-3 py-2 text-center'>
+                      <input
+                        type='checkbox'
+                        checked={selectedAccountsForPL.has(newRowData.accountName)}
+                        onChange={(e) => handlePLSelectionChange(newRowData.accountName, e.target.checked)}
+                        className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2'
+                        disabled={!newRowData.accountName}
+                      />
+                    </td>
+                    <td className='px-3 py-2'>
+                      <input
+                        type='text'
+                        value={newRowData.accountName}
+                        onChange={(e) => handleNewRowDataChange('accountName', e.target.value)}
+                        placeholder='Account Name'
+                        className='w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      />
+                    </td>
+                    <td className='px-3 py-2'>
+                      <input
+                        type='number'
+                        value={newRowData.credit}
+                        onChange={(e) => handleNewRowDataChange('credit', e.target.value)}
+                        placeholder='Credit'
+                        className='w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      />
+                    </td>
+                    <td className='px-3 py-2'>
+                      <input
+                        type='number'
+                        value={newRowData.debit}
+                        onChange={(e) => handleNewRowDataChange('debit', e.target.value)}
+                        placeholder='Debit'
+                        className='w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      />
+                    </td>
+                    <td className='px-3 py-2'>
+                      <input
+                        type='number'
+                        value={newRowData.balance}
+                        onChange={(e) => handleNewRowDataChange('balance', e.target.value)}
+                        placeholder='Balance'
+                        className='w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      />
+                    </td>
+                    <td className='px-3 py-2'>
+                      <select
+                        value={newRowData.result}
+                        onChange={(e) => handleNewRowDataChange('result', e.target.value)}
+                        className='w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                      >
+                        <option value='CREDIT'>CREDIT</option>
+                        <option value='DEBIT'>DEBIT</option>
+                      </select>
+                    </td>
+                  </tr>
+                
+                {/* Add Row Button - Always Visible */}
+                <tr className='bg-green-50 border-2 border-green-300'>
+                  <td colSpan={6} className='px-3 py-2 text-center'>
+                    <div className='flex gap-2 justify-center'>
+                      <Button
+                        variant='primary'
+                        size='sm'
+                        onClick={addCustomRow}
+                        disabled={!newRowData.accountName.trim()}
+                      >
+                        Add Row
+                      </Button>
+                      <Button
+                        variant='secondary'
+                        size='sm'
+                        onClick={() => {
+                          setNewRowData({
+                            accountName: '',
+                            credit: '',
+                            debit: '',
+                            balance: '',
+                            result: 'CREDIT',
+                            plYesNo: 'NO',
+                            bothYesNo: 'NO'
+                          });
+                        }}
+                      >
+                        Clear Form
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}

@@ -20,6 +20,7 @@ import DetailedLedger from './pages/DetailedLedger';
 import LedgerSummary from './pages/LedgerSummary';
 import ApproveRecords from './pages/ApproveRecords';
 import EditedRecords from './pages/EditedRecords';
+import DeletedRecords from './pages/DeletedRecords';
 import ReplaceForm from './pages/ReplaceForm';
 import BalanceSheet from './pages/BalanceSheet';
 import ExportExcel from './pages/ExportExcel';
@@ -153,6 +154,7 @@ const AppContent: React.FC = () => {
           <Route path='ledger-summary' element={<LedgerSummary />} />
           <Route path='approve-records' element={<ApproveRecords />} />
           <Route path='edited-records' element={<EditedRecords />} />
+          <Route path='deleted-records' element={<DeletedRecords />} />
           <Route path='replace-form' element={<ReplaceForm />} />
           <Route path='balance-sheet' element={<BalanceSheet />} />
           <Route path='export-excel' element={<ExportExcel />} />

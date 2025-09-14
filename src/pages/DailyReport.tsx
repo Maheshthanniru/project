@@ -52,6 +52,14 @@ const DailyReport: React.FC = () => {
     generateReport();
   }, [selectedDate, selectedCompany, searchTerm]);
 
+  // useEffect to load companies when date changes
+  useEffect(() => {
+    if (selectedDate) {
+      console.log('🔄 Date changed, loading companies for date:', selectedDate);
+      loadCompaniesByDate(selectedDate);
+    }
+  }, [selectedDate]);
+
   const loadCompanies = async () => {
     try {
       const companies = await supabaseDB.getCompanies();
@@ -63,6 +71,53 @@ const DailyReport: React.FC = () => {
     } catch (error) {
       console.error('Error loading companies:', error);
       toast.error('Failed to load companies');
+    }
+  };
+
+  const loadCompaniesByDate = async (date: string) => {
+    try {
+      console.log('🔍 Loading companies for date:', date);
+      
+      // Clear company selection when date changes
+      setSelectedCompany('');
+      
+      // Get all entries for the specific date
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('company_name')
+        .eq('c_date', date);
+
+      if (error) {
+        console.error('Error loading companies by date:', error);
+        return;
+      }
+
+      // Extract unique company names
+      const uniqueCompanies = [...new Set(data.map(entry => entry.company_name).filter(Boolean))];
+      
+      console.log(`📊 Found ${uniqueCompanies.length} companies for date ${date}:`, uniqueCompanies);
+      
+      // Update companies dropdown with date-specific options
+      const companiesData = uniqueCompanies.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
+      
+      // Show toast with summary
+      if (data.length > 0) {
+        toast.success(`Found ${data.length} entries on ${date} with ${uniqueCompanies.length} companies: ${uniqueCompanies.join(', ')}`);
+      } else {
+        toast.info(`No entries found on ${date}`);
+        // If no entries found, load all companies
+        await loadCompanies();
+      }
+      
+    } catch (error) {
+      console.error('Error loading companies by date:', error);
+      toast.error('Failed to load companies for selected date');
+      // Fallback to loading all companies
+      await loadCompanies();
     }
   };
 
@@ -178,11 +233,16 @@ const DailyReport: React.FC = () => {
     }
   };
 
-  const navigateDate = (direction: 'prev' | 'next') => {
+  const navigateDate = async (direction: 'prev' | 'next') => {
     const currentDate = new Date(selectedDate);
     const newDate =
       direction === 'prev' ? subDays(currentDate, 1) : addDays(currentDate, 1);
-    setSelectedDate(format(newDate, 'yyyy-MM-dd'));
+    const newDateString = format(newDate, 'yyyy-MM-dd');
+    setSelectedDate(newDateString);
+    // Clear company selection when date changes
+    setSelectedCompany('');
+    // Load companies for the new date
+    await loadCompaniesByDate(newDateString);
   };
 
   const printReport = async () => {
@@ -274,7 +334,14 @@ const DailyReport: React.FC = () => {
             <input
               type='date'
               value={selectedDate}
-              onChange={e => setSelectedDate(e.target.value)}
+              onChange={async (e) => {
+                const newDate = e.target.value;
+                setSelectedDate(newDate);
+                // Clear company selection when date changes
+                setSelectedCompany('');
+                // Load companies for the new date
+                await loadCompaniesByDate(newDate);
+              }}
               className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
             />
           </div>

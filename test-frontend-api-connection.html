@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend API Connection</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Frontend API Connection Test</h1>
+    <p>This page tests if the frontend can connect to the backend API.</p>
+    
+    <button onclick="testAPI()">Test Balance Sheet API</button>
+    <button onclick="testCache()">Test Cache Clear</button>
+    <button onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testAPI() {
+            addResult('🔄 Testing Balance Sheet API connection...', 'info');
+            
+            try {
+                const apiUrl = 'http://localhost:3000/api/balance-sheet';
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                addResult(`✅ API Test Successful!`, 'success');
+                addResult(`📊 Received ${data.balanceSheetData.length} accounts from ${data.recordCount} transactions`, 'success');
+                addResult(`⏱️ Cached: ${data.cached ? 'Yes' : 'No'}`, 'success');
+                addResult(`📅 Timestamp: ${data.timestamp}`, 'success');
+                
+                // Show sample data
+                if (data.balanceSheetData.length > 0) {
+                    const sample = data.balanceSheetData[0];
+                    addResult(`📋 Sample Account: ${sample.accountName} - Credit: ₹${sample.credit.toLocaleString()}, Debit: ₹${sample.debit.toLocaleString()}`, 'info');
+                }
+                
+            } catch (error) {
+                addResult(`❌ API Test Failed: ${error.message}`, 'error');
+                
+                if (error instanceof SyntaxError && error.message.includes('JSON')) {
+                    addResult('💡 This usually means the server returned HTML instead of JSON. Check if the backend server is running on port 3000.', 'error');
+                } else if (error instanceof TypeError && error.message.includes('fetch')) {
+                    addResult('💡 This usually means the server is not running or not accessible. Check if the backend server is running on port 3000.', 'error');
+                }
+            }
+        }
+
+        async function testCache() {
+            addResult('🔄 Testing Cache Clear API...', 'info');
+            
+            try {
+                const apiUrl = 'http://localhost:3000/api/balance-sheet/cache/clear';
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                addResult(`✅ Cache Clear Test Successful!`, 'success');
+                addResult(`📅 Response: ${data.message}`, 'success');
+                addResult(`⏱️ Timestamp: ${data.timestamp}`, 'success');
+                
+            } catch (error) {
+                addResult(`❌ Cache Clear Test Failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run test on page load
+        window.addEventListener('load', () => {
+            addResult('🚀 Page loaded. Ready to test API connections.', 'info');
+            addResult('💡 Make sure both servers are running:', 'info');
+            addResult('   • Backend: node server.js (port 3000)', 'info');
+            addResult('   • Frontend: npm run dev (port 5173)', 'info');
+        });
+    </script>
+</body>
+</html>

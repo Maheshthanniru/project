@@ -75,3 +75,4 @@ SELECT
     THEN '✅ Table structure looks correct'
     ELSE '⚠️ Table structure might be incomplete'
   END as structure_status;
+
