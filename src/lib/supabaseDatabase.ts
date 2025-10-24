@@ -3229,23 +3229,42 @@ class SupabaseDatabase {
     try {
       console.log(`🔍 [DEBUG] Fetching account names for company: "${companyName}"`);
       
-      const { data, error } = await supabase
+      // Get accounts from cash_book table (existing entries)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('acc_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
         .order('acc_name');
 
-      if (error) {
-        console.error('Error fetching distinct account names by company:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching account names from cash_book:', cashBookError);
       }
 
-      console.log(`📊 [DEBUG] Raw data for company "${companyName}":`, data?.length || 0, 'records');
-      console.log(`📊 [DEBUG] Sample data:`, data?.slice(0, 5));
+      // Get accounts from company_main_accounts table (newly created accounts)
+      const { data: mainAccountsData, error: mainAccountsError } = await supabase
+        .from('company_main_accounts')
+        .select('acc_name')
+        .eq('company_name', companyName)
+        .not('acc_name', 'is', null)
+        .order('acc_name');
 
-      const uniqueAccounts = [...new Set(data?.map(item => item.acc_name))];
-      console.log(`📊 [DEBUG] Unique accounts for company "${companyName}":`, uniqueAccounts.length, 'accounts');
+      if (mainAccountsError) {
+        console.error('Error fetching account names from company_main_accounts:', mainAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookAccounts = cashBookData?.map(item => item.acc_name) || [];
+      const mainAccounts = mainAccountsData?.map(item => item.acc_name) || [];
+      
+      console.log(`📊 [DEBUG] Cash book accounts for company "${companyName}":`, cashBookAccounts.length, 'accounts');
+      console.log(`📊 [DEBUG] Main accounts table for company "${companyName}":`, mainAccounts.length, 'accounts');
+
+      // Get unique accounts from both sources
+      const allAccounts = [...cashBookAccounts, ...mainAccounts];
+      const uniqueAccounts = [...new Set(allAccounts)];
+      
+      console.log(`📊 [DEBUG] Total unique accounts for company "${companyName}":`, uniqueAccounts.length, 'accounts');
       console.log(`📊 [DEBUG] Account names:`, uniqueAccounts);
       
       return uniqueAccounts.sort();
@@ -3279,7 +3298,10 @@ class SupabaseDatabase {
 
   async getSubAccountsByAccountAndCompany(accountName: string, companyName: string): Promise<string[]> {
     try {
-      const { data, error } = await supabase
+      console.log(`🔍 [DEBUG] Fetching sub-account names for account: "${accountName}" and company: "${companyName}"`);
+      
+      // Get sub-accounts from cash_book table (existing entries)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('sub_acc_name')
         .eq('acc_name', accountName)
@@ -3287,12 +3309,37 @@ class SupabaseDatabase {
         .not('sub_acc_name', 'is', null)
         .order('sub_acc_name');
 
-      if (error) {
-        console.error('Error fetching sub accounts by account and company:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching sub-account names from cash_book:', cashBookError);
       }
 
-      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      // Get sub-accounts from company_sub_accounts table (newly created sub-accounts)
+      const { data: subAccountsData, error: subAccountsError } = await supabase
+        .from('company_sub_accounts')
+        .select('sub_acc')
+        .eq('acc_name', accountName)
+        .eq('company_name', companyName)
+        .not('sub_acc', 'is', null)
+        .order('sub_acc');
+
+      if (subAccountsError) {
+        console.error('Error fetching sub-account names from company_sub_accounts:', subAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookSubAccounts = cashBookData?.map(item => item.sub_acc_name) || [];
+      const subAccounts = subAccountsData?.map(item => item.sub_acc) || [];
+      
+      console.log(`📊 [DEBUG] Cash book sub-accounts for account "${accountName}" and company "${companyName}":`, cashBookSubAccounts.length, 'sub-accounts');
+      console.log(`📊 [DEBUG] Sub-accounts table for account "${accountName}" and company "${companyName}":`, subAccounts.length, 'sub-accounts');
+
+      // Get unique sub-accounts from both sources
+      const allSubAccounts = [...cashBookSubAccounts, ...subAccounts];
+      const uniqueSubAccounts = [...new Set(allSubAccounts)];
+      
+      console.log(`📊 [DEBUG] Total unique sub-accounts for account "${accountName}" and company "${companyName}":`, uniqueSubAccounts.length, 'sub-accounts');
+      console.log(`📊 [DEBUG] Sub-account names:`, uniqueSubAccounts);
+      
       return uniqueSubAccounts.sort();
     } catch (error) {
       console.error('Error in getSubAccountsByAccountAndCompany:', error);

@@ -530,7 +530,12 @@ const NewEntry: React.FC = () => {
         entry.companyName,
         newAccountName.trim()
       );
-      // Accounts are now managed by React Query - will be refetched automatically
+      
+      // Refresh account options for the current company
+      const names = await supabaseDB.getDistinctAccountNamesByCompany(entry.companyName);
+      setAccountOptions(names.map(name => ({ value: name, label: name })));
+      
+      // Set the newly created account as selected
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
       setNewAccountName('');
       setShowNewAccount(false);
@@ -554,10 +559,13 @@ const NewEntry: React.FC = () => {
         entry.accountName,
         newSubAccountName.trim()
       );
-      setSubAccounts(prev => [
-        ...prev,
-        { value: subAccount.sub_acc, label: subAccount.sub_acc },
-      ]);
+      
+      // Refresh sub-account options for the current company and account
+      const subs = await supabaseDB.getSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
+      const data = subs.map(name => ({ value: name, label: name }));
+      setSubAccounts(data);
+      
+      // Set the newly created sub-account as selected
       setEntry(prev => ({ ...prev, subAccount: subAccount.sub_acc }));
       setNewSubAccountName('');
       setShowNewSubAccount(false);
