@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -20,6 +20,7 @@ import {
   Search,
   Filter,
   Clock,
+  AlertCircle,
 } from 'lucide-react';
 
 interface ApprovalFilters {
@@ -40,17 +41,26 @@ const ApproveRecords: React.FC = () => {
   });
 
   const [entries, setEntries] = useState<any[]>([]);
-  const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
+  const [deletedEntries, setDeletedEntries] = useState<any[]>([]);
+  const [rejectedEntries, setRejectedEntries] = useState<any[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(
     new Set()
   );
+  const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  // Add debounce timer for filter changes
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate total pages
-  const totalPages = Math.ceil(filteredEntries.length / recordsPerPage);
+  const totalPages = Math.ceil(entries.length / recordsPerPage);
 
   // Dropdown data
   const [companies, setCompanies] = useState<
@@ -65,6 +75,8 @@ const ApproveRecords: React.FC = () => {
     totalRecords: 0,
     approvedRecords: 0,
     pendingRecords: 0,
+    deletedRecords: 0,
+    rejectedRecords: 0,
     selectedCount: 0,
   });
 
@@ -78,13 +90,21 @@ const ApproveRecords: React.FC = () => {
     loadEntries();
   }, [isAdmin]);
 
-  useEffect(() => {
-    applyFilters();
-  }, [entries, filters]);
+  // Remove this useEffect since we're now doing server-side filtering
+  // The filtering is handled directly in loadEntries() when filters change
 
   useEffect(() => {
     updateSummary();
-  }, [filteredEntries, selectedEntries]);
+  }, [entries, selectedEntries]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const loadDropdownData = async () => {
     try {
@@ -112,27 +132,74 @@ const ApproveRecords: React.FC = () => {
     }
   };
 
+  const updateRecordsForTesting = async () => {
+    try {
+      console.log('🔄 Updating records for testing...');
+      const result = await supabaseDB.updateRecordsForTesting();
+      if (result.success) {
+        toast.success('Records updated for testing successfully!');
+        await loadEntries(); // Reload the entries
+      } else {
+        toast.error(result.error || 'Failed to update records');
+      }
+    } catch (error) {
+      console.error('Error updating records:', error);
+      toast.error('Failed to update records');
+    }
+  };
+
+  const createTestRecords = async () => {
+    try {
+      console.log('🔄 Creating test records for approval...');
+      const result = await supabaseDB.createTestApprovalRecords();
+      if (result.success) {
+        toast.success('Test records created successfully!');
+        await loadEntries(); // Reload the entries
+      } else {
+        toast.error(result.error || 'Failed to create test records');
+      }
+    } catch (error) {
+      console.error('Error creating test records:', error);
+      toast.error('Failed to create test records');
+    }
+  };
+
   const loadEntries = async () => {
     setLoading(true);
     setFetchError(null);
     try {
-      const allEntries = await supabaseDB.getAllCashBookEntries();
-      console.log('[ApproveRecords] Fetched entries:', allEntries);
+      console.log('🔄 Loading approval records with server-side optimization...');
+      
+      // Use server-side filtering for better performance
+      const result = await supabaseDB.getApprovalRecords({
+        date: filters.date || undefined,
+        company: filters.company || undefined,
+        staff: filters.staff || undefined,
+        includeDeleted: true, // Always include deleted records
+      });
 
-      // Debug: Check approval status of entries
-      const pendingEntries = allEntries.filter(
-        entry =>
-          entry.approved === false ||
-          entry.approved === null ||
-          entry.approved === undefined ||
-          entry.approved === '' ||
-          entry.approved === 'false'
-      );
-      console.log('[ApproveRecords] Pending entries:', pendingEntries);
+      console.log('✅ Approval records loaded:', result);
+      console.log('🔍 Deleted entries received:', result.deletedEntries?.length || 0);
+      console.log('🔍 Deleted entries data:', result.deletedEntries);
 
-      setEntries(allEntries);
-      if (!allEntries || allEntries.length === 0) {
-        setFetchError('No entries found in the database.');
+      setEntries(result.entries);
+      setDeletedEntries(result.deletedEntries);
+      setRejectedEntries(result.rejectedEntries || []);
+      
+      // Update summary with server-calculated values
+      setSummary(prev => ({
+        ...prev,
+        totalRecords: result.summary.totalRecords,
+        approvedRecords: result.summary.approvedRecords,
+        pendingRecords: result.summary.pendingRecords,
+        deletedRecords: result.summary.deletedRecords,
+        rejectedRecords: result.summary.rejectedRecords,
+      }));
+
+      if (!result.entries || result.entries.length === 0) {
+        setFetchError('No entries found matching the current filters.');
+      } else {
+        setFetchError(null);
       }
     } catch (error) {
       setFetchError('Failed to load entries from the database.');
@@ -144,66 +211,26 @@ const ApproveRecords: React.FC = () => {
   };
 
   const applyFilters = () => {
-    let filtered = [...entries];
-    console.log(
-      '[ApproveRecords] Applying filters:',
-      filters,
-      'Entries:',
-      entries
-    );
-
-    // Date filter
-    if (filters.date) {
-      filtered = filtered.filter(entry => entry.c_date === filters.date);
-    }
-
-    // Company filter
-    if (filters.company) {
-      filtered = filtered.filter(
-        entry => entry.company_name === filters.company
-      );
-    }
-
-    // Staff filter
-    if (filters.staff) {
-      filtered = filtered.filter(entry => entry.staff === filters.staff);
-    }
-
-    // Only show pending records (not approved)
-    filtered = filtered.filter(entry => {
-      // Check if entry is not approved (false, null, undefined, or empty string)
-      return (
-        entry.approved === false ||
-        entry.approved === null ||
-        entry.approved === undefined ||
-        entry.approved === '' ||
-        entry.approved === 'false'
-      );
-    });
-
-    setFilteredEntries(filtered);
-    setCurrentPage(1);
-    if (filtered.length === 0) {
-      setFetchError('No pending records found matching the selected filters.');
-    } else {
-      setFetchError(null);
-    }
+    // Since we're now doing server-side filtering, we just need to reload the data
+    // when filters change. The filtering is handled in loadEntries().
+    console.log('[ApproveRecords] Filters changed, reloading data...', filters);
+    
+    setFilterLoading(true);
+    
+    // Add a small delay to prevent rapid successive calls
+    setTimeout(() => {
+      loadEntries().finally(() => {
+        setFilterLoading(false);
+      });
+    }, 100);
   };
 
   const updateSummary = () => {
-    const totalRecords = filteredEntries.length;
-    const approvedRecords = filteredEntries.filter(
-      entry => entry.approved === true || entry.approved === 'true'
-    ).length;
-    const pendingRecords = totalRecords - approvedRecords;
-    const selectedCount = selectedEntries.size;
-
-    setSummary({
-      totalRecords,
-      approvedRecords,
-      pendingRecords,
-      selectedCount,
-    });
+    // Summary is now calculated server-side, we just need to update the selected count
+    setSummary(prev => ({
+      ...prev,
+      selectedCount: selectedEntries.size,
+    }));
   };
 
   const handleFilterChange = (field: keyof ApprovalFilters, value: any) => {
@@ -211,6 +238,16 @@ const ApproveRecords: React.FC = () => {
       ...prev,
       [field]: value,
     }));
+
+    // Clear existing timeout
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+    }
+
+    // Set new timeout to apply filters after user stops typing
+    filterTimeoutRef.current = setTimeout(() => {
+      applyFilters();
+    }, 300); // 300ms delay
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -231,6 +268,110 @@ const ApproveRecords: React.FC = () => {
       newSelected.add(entryId);
     }
     setSelectedEntries(newSelected);
+  };
+
+  const handleViewEntry = async (entryId: string) => {
+    try {
+      const entry = await supabaseDB.getEntryById(entryId);
+      if (entry) {
+        setSelectedEntry(entry);
+        setEditFormData({ ...entry });
+        setIsEditing(false);
+        setShowEntryModal(true);
+      } else {
+        toast.error('Failed to load entry details');
+      }
+    } catch (error) {
+      console.error('Error loading entry details:', error);
+      toast.error('Failed to load entry details');
+    }
+  };
+
+  const handleEditEntry = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      if (!editFormData) return;
+      
+      const result = await supabaseDB.updateCashBookEntry(editFormData.id, editFormData);
+      
+      if (!result) {
+        toast.error('Failed to update entry');
+        return;
+      }
+      
+      toast.success('Entry updated successfully');
+      setIsEditing(false);
+      
+      // Reload entries to reflect changes
+      await loadEntries();
+      
+      // Update the selected entry with new data
+      setSelectedEntry(editFormData);
+      
+    } catch (error) {
+      console.error('Error updating entry:', error);
+      toast.error('Failed to update entry');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditFormData(selectedEntry);
+  };
+
+  const handleFormChange = (field: string, value: any) => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleApproveEntry = async (entryId: string) => {
+    try {
+      const result = await supabaseDB.approveEntry(entryId);
+      if (result.success) {
+        toast.success('Entry approved successfully');
+        await loadEntries(); // Reload to update the list
+      } else {
+        toast.error(result.error || 'Failed to approve entry');
+      }
+    } catch (error) {
+      console.error('Error approving entry:', error);
+      toast.error('Failed to approve entry');
+    }
+  };
+
+  const handleApproveDeletion = async (entryId: string) => {
+    try {
+      const result = await supabaseDB.approveDeletion(entryId);
+      if (result.success) {
+        toast.success('Deletion approved successfully');
+        await loadEntries(); // Reload to update the list
+      } else {
+        toast.error(result.error || 'Failed to approve deletion');
+      }
+    } catch (error) {
+      console.error('Error approving deletion:', error);
+      toast.error('Failed to approve deletion');
+    }
+  };
+
+  const handleRejectDeletion = async (entryId: string) => {
+    try {
+      const result = await supabaseDB.rejectDeletion(entryId);
+      if (result.success) {
+        toast.success('Deletion rejected - record restored to Edit Entry');
+        await loadEntries(); // Reload to update the list
+      } else {
+        toast.error(result.error || 'Failed to reject deletion');
+      }
+    } catch (error) {
+      console.error('Error rejecting deletion:', error);
+      toast.error('Failed to reject deletion');
+    }
   };
 
   const handleSelectAll = () => {
@@ -309,27 +450,28 @@ const ApproveRecords: React.FC = () => {
 
     setLoading(true);
     try {
-      let approvedCount = 0;
+      console.log(`🔄 Approving ${selectedEntries.size} selected entries...`);
+      
+      // Use the new approveEntries function for better performance
+      const result = await supabaseDB.approveEntries(Array.from(selectedEntries));
 
-      for (const entryId of selectedEntries) {
-        const result = await supabaseDB.toggleApproval(entryId);
-        if (result) {
-          approvedCount++;
-        }
-      }
-
-      if (approvedCount > 0) {
-        await loadEntries();
-        setSelectedEntries(new Set());
-        toast.success(`${approvedCount} entries approved successfully!`);
+      if (result.success > 0) {
+        await loadEntries(); // Reload data to reflect changes
+        setSelectedEntries(new Set()); // Clear selection
+        toast.success(`${result.success} entries approved successfully!`);
         
         // Trigger dashboard refresh
         localStorage.setItem('dashboard-refresh', Date.now().toString());
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+        
+        if (result.failed > 0) {
+          toast.error(`${result.failed} entries failed to approve`);
+        }
       } else {
         toast.error('Failed to approve entries');
       }
     } catch (error) {
+      console.error('Error approving entries:', error);
       toast.error('Failed to approve entries');
     } finally {
       setLoading(false);
@@ -342,7 +484,7 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    const companyEntries = filteredEntries.filter(
+    const companyEntries = entries.filter(
       entry =>
         entry.company_name === filters.company && entry.approved !== 'true'
     );
@@ -393,7 +535,7 @@ const ApproveRecords: React.FC = () => {
       return;
     }
 
-    const staffEntries = filteredEntries.filter(
+    const staffEntries = entries.filter(
       entry => entry.staff === filters.staff && entry.approved !== 'true'
     );
 
@@ -438,7 +580,7 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithoutConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(
+    const pendingEntries = entries.filter(
       entry => entry.approved !== 'true'
     );
 
@@ -473,7 +615,7 @@ const ApproveRecords: React.FC = () => {
   };
 
   const approveAllWithConfirmation = async () => {
-    const pendingEntries = filteredEntries.filter(
+    const pendingEntries = entries.filter(
       entry => entry.approved !== 'true'
     );
 
@@ -720,7 +862,7 @@ const ApproveRecords: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                ${filteredEntries
+                ${entries
                   .map(
                     (entry, index) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
@@ -773,7 +915,7 @@ const ApproveRecords: React.FC = () => {
   const getCurrentPageEntries = () => {
     const startIndex = (currentPage - 1) * recordsPerPage;
     const endIndex = startIndex + recordsPerPage;
-    return filteredEntries.slice(startIndex, endIndex);
+    return entries.slice(startIndex, endIndex);
   };
 
   const getRowColor = (entry: any) => {
@@ -805,6 +947,11 @@ const ApproveRecords: React.FC = () => {
           Loading records...
         </div>
       )}
+      {filterLoading && !loading && (
+        <div className='text-center py-4 text-blue-500 text-sm'>
+          Updating filters...
+        </div>
+      )}
       {fetchError && !loading && (
         <div className='text-center py-8 text-red-600 font-semibold'>
           {fetchError}
@@ -819,6 +966,12 @@ const ApproveRecords: React.FC = () => {
           </p>
         </div>
         <div className='flex items-center gap-3'>
+          <Button variant='secondary' onClick={updateRecordsForTesting}>
+            Update Records for Testing
+          </Button>
+          <Button variant='secondary' onClick={createTestRecords}>
+            Create Test Records
+          </Button>
           <Button variant='secondary' onClick={loadEntries}>
             Refresh
           </Button>
@@ -950,7 +1103,7 @@ const ApproveRecords: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
+      <div className='grid grid-cols-1 md:grid-cols-6 gap-4'>
         <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white'>
           <div className='flex items-center justify-between'>
             <div>
@@ -981,6 +1134,26 @@ const ApproveRecords: React.FC = () => {
           </div>
         </Card>
 
+        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-red-100 text-sm font-medium'>Deleted Pending</p>
+              <p className='text-2xl font-bold'>{summary.deletedRecords}</p>
+            </div>
+            <Trash2 className='w-8 h-8 text-red-200' />
+          </div>
+        </Card>
+
+        <Card className='bg-gradient-to-r from-gray-500 to-gray-600 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-gray-100 text-sm font-medium'>Rejected</p>
+              <p className='text-2xl font-bold'>{summary.rejectedRecords}</p>
+            </div>
+            <X className='w-8 h-8 text-gray-200' />
+          </div>
+        </Card>
+
         <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white'>
           <div className='flex items-center justify-between'>
             <div>
@@ -995,8 +1168,8 @@ const ApproveRecords: React.FC = () => {
       {/* Records Table */}
       {!loading && !fetchError && (
         <Card
-          title='Records for Approval'
-          subtitle={`Showing ${getCurrentPageEntries().length} of ${filteredEntries.length} records`}
+          title='Deleted Records - Pending Approval'
+          subtitle={`Showing ${getCurrentPageEntries().length} of ${entries.length} deleted records`}
         >
           <div className='overflow-x-auto'>
             <table className='min-w-full divide-y divide-gray-200'>
@@ -1006,8 +1179,8 @@ const ApproveRecords: React.FC = () => {
                     <input
                       type='checkbox'
                       checked={
-                        selectedEntries.size === filteredEntries.length &&
-                        filteredEntries.length > 0
+                        selectedEntries.size === entries.length &&
+                        entries.length > 0
                       }
                       onChange={handleSelectAll}
                       className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
@@ -1083,17 +1256,17 @@ const ApproveRecords: React.FC = () => {
                       {entry.credit > 0 ? 'Credit' : 'Debit'}
                     </td>
                     <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
-                      {entry.approved === true ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                          Approved
-                        </span>
-                      ) : entry.approved === false ? (
+                      {entry.status === 'deleted-pending' ? (
                         <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                          Deleted - Pending Approval
+                        </span>
+                      ) : entry.status === 'rejected' ? (
+                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
                           Rejected
                         </span>
                       ) : (
                         <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                          Pending
+                          {entry.status || 'Unknown'}
                         </span>
                       )}
                     </td>
@@ -1101,31 +1274,32 @@ const ApproveRecords: React.FC = () => {
                       <Button
                         variant='secondary'
                         onClick={() => {
-                          handleDirectApprove(entry.id);
+                          handleApproveDeletion(entry.id);
                         }}
                         className='mr-2'
-                        disabled={entry.approved === true}
+                        disabled={entry.status !== 'deleted-pending'}
                       >
-                        Approve
+                        Approve Deletion
                       </Button>
                       <Button
                         variant='secondary'
                         onClick={() => {
-                          handleDirectReject(entry.id);
+                          handleRejectDeletion(entry.id);
                         }}
                         className='mr-2'
-                        disabled={entry.approved === false}
+                        disabled={entry.status !== 'deleted-pending'}
                       >
-                        Reject
+                        Reject Deletion
                       </Button>
                       <Button
                         variant='secondary'
                         onClick={() => {
-                          // TODO: Implement view functionality
-                          toast.success('View functionality coming soon');
+                          handleViewEntry(entry.id);
                         }}
                         className='mr-2'
+                        size='sm'
                       >
+                        <Eye className='w-4 h-4 mr-1' />
                         View
                       </Button>
                     </td>
@@ -1166,12 +1340,12 @@ const ApproveRecords: React.FC = () => {
                   <span className='font-semibold'>
                     {Math.min(
                       currentPage * recordsPerPage,
-                      filteredEntries.length
+                      entries.length
                     )}
                   </span>{' '}
                   of{' '}
                   <span className='font-semibold'>
-                    {filteredEntries.length}
+                    {entries.length}
                   </span>{' '}
                   results
                 </p>
@@ -1206,6 +1380,520 @@ const ApproveRecords: React.FC = () => {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Deleted Records Table */}
+      {!loading && !fetchError && deletedEntries.length > 0 && (
+        <Card
+          title='Deleted Records for Approval'
+          subtitle={`Showing ${deletedEntries.length} deleted records`}
+        >
+          <div className='overflow-x-auto'>
+            <table className='min-w-full divide-y divide-gray-200'>
+              <thead className='bg-gray-50'>
+                <tr>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    <input
+                      type='checkbox'
+                      checked={
+                        selectedEntries.size === deletedEntries.length &&
+                        deletedEntries.length > 0
+                      }
+                      onChange={() => {
+                        if (selectedEntries.size === deletedEntries.length) {
+                          setSelectedEntries(new Set());
+                        } else {
+                          setSelectedEntries(new Set(deletedEntries.map(entry => entry.id)));
+                        }
+                      }}
+                      className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
+                    />
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Date
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Company
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Staff
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Amount
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Type
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Status
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className='bg-white divide-y divide-gray-200'>
+                {deletedEntries.map(entry => (
+                  <tr
+                    key={entry.id}
+                    className='bg-red-50 hover:bg-red-100 transition-colors'
+                  >
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                      <input
+                        type='checkbox'
+                        checked={selectedEntries.has(entry.id)}
+                        onChange={e => {
+                          e.stopPropagation();
+                          handleSelectEntry(entry.id);
+                        }}
+                        className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
+                      />
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {entry.c_date}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.company_name}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.staff}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.credit > 0
+                        ? `₹${entry.credit.toLocaleString()}`
+                        : `₹${entry.debit.toLocaleString()}`}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.credit > 0 ? 'Credit' : 'Debit'}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        entry.approved === false && entry.edited === true
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {entry.approved === false && entry.edited === true 
+                          ? 'Deleted - Pending Approval' 
+                          : 'Deleted - Pending Approval'}
+                      </span>
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                      <Button
+                        variant='secondary'
+                        onClick={() => {
+                          handleViewEntry(entry.id);
+                        }}
+                        className='mr-2'
+                        size='sm'
+                      >
+                        <Eye className='w-4 h-4 mr-1' />
+                        View
+                      </Button>
+                      <Button
+                        variant='secondary'
+                        onClick={() => {
+                          handleApproveDeletion(entry.id);
+                        }}
+                        className='mr-2'
+                        size='sm'
+                      >
+                        Approve Deletion
+                      </Button>
+                      <Button
+                        variant='secondary'
+                        onClick={() => {
+                          handleRejectDeletion(entry.id);
+                        }}
+                        size='sm'
+                      >
+                        Reject Deletion
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Rejected Records Table */}
+      {!loading && !fetchError && rejectedEntries.length > 0 && (
+        <Card
+          title='Rejected Records'
+          subtitle={`Showing ${rejectedEntries.length} rejected records`}
+        >
+          <div className='overflow-x-auto'>
+            <table className='min-w-full divide-y divide-gray-200'>
+              <thead className='bg-gray-50'>
+                <tr>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    <input
+                      type='checkbox'
+                      checked={
+                        rejectedEntries.length > 0 &&
+                        rejectedEntries.every(entry =>
+                          selectedEntries.has(entry.id)
+                        )
+                      }
+                      onChange={handleSelectAll}
+                      className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
+                    />
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Date
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Company
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Staff
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Amount
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Status
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className='bg-white divide-y divide-gray-200'>
+                {rejectedEntries.map(entry => (
+                  <tr
+                    key={entry.id}
+                    className='bg-yellow-50 hover:bg-yellow-100 transition-colors'
+                  >
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                      <input
+                        type='checkbox'
+                        checked={selectedEntries.has(entry.id)}
+                        onChange={e => {
+                          e.stopPropagation();
+                          handleSelectEntry(entry.id);
+                        }}
+                        className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded'
+                      />
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {entry.c_date}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.company_name}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.staff}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                      {entry.credit > 0
+                        ? `₹${entry.credit.toLocaleString()}`
+                        : `₹${entry.debit.toLocaleString()}`}
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm'>
+                      <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
+                        Rejected
+                      </span>
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                      <Button
+                        variant='secondary'
+                        onClick={() => {
+                          handleViewEntry(entry.id);
+                        }}
+                        className='mr-2'
+                        size='sm'
+                      >
+                        <Eye className='w-4 h-4 mr-1' />
+                        View
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Entry Details Modal */}
+      {showEntryModal && selectedEntry && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto'>
+            <div className='flex justify-between items-center mb-4'>
+              <h2 className='text-2xl font-bold text-gray-900'>Entry Details</h2>
+              <Button
+                variant='secondary'
+                onClick={() => setShowEntryModal(false)}
+                size='sm'
+              >
+                <X className='w-4 h-4' />
+              </Button>
+            </div>
+            
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              {/* Basic Information */}
+              <div className='space-y-4'>
+                <h3 className='text-lg font-semibold text-gray-900'>Basic Information</h3>
+                <div className='space-y-2'>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>S.No</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.sno || ''}
+                        onChange={(value) => handleFormChange('sno', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.sno}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Date</label>
+                    {isEditing ? (
+                      <Input
+                        type='date'
+                        value={editFormData?.c_date || ''}
+                        onChange={(value) => handleFormChange('c_date', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.c_date}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Company Name</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.company_name || ''}
+                        onChange={(value) => handleFormChange('company_name', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.company_name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Staff</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.staff || ''}
+                        onChange={(value) => handleFormChange('staff', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.staff}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Entry Time</label>
+                    <p className='text-sm text-gray-900'>{selectedEntry.entry_time}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Information */}
+              <div className='space-y-4'>
+                <h3 className='text-lg font-semibold text-gray-900'>Account Information</h3>
+                <div className='space-y-2'>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Main Account</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.acc_name || ''}
+                        onChange={(value) => handleFormChange('acc_name', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.acc_name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Sub Account</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.sub_acc_name || ''}
+                        onChange={(value) => handleFormChange('sub_acc_name', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.sub_acc_name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Particulars</label>
+                    {isEditing ? (
+                      <Input
+                        value={editFormData?.particulars || ''}
+                        onChange={(value) => handleFormChange('particulars', value)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>{selectedEntry.particulars}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Information */}
+              <div className='space-y-4'>
+                <h3 className='text-lg font-semibold text-gray-900'>Financial Information</h3>
+                <div className='space-y-2'>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Credit</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.credit || ''}
+                        onChange={(value) => handleFormChange('credit', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-green-600 font-semibold'>₹{selectedEntry.credit.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Debit</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.debit || ''}
+                        onChange={(value) => handleFormChange('debit', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-red-600 font-semibold'>₹{selectedEntry.debit.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Credit Online</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.credit_online || ''}
+                        onChange={(value) => handleFormChange('credit_online', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>₹{selectedEntry.credit_online.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Credit Offline</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.credit_offline || ''}
+                        onChange={(value) => handleFormChange('credit_offline', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>₹{selectedEntry.credit_offline.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Debit Online</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.debit_online || ''}
+                        onChange={(value) => handleFormChange('debit_online', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>₹{selectedEntry.debit_online.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Debit Offline</label>
+                    {isEditing ? (
+                      <Input
+                        type='number'
+                        value={editFormData?.debit_offline || ''}
+                        onChange={(value) => handleFormChange('debit_offline', parseFloat(value) || 0)}
+                        className='w-full'
+                      />
+                    ) : (
+                      <p className='text-sm text-gray-900'>₹{selectedEntry.debit_offline.toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Information */}
+              <div className='space-y-4'>
+                <h3 className='text-lg font-semibold text-gray-900'>Status Information</h3>
+                <div className='space-y-2'>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Approval Status</label>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      selectedEntry.approved === true ? 'bg-green-100 text-green-800' :
+                      selectedEntry.approved === false ? 'bg-red-100 text-red-800' :
+                      'bg-orange-100 text-orange-800'
+                    }`}>
+                      {selectedEntry.approved === true ? 'Approved' :
+                       selectedEntry.approved === false ? 'Rejected' : 'Pending'}
+                    </span>
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Lock Record</label>
+                    <p className='text-sm text-gray-900'>{selectedEntry.lock_record ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Edited</label>
+                    <p className='text-sm text-gray-900'>{selectedEntry.edited ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Created At</label>
+                    <p className='text-sm text-gray-900'>{new Date(selectedEntry.created_at).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700'>Updated At</label>
+                    <p className='text-sm text-gray-900'>{new Date(selectedEntry.updated_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className='flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200'>
+              <Button
+                variant='secondary'
+                onClick={() => {
+                  setShowEntryModal(false);
+                  setIsEditing(false);
+                }}
+              >
+                Close
+              </Button>
+              {isEditing ? (
+                <>
+                  <Button
+                    variant='secondary'
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveEdit}
+                    className='bg-green-600 hover:bg-green-700'
+                  >
+                    Save Changes
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={handleEditEntry}
+                  className='bg-blue-600 hover:bg-blue-700'
+                >
+                  <Edit className='w-4 h-4 mr-2' />
+                  Edit Entry
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

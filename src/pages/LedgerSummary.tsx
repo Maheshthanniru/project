@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
-import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 
 interface LedgerSummaryFilters {
   betweenDates: boolean;
@@ -36,6 +35,7 @@ interface CompanySummary {
 
 interface SubAccountSummary {
   subAccount: string;
+  mainAccount: string; // Add main account mapping
   credit: number;
   debit: number;
   balance: number;
@@ -43,7 +43,6 @@ interface SubAccountSummary {
 }
 
 const LedgerSummary: React.FC = () => {
-  const { user } = useAuth();
 
   const [filters, setFilters] = useState<LedgerSummaryFilters>({
     betweenDates: true,
@@ -188,190 +187,32 @@ const LedgerSummary: React.FC = () => {
   const generateSummary = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Get filtered entries from Supabase - use getAllCashBookEntries to get all 67k records
-      let entries = await supabaseDB.getAllCashBookEntries();
-
-      // Apply date filter
-      if (filters.betweenDates) {
-        entries = entries.filter(entry => {
-          const entryDate = new Date(entry.c_date);
-          const fromDate = new Date(filters.fromDate);
-          const toDate = new Date(filters.toDate);
-          return entryDate >= fromDate && entryDate <= toDate;
-        });
-      }
-
-      // Apply other filters
-      if (filters.companyName) {
-        entries = entries.filter(
-          entry => entry.company_name === filters.companyName
-        );
-      }
-      if (filters.mainAccount) {
-        entries = entries.filter(
-          entry => entry.acc_name === filters.mainAccount
-        );
-      }
-      if (filters.subAccount) {
-        entries = entries.filter(
-          entry => entry.sub_acc_name === filters.subAccount
-        );
-      }
-      if (filters.staff) {
-        entries = entries.filter(entry => entry.staff === filters.staff);
-      }
-
-      // Generate company-wise summary
-      const companyMap = new Map<string, CompanySummary>();
-      const accountMap = new Map<string, AccountSummary>();
-      const subAccountMap = new Map<string, SubAccountSummary>();
-
-      let totalCredit = 0;
-      let totalDebit = 0;
-
-      entries.forEach(entry => {
-        totalCredit += entry.credit;
-        totalDebit += entry.debit;
-
-        // Company summary
-        if (!companyMap.has(entry.company_name)) {
-          companyMap.set(entry.company_name, {
-            companyName: entry.company_name,
-            totalCredit: 0,
-            totalDebit: 0,
-            balance: 0,
-            accounts: [],
-          });
-        }
-        const companySummary = companyMap.get(entry.company_name)!;
-        companySummary.totalCredit += entry.credit;
-        companySummary.totalDebit += entry.debit;
-        companySummary.balance =
-          companySummary.totalCredit - companySummary.totalDebit;
-
-        // Account summary
-        const accountKey = `${entry.company_name}-${entry.acc_name}`;
-        if (!accountMap.has(accountKey)) {
-          accountMap.set(accountKey, {
-            accountName: entry.acc_name,
-            credit: 0,
-            debit: 0,
-            balance: 0,
-            transactionCount: 0,
-          });
-        }
-        const accountSummary = accountMap.get(accountKey)!;
-        accountSummary.credit += entry.credit;
-        accountSummary.debit += entry.debit;
-        accountSummary.balance = accountSummary.credit - accountSummary.debit;
-        accountSummary.transactionCount++;
-
-        // Sub Account summary
-        if (entry.sub_acc_name) {
-          const subAccountKey = `${entry.company_name}-${entry.acc_name}-${entry.sub_acc_name}`;
-          if (!subAccountMap.has(subAccountKey)) {
-            subAccountMap.set(subAccountKey, {
-              subAccount: entry.sub_acc_name,
-              credit: 0,
-              debit: 0,
-              balance: 0,
-              transactionCount: 0,
-            });
-          }
-          const subAccountSummary = subAccountMap.get(subAccountKey)!;
-          subAccountSummary.credit += entry.credit;
-          subAccountSummary.debit += entry.debit;
-          subAccountSummary.balance =
-            subAccountSummary.credit - subAccountSummary.debit;
-          subAccountSummary.transactionCount++;
-        }
-      });
-
-      // Convert maps to arrays and sort
-      const companySummariesArray = Array.from(companyMap.values()).sort(
-        (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-      );
-
-      // Create company-specific summaries when company filter is active
-      let mainAccountSummariesArray: AccountSummary[] = [];
-      let subAccountSummariesArray: SubAccountSummary[] = [];
+      console.log('🔄 Generating ledger summary with server-side optimization...');
       
-      if (filters.companyName) {
-        // When company filter is active, create summaries only for the selected company
-        const companyAccountMap = new Map<string, AccountSummary>();
-        const companySubAccountMap = new Map<string, SubAccountSummary>();
-        
-        // Process only entries for the selected company
-        entries.forEach(entry => {
-          if (entry.company_name === filters.companyName) {
-            // Account summary for this company
-            const accountKey = entry.acc_name;
-            if (!companyAccountMap.has(accountKey)) {
-              companyAccountMap.set(accountKey, {
-                accountName: entry.acc_name,
-                credit: 0,
-                debit: 0,
-                balance: 0,
-                transactionCount: 0,
-              });
-            }
-            const accountSummary = companyAccountMap.get(accountKey)!;
-            accountSummary.credit += entry.credit;
-            accountSummary.debit += entry.debit;
-            accountSummary.balance = accountSummary.credit - accountSummary.debit;
-            accountSummary.transactionCount++;
-            
-            // Sub Account summary for this company
-            if (entry.sub_acc_name) {
-              const subAccountKey = entry.sub_acc_name;
-              if (!companySubAccountMap.has(subAccountKey)) {
-                companySubAccountMap.set(subAccountKey, {
-                  subAccount: entry.sub_acc_name,
-                  credit: 0,
-                  debit: 0,
-                  balance: 0,
-                  transactionCount: 0,
-                });
-              }
-              const subAccountSummary = companySubAccountMap.get(subAccountKey)!;
-              subAccountSummary.credit += entry.credit;
-              subAccountSummary.debit += entry.debit;
-              subAccountSummary.balance = subAccountSummary.credit - subAccountSummary.debit;
-              subAccountSummary.transactionCount++;
-            }
-          }
-        });
-        
-        mainAccountSummariesArray = Array.from(companyAccountMap.values()).sort(
-          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-        );
-        
-        subAccountSummariesArray = Array.from(companySubAccountMap.values()).sort(
-          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-        );
-      } else {
-        // When no company filter, use all data
-        mainAccountSummariesArray = Array.from(accountMap.values()).sort(
-          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-        );
-        
-        subAccountSummariesArray = Array.from(subAccountMap.values()).sort(
-          (a, b) => Math.abs(b.balance) - Math.abs(a.balance)
-        );
-      }
-
-      setCompanySummaries(companySummariesArray);
-      setMainAccountSummaries(mainAccountSummariesArray);
-      setSubAccountSummaries(subAccountSummariesArray);
-
-      setGrandTotals({
-        totalCredit,
-        totalDebit,
-        balance: totalCredit - totalDebit,
-        recordCount: entries.length,
+      // Use server-side filtering for better performance
+      const summaryData = await supabaseDB.getLedgerSummaryData({
+        fromDate: filters.betweenDates ? filters.fromDate : undefined,
+        toDate: filters.betweenDates ? filters.toDate : undefined,
+        companyName: filters.companyName || undefined,
+        accountName: filters.mainAccount || undefined,
+        subAccountName: filters.subAccount || undefined,
+        staff: filters.staff || undefined,
       });
+
+      // Set the data directly from server response
+      // Convert server response to match component interface
+      const companySummariesWithAccounts = summaryData.companySummaries.map(company => ({
+        ...company,
+        accounts: [] // Company-specific accounts will be handled separately
+      }));
+      
+      setCompanySummaries(companySummariesWithAccounts);
+      setMainAccountSummaries(summaryData.accountSummaries);
+      setSubAccountSummaries(summaryData.subAccountSummaries);
+      setGrandTotals(summaryData.grandTotals);
+
+      console.log('✅ Ledger summary generated successfully with server-side optimization');
+      toast.success(`Summary generated for ${summaryData.grandTotals.recordCount} records`);
     } catch (error) {
       console.error('Error generating summary:', error);
       toast.error('Failed to generate summary');
@@ -398,28 +239,6 @@ const LedgerSummary: React.FC = () => {
     }
   };
 
-  const refreshData = () => {
-    generateSummary();
-    toast.success('Data refreshed successfully!');
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      betweenDates: true,
-      fromDate: '2016-10-31',
-      toDate: format(new Date(), 'yyyy-MM-dd'),
-      companyName: '',
-      mainAccount: '',
-      subAccount: '',
-      staff: '',
-    });
-    toast.success('Filters reset');
-  };
-
-  const closeFilters = () => {
-    // Just a placeholder for close functionality
-    toast.success('Filters panel closed');
-  };
 
   const exportToExcel = () => {
     let exportData: any[] = [];
@@ -448,6 +267,7 @@ const LedgerSummary: React.FC = () => {
       case 'subAccount':
       case 'subAccountGrand':
         exportData = subAccountSummaries.map(subAccount => ({
+          'Main Account': subAccount.mainAccount,
           'Sub Account': subAccount.subAccount,
           Credit: subAccount.credit,
           Debit: subAccount.debit,
@@ -529,6 +349,7 @@ const LedgerSummary: React.FC = () => {
           <table>
             <thead>
               <tr>
+                ${activeTab === 'subAccount' || activeTab === 'subAccountGrand' ? '<th>Main Account</th>' : ''}
                 <th>${activeTab === 'company' ? 'Company Name' : activeTab === 'mainAccount' ? 'Main Account' : 'Sub Account'}</th>
                 <th class="text-right">Credit</th>
                 <th class="text-right">Debit</th>
@@ -542,6 +363,8 @@ const LedgerSummary: React.FC = () => {
                     const name = activeTab === 'company' ? (item as CompanySummary).companyName : 
                                  activeTab === 'mainAccount' ? (item as AccountSummary).accountName : 
                                  (item as SubAccountSummary).subAccount;
+                    const mainAccount = (activeTab === 'subAccount' || activeTab === 'subAccountGrand') ? 
+                                       (item as SubAccountSummary).mainAccount : '';
                     const credit = activeTab === 'company' ? (item as CompanySummary).totalCredit : 
                                   (item as AccountSummary | SubAccountSummary).credit;
                     const debit = activeTab === 'company' ? (item as CompanySummary).totalDebit : 
@@ -550,6 +373,7 @@ const LedgerSummary: React.FC = () => {
                     
                     return `
                 <tr>
+                  ${(activeTab === 'subAccount' || activeTab === 'subAccountGrand') ? `<td>${mainAccount}</td>` : ''}
                   <td>${name}</td>
                   <td class="text-right text-green">₹${credit.toLocaleString()}</td>
                   <td class="text-right text-red">₹${debit.toLocaleString()}</td>
@@ -600,8 +424,6 @@ const LedgerSummary: React.FC = () => {
   };
 
   const renderSummaryTable = () => {
-    const data = getCurrentData();
-
     if (activeTab === 'company') {
       return (
         <div className='overflow-x-auto'>
@@ -715,6 +537,9 @@ const LedgerSummary: React.FC = () => {
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                  Main Account
+                </th>
+                <th className='px-4 py-3 text-left font-medium text-gray-700'>
                   {filters.companyName ? `${filters.companyName} - Sub Account` : 'Sub Account'}
                 </th>
                 <th className='px-4 py-3 text-right font-medium text-gray-700'>
@@ -736,6 +561,9 @@ const LedgerSummary: React.FC = () => {
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                   }`}
                 >
+                  <td className='px-4 py-3 font-medium text-purple-600'>
+                    {subAccount.mainAccount}
+                  </td>
                   <td className='px-4 py-3 font-medium text-blue-600'>
                     {subAccount.subAccount}
                   </td>
@@ -847,32 +675,36 @@ const LedgerSummary: React.FC = () => {
 
           {/* Filter Options */}
           <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-            <Select
+            <SearchableSelect
               label='Company Name'
               value={filters.companyName}
               onChange={value => handleFilterChange('companyName', value)}
               options={companies}
+              placeholder='Select company...'
             />
 
-            <Select
+            <SearchableSelect
               label='Main Account'
               value={filters.mainAccount}
               onChange={value => handleFilterChange('mainAccount', value)}
               options={accounts}
+              placeholder='Select main account...'
             />
 
-            <Select
+            <SearchableSelect
               label='Sub Account'
               value={filters.subAccount}
               onChange={value => handleFilterChange('subAccount', value)}
               options={subAccounts}
+              placeholder='Select sub account...'
             />
 
-            <Select
+            <SearchableSelect
               label='Staff'
               value={filters.staff}
               onChange={value => handleFilterChange('staff', value)}
               options={staffList}
+              placeholder='Select staff...'
             />
           </div>
 

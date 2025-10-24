@@ -29,7 +29,7 @@ export const useAllCashBookEntries = () => {
 export const useCashBookEntriesByDate = (date: string) => {
   return useQuery({
     queryKey: queryKeys.cashBook.byDate(date),
-    queryFn: () => supabaseDB.getCashBookEntriesByDate(date),
+    queryFn: () => supabaseDB.getCashBookEntriesByDateRange(date, date, 1000, 0).then(result => result.data),
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
     enabled: !!date, // Only fetch if date is provided
@@ -40,7 +40,7 @@ export const useCashBookEntriesByDate = (date: string) => {
 export const useCashBookEntry = (id: string) => {
   return useQuery({
     queryKey: queryKeys.cashBook.byId(id),
-    queryFn: () => supabaseDB.getCashBookEntry(id),
+    queryFn: () => supabaseDB.getEntryById(id),
     staleTime: 5 * 60 * 1000, // 5 minutes for individual entries
     gcTime: 10 * 60 * 1000,
     enabled: !!id, // Only fetch if ID is provided
@@ -52,7 +52,7 @@ export const useCreateCashBookEntry = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (entry: any) => supabaseDB.createCashBookEntry(entry),
+    mutationFn: (entry: any) => supabaseDB.addCashBookEntry(entry),
     onSuccess: () => {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
@@ -137,3 +137,5 @@ export const useBulkCashBookOperations = () => {
     },
   });
 };
+
+

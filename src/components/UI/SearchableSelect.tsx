@@ -39,11 +39,12 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Get the selected option label
-    const selectedOption = options.find(option => option.value === value);
-    const displayValue = selectedOption ? selectedOption.label : '';
+    const selectedOption = options.find(option => option && option.value === value);
+    const displayValue = selectedOption && selectedOption.label ? selectedOption.label : '';
 
     // Filter options based on search term
     const filteredOptions = options.filter(option =>
+      option && option.label && typeof option.label === 'string' && 
       option.label.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -89,7 +90,15 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
           if (isOpen && highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
             handleSelect(filteredOptions[highlightedIndex].value);
           } else if (!isOpen) {
-            setIsOpen(true);
+            // If dropdown is closed and no value is selected, open dropdown
+            if (!value) {
+              setIsOpen(true);
+            } else {
+              // If dropdown is closed and value is already selected, move to next field
+              if (onKeyDown) {
+                onKeyDown(e);
+              }
+            }
           }
           break;
         case 'Escape':
@@ -116,6 +125,19 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
       setIsOpen(false);
       setSearchTerm('');
       setHighlightedIndex(-1);
+      
+      // After selecting an option, move to next field
+      setTimeout(() => {
+        if (onKeyDown) {
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            bubbles: true,
+            cancelable: true
+          });
+          onKeyDown(enterEvent as any);
+        }
+      }, 0);
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,3 +244,4 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
 SearchableSelect.displayName = 'SearchableSelect';
 
 export default SearchableSelect;
+

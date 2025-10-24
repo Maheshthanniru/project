@@ -3,6 +3,7 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -72,9 +73,12 @@ const EditedRecords = () => {
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
+  const [editedDates, setEditedDates] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [userFilter, setUserFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -83,11 +87,31 @@ const EditedRecords = () => {
       supabaseDB.getEditAuditLog(),
       supabaseDB.getUsers(),
       supabaseDB.getDeletedCashBook(),
+      supabaseDB.getCompanies(),
     ])
-      .then(([log, users, deleted]) => {
+      .then(([log, users, deleted, companiesData]) => {
         setAuditLog(log as AuditLogEntry[]);
         setUsers(users as User[]);
         setDeletedRecords(deleted as any[]);
+        // Ensure companies data is properly formatted
+        const formattedCompanies = (companiesData || [])
+          .filter((c: any) => c && typeof c === 'string' && c.trim() !== '')
+          .map((c: string) => ({ value: c, label: c }));
+        setCompanies(formattedCompanies);
+        
+        // Extract unique edited dates from audit log
+        const dates = new Set<string>();
+        (log as AuditLogEntry[]).forEach(entry => {
+          if (entry.edited_at) {
+            const date = new Date(entry.edited_at).toISOString().split('T')[0];
+            dates.add(date);
+          }
+        });
+        const formattedDates = Array.from(dates)
+          .sort()
+          .reverse() // Most recent first
+          .map(date => ({ value: date, label: date }));
+        setEditedDates(formattedDates);
       })
       .catch(() => toast.error('Failed to load edit audit log'))
       .finally(() => setLoading(false));
@@ -122,11 +146,12 @@ const EditedRecords = () => {
       const matchesSearch =
         search === '' || searchText.includes(search.toLowerCase());
       const matchesUser = userFilter === '' || log.edited_by === userFilter;
+      const matchesDate = dateFilter === '' || newObj.c_date === dateFilter;
       // Exclude deletes from main table
       const isDelete = log.new_values == null && log.old_values != null;
-      return matchesSearch && matchesUser && !isDelete;
+      return matchesSearch && matchesUser && matchesDate && !isDelete;
     });
-  }, [auditLog, search, userFilter, userMap]);
+  }, [auditLog, search, userFilter, dateFilter, userMap]);
 
   // Deleted records log (from deleted_cash_book)
   // No filtering for now, but you can add search/userFilter if needed
@@ -146,23 +171,38 @@ const EditedRecords = () => {
 
   // Export to Excel
   const handleExportExcel = () => {
-    const rows = filteredLog.map((log, idx) => {
+    const rows: any[] = [];
+    filteredLog.forEach((log, idx) => {
       const oldObj = log.old_values ? JSON.parse(log.old_values) : {};
       const newObj = log.new_values ? JSON.parse(log.new_values) : {};
-      return [
+      
+      // Before row
+      rows.push([
         idx + 1,
+        'Before',
         ...FIELDS.map(f => getFieldDisplay(f.key, oldObj[f.key])),
+        userMap[log.edited_by] || log.edited_by,
+        log.edited_at && !isNaN(new Date(log.edited_at).getTime())
+          ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm')
+          : '',
+      ]);
+      
+      // After row
+      rows.push([
+        '',
+        'After',
         ...FIELDS.map(f => getFieldDisplay(f.key, newObj[f.key])),
         userMap[log.edited_by] || log.edited_by,
         log.edited_at && !isNaN(new Date(log.edited_at).getTime())
           ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm')
           : '',
-      ];
+      ]);
     });
+    
     const header = [
       'S.No',
-      ...FIELDS.map(f => f.label + ' (Before)'),
-      ...FIELDS.map(f => f.label + ' (After)'),
+      'Type',
+      ...FIELDS.map(f => f.label),
       'Edited By',
       'Edited At',
     ];
@@ -192,11 +232,9 @@ const EditedRecords = () => {
     printWindow.document.write('<h2>Edit Audit Log</h2>');
     printWindow.document.write('<table><thead><tr>');
     printWindow.document.write('<th>S.No</th>');
+    printWindow.document.write('<th>Type</th>');
     FIELDS.forEach(f =>
-      printWindow.document.write(`<th>${f.label} (Before)</th>`)
-    );
-    FIELDS.forEach(f =>
-      printWindow.document.write(`<th>${f.label} (After)</th>`)
+      printWindow.document.write(`<th>${f.label}</th>`)
     );
     printWindow.document.write(
       '<th>Edited By</th><th>Edited At</th></tr></thead><tbody>'
@@ -204,13 +242,27 @@ const EditedRecords = () => {
     filteredLog.forEach((log, idx) => {
       const oldObj = log.old_values ? JSON.parse(log.old_values) : {};
       const newObj = log.new_values ? JSON.parse(log.new_values) : {};
+      
+      // Before row
       printWindow.document.write('<tr>');
-      printWindow.document.write(`<td>${idx + 1}</td>`);
+      printWindow.document.write(`<td rowspan="2">${idx + 1}</td>`);
+      printWindow.document.write('<td><strong>Before</strong></td>');
       FIELDS.forEach(f =>
         printWindow.document.write(
           `<td>${getFieldDisplay(f.key, oldObj[f.key])}</td>`
         )
       );
+      printWindow.document.write(
+        `<td>${userMap[log.edited_by] || log.edited_by}</td>`
+      );
+      printWindow.document.write(
+        `<td>${log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : ''}</td>`
+      );
+      printWindow.document.write('</tr>');
+      
+      // After row
+      printWindow.document.write('<tr>');
+      printWindow.document.write('<td><strong>After</strong></td>');
       FIELDS.forEach(f =>
         printWindow.document.write(
           `<td>${getFieldDisplay(f.key, newObj[f.key])}</td>`
@@ -240,6 +292,16 @@ const EditedRecords = () => {
           value={search}
           onChange={setSearch}
           placeholder='Search by any field...'
+          className='w-48'
+        />
+        <Select
+          label='Edited Date'
+          value={dateFilter}
+          onChange={setDateFilter}
+          options={[
+            { value: '', label: 'All Dates' },
+            ...editedDates,
+          ]}
           className='w-48'
         />
         <Select
@@ -291,8 +353,8 @@ const EditedRecords = () => {
                 return (
                   <React.Fragment key={log.id}>
                     {/* Before Edit Row */}
-                    <tr className='border-b border-gray-100 hover:bg-gray-50'>
-                      <td className='px-2 py-1 text-center' rowSpan={1}>
+                    <tr className='border-b border-gray-100 hover:bg-gray-50 bg-red-50'>
+                      <td className='px-2 py-1 text-center' rowSpan={2}>
                         {(page - 1) * PAGE_SIZE + idx + 1}
                       </td>
                       <td className='px-2 py-1 font-semibold text-red-600'>
@@ -301,7 +363,13 @@ const EditedRecords = () => {
                       {FIELDS.map(f => (
                         <td
                           key={f.key + '-before'}
-                          className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}
+                          className={`px-2 py-1 ${
+                            f.key === 'particulars' 
+                              ? 'bg-blue-100 font-semibold text-blue-800' 
+                              : changed[f.key] 
+                                ? 'bg-yellow-200 font-semibold' 
+                                : ''
+                          }`}
                         >
                           {getFieldDisplay(f.key, oldObj[f.key])}
                         </td>
@@ -318,14 +386,13 @@ const EditedRecords = () => {
                     </tr>
                     {/* After Edit Row */}
                     <tr className='border-b border-gray-100 hover:bg-gray-50 bg-green-50'>
-                      <td className='px-2 py-1 text-center'></td>
                       <td className='px-2 py-1 font-semibold text-green-700'>
                         After
                       </td>
                       {FIELDS.map(f => (
                         <td
                           key={f.key + '-after'}
-                          className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}
+                          className={`px-2 py-1 ${changed[f.key] ? 'bg-yellow-200 font-semibold' : ''}`}
                         >
                           {getFieldDisplay(f.key, newObj[f.key])}
                         </td>

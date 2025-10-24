@@ -45,6 +45,7 @@ export interface CashBookEntry {
   entry_time: string;
   sale_qty: number;
   purchase_qty: number;
+  status?: string;
   approved: boolean;
   edited: boolean;
   e_count: number;
@@ -335,12 +336,28 @@ class SupabaseDatabase {
       const start = offset;
       const end = offset + limit - 1;
       
-      const { data, error } = await supabase
+      // Try with status filtering first, fallback to basic query if status column doesn't exist
+      let { data, error } = await supabase
         .from('cash_book')
         .select('*')
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected')
         .order('c_date', { ascending: false })
         .order('created_at', { ascending: false })
         .range(start, end);
+
+      // If status filtering fails, try without status filtering
+      if (error && error.message.includes('status')) {
+        console.log('⚠️ Status column not found, falling back to basic query');
+        const fallbackResult = await supabase
+          .from('cash_book')
+          .select('*')
+          .order('c_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range(start, end);
+        
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) {
         console.error(`❌ Error fetching cash book entries (offset: ${offset}, limit: ${limit}):`, error);
@@ -359,9 +376,22 @@ class SupabaseDatabase {
   // Get total count for pagination
   async getCashBookEntriesCount(): Promise<number> {
     try {
-      const { count, error } = await supabase
+      // Try with status filtering first, fallback to basic query if status column doesn't exist
+      let { count, error } = await supabase
         .from('cash_book')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
+
+      // If status filtering fails, try without status filtering
+      if (error && error.message.includes('status')) {
+        console.log('⚠️ Status column not found, falling back to basic count query');
+        const fallbackResult = await supabase
+          .from('cash_book')
+          .select('*', { count: 'exact', head: true });
+        
+        count = fallbackResult.count;
+        error = fallbackResult.error;
+      }
 
       if (error) {
         console.error('Error getting count:', error);
@@ -462,7 +492,8 @@ class SupabaseDatabase {
       
       let query = supabase
         .from('cash_book')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact' })
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
 
       // Apply filters at database level for better performance
       if (filters.companyName) {
@@ -523,7 +554,8 @@ class SupabaseDatabase {
       
       let query = supabase
         .from('cash_book')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact' })
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
 
       // Apply filters at database level for better performance
       if (filters.companyName) {
@@ -566,6 +598,207 @@ class SupabaseDatabase {
     }
   }
 
+  // Server-side ledger summary functions for better performance
+  async getLedgerSummaryData(filters: {
+    fromDate?: string;
+    toDate?: string;
+    companyName?: string;
+    accountName?: string;
+    subAccountName?: string;
+    staff?: string;
+  }): Promise<{
+    companySummaries: Array<{
+      companyName: string;
+      totalCredit: number;
+      totalDebit: number;
+      balance: number;
+    }>;
+    accountSummaries: Array<{
+      accountName: string;
+      credit: number;
+      debit: number;
+      balance: number;
+      transactionCount: number;
+    }>;
+    subAccountSummaries: Array<{
+      subAccount: string;
+      mainAccount: string;
+      credit: number;
+      debit: number;
+      balance: number;
+      transactionCount: number;
+    }>;
+    grandTotals: {
+      totalCredit: number;
+      totalDebit: number;
+      balance: number;
+      recordCount: number;
+    };
+  }> {
+    try {
+      console.log('🔄 Fetching ledger summary data with server-side aggregation...');
+      console.log('🔍 Filters:', filters);
+
+      // Fetch all records using pagination to handle large datasets
+      const allData: any[] = [];
+      const batchSize = 10000; // Process in batches of 10k
+      let offset = 0;
+      let hasMore = true;
+
+      console.log('🔄 Fetching all records in batches...');
+
+      while (hasMore) {
+        let query = supabase
+          .from('cash_book')
+          .select('company_name, acc_name, sub_acc_name, credit, debit, staff, c_date')
+          .or('status.is.null,status.neq.deleted-pending,status.neq.rejected')
+          .range(offset, offset + batchSize - 1);
+
+        // Apply date filters
+        if (filters.fromDate && filters.toDate) {
+          query = query
+            .gte('c_date', filters.fromDate)
+            .lte('c_date', filters.toDate);
+        }
+
+        // Apply other filters
+        if (filters.companyName) {
+          query = query.eq('company_name', filters.companyName);
+        }
+        if (filters.accountName) {
+          query = query.eq('acc_name', filters.accountName);
+        }
+        if (filters.subAccountName) {
+          query = query.eq('sub_acc_name', filters.subAccountName);
+        }
+        if (filters.staff) {
+          query = query.eq('staff', filters.staff);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('❌ Error fetching ledger summary data:', error);
+          throw error;
+        }
+
+        if (data && data.length > 0) {
+          allData.push(...data);
+          offset += batchSize;
+          console.log(`📊 Fetched batch: ${data.length} records (total so far: ${allData.length})`);
+        } else {
+          hasMore = false;
+        }
+
+        // If we got less than batch size, we've reached the end
+        if (!data || data.length < batchSize) {
+          hasMore = false;
+        }
+      }
+
+      console.log(`✅ Successfully fetched ${allData.length} entries for summary calculation`);
+
+      // Process data client-side for aggregation
+      const companyMap = new Map<string, { totalCredit: number; totalDebit: number; balance: number }>();
+      const accountMap = new Map<string, { credit: number; debit: number; balance: number; transactionCount: number }>();
+      const subAccountMap = new Map<string, { mainAccount: string; credit: number; debit: number; balance: number; transactionCount: number }>();
+
+      let totalCredit = 0;
+      let totalDebit = 0;
+      let recordCount = 0;
+
+      allData.forEach(entry => {
+        totalCredit += entry.credit;
+        totalDebit += entry.debit;
+        recordCount++;
+
+        // Company aggregation
+        if (!companyMap.has(entry.company_name)) {
+          companyMap.set(entry.company_name, { totalCredit: 0, totalDebit: 0, balance: 0 });
+        }
+        const company = companyMap.get(entry.company_name)!;
+        company.totalCredit += entry.credit;
+        company.totalDebit += entry.debit;
+        company.balance = company.totalCredit - company.totalDebit;
+
+        // Account aggregation
+        const accountKey = `${entry.company_name}-${entry.acc_name}`;
+        if (!accountMap.has(accountKey)) {
+          accountMap.set(accountKey, { credit: 0, debit: 0, balance: 0, transactionCount: 0 });
+        }
+        const account = accountMap.get(accountKey)!;
+        account.credit += entry.credit;
+        account.debit += entry.debit;
+        account.balance = account.credit - account.debit;
+        account.transactionCount++;
+
+        // Sub-account aggregation
+        if (entry.sub_acc_name) {
+          const subAccountKey = `${entry.company_name}-${entry.acc_name}-${entry.sub_acc_name}`;
+          if (!subAccountMap.has(subAccountKey)) {
+            subAccountMap.set(subAccountKey, { 
+              mainAccount: entry.acc_name, // Store the main account name
+              credit: 0, 
+              debit: 0, 
+              balance: 0, 
+              transactionCount: 0 
+            });
+          }
+          const subAccount = subAccountMap.get(subAccountKey)!;
+          subAccount.credit += entry.credit;
+          subAccount.debit += entry.debit;
+          subAccount.balance = subAccount.credit - subAccount.debit;
+          subAccount.transactionCount++;
+        }
+      });
+
+      // Convert maps to arrays and sort
+      const companySummaries = Array.from(companyMap.entries())
+        .map(([companyName, data]) => ({
+          companyName,
+          ...data
+        }))
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+      const accountSummaries = Array.from(accountMap.entries())
+        .map(([accountKey, data]) => ({
+          accountName: accountKey.split('-').slice(1).join('-'), // Remove company prefix
+          ...data
+        }))
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+      const subAccountSummaries = Array.from(subAccountMap.entries())
+        .map(([subAccountKey, data]) => ({
+          subAccount: subAccountKey.split('-').slice(2).join('-'), // Remove company and account prefix
+          mainAccount: data.mainAccount, // Include the main account name
+          credit: data.credit,
+          debit: data.debit,
+          balance: data.balance,
+          transactionCount: data.transactionCount
+        }))
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+      const grandTotals = {
+        totalCredit,
+        totalDebit,
+        balance: totalCredit - totalDebit,
+        recordCount
+      };
+
+      console.log(`✅ Generated summary: ${companySummaries.length} companies, ${accountSummaries.length} accounts, ${subAccountSummaries.length} sub-accounts`);
+
+      return {
+        companySummaries,
+        accountSummaries,
+        subAccountSummaries,
+        grandTotals
+      };
+    } catch (error) {
+      console.error('❌ Error in getLedgerSummaryData:', error);
+      throw error;
+    }
+  }
+
   // Search entries with pagination
   async searchCashBookEntries(
     searchTerm: string = '',
@@ -578,7 +811,8 @@ class SupabaseDatabase {
       
       let query = supabase
         .from('cash_book')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact' })
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
 
       // Apply search filter
       if (searchTerm) {
@@ -635,6 +869,7 @@ class SupabaseDatabase {
         .select('*', { count: 'exact' })
         .gte('c_date', startDate)
         .lte('c_date', endDate)
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected')
         .order('c_date', { ascending: false })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -692,19 +927,42 @@ class SupabaseDatabase {
       Object.entries(entry).filter(([_, value]) => value !== undefined)
     );
 
-    const { data, error } = await supabase
+    // Try to insert with status column first, fallback to old method if status column doesn't exist
+    let { data, error } = await supabase
       .from('cash_book')
       .insert({
         ...filteredEntry,
         sno: nextSno,
         entry_time: new Date().toISOString(),
-        approved: false, // Set to pending by default (boolean)
+        status: 'approved', // Set to approved by default
+        approved: true, // Keep for backward compatibility
         edited: false,
         e_count: 0,
         lock_record: false,
       })
       .select()
       .single();
+
+    // If status column doesn't exist, fallback to old method
+    if (error && error.message.includes('status')) {
+      console.log('⚠️ Status column not found, falling back to old entry creation method');
+      const fallbackResult = await supabase
+        .from('cash_book')
+        .insert({
+          ...filteredEntry,
+          sno: nextSno,
+          entry_time: new Date().toISOString(),
+          approved: true,
+          edited: false,
+          e_count: 0,
+          lock_record: false,
+        })
+        .select()
+        .single();
+      
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       throw new Error(`Failed to create cash book entry: ${error.message}`);
@@ -1301,10 +1559,32 @@ class SupabaseDatabase {
       let offlineDebit = 0;
 
       if (aggError || !aggregatedData) {
-        console.log('⚠️ Database aggregation not available, using getAllCashBookEntries fallback...');
-        // Fallback: Use getAllCashBookEntries to get all records (handles pagination properly)
-        const allEntries = await this.getAllCashBookEntries();
-        console.log(`📊 Fetched ${allEntries.length} entries for dashboard stats (fallback method)`);
+        console.log('⚠️ Database aggregation not available, using optimized server-side fallback...');
+        // Optimized fallback: Get only required fields for faster processing
+        // Try with status filtering first, fallback to basic query if status column doesn't exist
+        let { data: entriesData, error: entriesError } = await supabase
+          .from('cash_book')
+          .select('credit, debit, credit_online, credit_offline, debit_online, debit_offline')
+          .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
+
+        // If status filtering fails, try without status filtering
+        if (entriesError && entriesError.message.includes('status')) {
+          console.log('⚠️ Status column not found, falling back to basic dashboard query');
+          const fallbackResult = await supabase
+            .from('cash_book')
+            .select('credit, debit, credit_online, credit_offline, debit_online, debit_offline');
+          
+          entriesData = fallbackResult.data;
+          entriesError = fallbackResult.error;
+        }
+        
+        if (entriesError) {
+          console.error('❌ Error fetching entries for stats:', entriesError);
+          return this.getDashboardStatsFallback();
+        }
+        
+        const allEntries = entriesData || [];
+        console.log(`📊 Processing ${allEntries.length} entries for dashboard stats (optimized method)`);
         
         if (allEntries.length > 0) {
           totalCredit = allEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
@@ -1388,7 +1668,8 @@ class SupabaseDatabase {
         .from('cash_book')
         .select('company_name, credit, debit')
         .not('company_name', 'is', null)
-        .not('company_name', 'eq', '');
+        .not('company_name', 'eq', '')
+        .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
 
       if (error) {
         console.error('Error fetching company data:', error);
@@ -1468,7 +1749,8 @@ class SupabaseDatabase {
       .select(
         'credit, debit, c_date, credit_online, credit_offline, debit_online, debit_offline'
       )
-      .eq('c_date', date);
+      .eq('c_date', date)
+      .or('status.is.null,status.neq.deleted-pending,status.neq.rejected');
 
     if (error) {
       console.error('Error fetching dashboard stats for date:', error);
@@ -1528,6 +1810,613 @@ class SupabaseDatabase {
       totalOnline,
       totalOffline,
     };
+  }
+
+  // Get approval records with server-side filtering for better performance
+  async getApprovalRecords(filters: {
+    date?: string;
+    company?: string;
+    staff?: string;
+    includeDeleted?: boolean;
+  }): Promise<{
+    entries: CashBookEntry[];
+    deletedEntries: CashBookEntry[];
+    rejectedEntries: CashBookEntry[];
+    summary: {
+      totalRecords: number;
+      approvedRecords: number;
+      pendingRecords: number;
+      deletedRecords: number;
+      rejectedRecords: number;
+    };
+  }> {
+    try {
+      console.log('🔄 Fetching approval records with server-side filtering...');
+      console.log('🔍 Filters:', filters);
+
+      // Debug: Check what records exist in the database
+      const { data: debugAllData, error: debugAllError } = await supabase
+        .from('cash_book')
+        .select('id, company_name, particulars, approved, edited, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      console.log('🔍 Debug - All records in database:', debugAllData?.length || 0);
+      if (debugAllData && debugAllData.length > 0) {
+        console.log('🔍 Debug - Sample records:', debugAllData);
+      }
+
+      // Debug: Check records with status = deleted-pending or rejected
+      const { data: debugUnapprovedData, error: debugUnapprovedError } = await supabase
+        .from('cash_book')
+        .select('id, company_name, particulars, status, created_at')
+        .or('status.eq.deleted-pending,status.eq.rejected')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      console.log('🔍 Debug - Records needing approval in database:', debugUnapprovedData?.length || 0);
+      if (debugUnapprovedData && debugUnapprovedData.length > 0) {
+        console.log('🔍 Debug - Sample records needing approval:', debugUnapprovedData);
+      } else {
+        console.log('🔍 Debug - No records needing approval found in database');
+      }
+
+      // Main query for records that need approval (deleted-pending or rejected)
+      // Try with status filtering first, fallback to old method if status column doesn't exist
+      let query = supabase
+        .from('cash_book')
+        .select('*', { count: 'exact' })
+        .or('status.eq.deleted-pending,status.eq.rejected');
+
+      // If status column doesn't exist, fallback to old method
+      let { data, error, count } = await query;
+      
+      if (error && error.message.includes('status')) {
+        console.log('⚠️ Status column not found, falling back to old approval method');
+        query = supabase
+          .from('cash_book')
+          .select('*', { count: 'exact' })
+          .eq('approved', false);
+        
+        const fallbackResult = await query;
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+        count = fallbackResult.count;
+      }
+
+      console.log('🔍 Main query: SELECT * FROM cash_book WHERE approved = false');
+
+      // Apply filters at database level
+      if (filters.date) {
+        query = query.eq('c_date', filters.date);
+      }
+      if (filters.company) {
+        query = query.eq('company_name', filters.company);
+      }
+      if (filters.staff) {
+        query = query.eq('staff', filters.staff);
+      }
+
+      // If no filters are applied, limit to recent records to avoid loading all 67k records
+      if (!filters.date && !filters.company && !filters.staff) {
+        console.log('⚠️ No filters applied, limiting to recent 1000 records for performance');
+        query = query.limit(1000);
+      }
+
+      // Order by date and created_at for consistent results
+      query = query
+        .order('c_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      // Execute the final query
+      const finalResult = await query;
+      data = finalResult.data;
+      error = finalResult.error;
+      count = finalResult.count;
+
+      if (error) {
+        console.error('❌ Error fetching approval records:', error);
+        throw error;
+      }
+
+      // Separate records into deleted-pending and rejected
+      const approvalRecords = data || [];
+      const deletedEntries = approvalRecords.filter(record => record.status === 'deleted-pending');
+      const rejectedEntries = approvalRecords.filter(record => record.status === 'rejected');
+
+      console.log(`📊 Record separation: ${approvalRecords.length} total, ${deletedEntries.length} deleted-pending, ${rejectedEntries.length} rejected`);
+
+      console.log(`✅ Successfully fetched ${data?.length || 0} entries for approval (total available: ${count || 0})`);
+      if (filters.includeDeleted) {
+        console.log(`✅ Successfully fetched ${deletedEntries.length} deleted entries`);
+      }
+
+      // Get total counts including approved records for accurate summary
+      let totalApprovedCount = 0;
+      if (filters.date || filters.company || filters.staff) {
+        // If filters are applied, get the actual count of approved records
+        let approvedQuery = supabase
+          .from('cash_book')
+          .select('id', { count: 'exact' })
+          .eq('approved', true);
+        
+        if (filters.date) {
+          approvedQuery = approvedQuery.eq('c_date', filters.date);
+        }
+        if (filters.company) {
+          approvedQuery = approvedQuery.eq('company_name', filters.company);
+        }
+        if (filters.staff) {
+          approvedQuery = approvedQuery.eq('staff', filters.staff);
+        }
+        
+        const { count: approvedCount } = await approvedQuery;
+        totalApprovedCount = approvedCount || 0;
+      }
+
+      // Calculate summary
+      const totalRecords = approvalRecords.length;
+      const approvedRecords = totalApprovedCount;
+      const pendingRecords = deletedEntries.length;
+      const deletedRecords = deletedEntries.length;
+      const rejectedRecords = rejectedEntries.length;
+
+      console.log(`📊 Summary: ${totalRecords} total, ${pendingRecords} deleted-pending, ${rejectedRecords} rejected`);
+
+      return {
+        entries: deletedEntries, // Return deleted-pending entries in main list
+        deletedEntries, // Return deleted entries separately
+        rejectedEntries, // Return rejected entries separately
+        summary: {
+          totalRecords: approvalRecords.length,
+          approvedRecords: totalApprovedCount,
+          pendingRecords: deletedEntries.length,
+          deletedRecords: deletedEntries.length,
+          rejectedRecords: rejectedEntries.length
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error in getApprovalRecords:', error);
+      throw error;
+    }
+  }
+
+  // Update some existing records to be unapproved for testing
+  async updateRecordsForTesting(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Updating some records to be unapproved for testing...');
+      
+      // First check if there are any approved records
+      const { data: approvedRecords, error: approvedError } = await supabase
+        .from('cash_book')
+        .select('id')
+        .eq('status', 'approved')
+        .limit(5);
+
+      if (approvedError) {
+        console.error('❌ Error checking approved records:', approvedError);
+        return { success: false, error: 'Error checking records' };
+      }
+
+      if (!approvedRecords || approvedRecords.length === 0) {
+        console.log('ℹ️ No approved records found. All records are already unapproved.');
+        return { success: true, error: 'All records are already unapproved' };
+      }
+
+      const recordIds = approvedRecords.map(record => record.id);
+      
+      const { error: updateError } = await supabase
+        .from('cash_book')
+        .update({ status: 'deleted-pending' })
+        .in('id', recordIds);
+
+      if (updateError) {
+        console.error('❌ Error updating records:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      console.log(`✅ Successfully updated ${recordIds.length} records to unapproved`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in updateRecordsForTesting:', error);
+      return { success: false, error: 'Failed to update records' };
+    }
+  }
+
+  // Create test records for approval (for debugging)
+  async createTestApprovalRecords(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Creating test records for approval...');
+      
+      // First, get existing company names and staff to avoid foreign key violations
+      const { data: companies, error: companiesError } = await supabase
+        .from('companies')
+        .select('company_name')
+        .limit(3);
+      
+      if (companiesError || !companies || companies.length === 0) {
+        console.error('❌ Error fetching companies:', companiesError);
+        return { success: false, error: 'No companies found in database' };
+      }
+
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('username')
+        .eq('is_active', true)
+        .limit(1);
+      
+      if (usersError || !users || users.length === 0) {
+        console.error('❌ Error fetching users:', usersError);
+        return { success: false, error: 'No active users found in database' };
+      }
+
+      const companyName = companies[0].company_name;
+      const staffName = users[0].username;
+
+      console.log(`📋 Using company: ${companyName}, staff: ${staffName}`);
+
+      const testRecords = [
+        {
+          sno: 999001,
+          acc_name: 'Test Account 1',
+          sub_acc_name: 'Test Sub Account 1',
+          particulars: 'Test entry for approval 1',
+          c_date: new Date().toISOString().split('T')[0],
+          credit: 1000,
+          debit: 0,
+          company_name: companyName,
+          staff: staffName,
+          status: 'deleted-pending',
+          approved: false,
+          edited: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          sno: 999002,
+          acc_name: 'Test Account 2',
+          sub_acc_name: 'Test Sub Account 2',
+          particulars: 'Test entry for approval 2',
+          c_date: new Date().toISOString().split('T')[0],
+          credit: 0,
+          debit: 500,
+          company_name: companyName,
+          staff: staffName,
+          status: 'deleted-pending',
+          approved: false,
+          edited: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          sno: 999003,
+          acc_name: 'Test Account 3',
+          sub_acc_name: 'Test Sub Account 3',
+          particulars: 'REJECTED: Test entry marked for deletion',
+          c_date: new Date().toISOString().split('T')[0],
+          credit: 2000,
+          debit: 0,
+          company_name: companyName,
+          staff: staffName,
+          status: 'rejected',
+          approved: false,
+          edited: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+
+      const { error } = await supabase
+        .from('cash_book')
+        .insert(testRecords);
+
+      if (error) {
+        console.error('❌ Error creating test records:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Successfully created test records for approval');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in createTestApprovalRecords:', error);
+      return { success: false, error: 'Failed to create test records' };
+    }
+  }
+
+  // Get single entry with full details for viewing/editing
+  async getEntryById(id: string): Promise<CashBookEntry | null> {
+    try {
+      console.log(`🔄 Fetching entry details for ID: ${id}`);
+      
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching entry details:', error);
+        return null;
+      }
+
+      console.log(`✅ Successfully fetched entry details`);
+      return data;
+    } catch (error) {
+      console.error('❌ Error in getEntryById:', error);
+      return null;
+    }
+  }
+
+  // Soft delete entry (mark as deleted-pending)
+  async softDeleteEntry(entryId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔄 Soft deleting entry: ${entryId}`);
+      
+      // Try to use the status column to track deletion, fallback to old method if status column doesn't exist
+      let { error } = await supabase
+        .from('cash_book')
+        .update({ 
+          status: 'deleted-pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', entryId);
+
+      // If status column doesn't exist, fallback to old method
+      if (error && error.message.includes('status')) {
+        console.log('⚠️ Status column not found, falling back to old deletion method');
+        const fallbackResult = await supabase
+          .from('cash_book')
+          .update({ 
+            approved: false,
+            edited: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', entryId);
+        
+        error = fallbackResult.error;
+      }
+
+      if (error) {
+        console.error('❌ Error soft deleting entry:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Successfully soft deleted entry: ${entryId} (status=deleted-pending)`);
+      
+      // Verify the update worked
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('cash_book')
+        .select('id, status')
+        .eq('id', entryId)
+        .single();
+      
+      if (!verifyError && verifyData) {
+        console.log(`🔍 Verification: Entry ${entryId} now has status=${verifyData.status}`);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in softDeleteEntry:', error);
+      return { success: false, error: 'Failed to soft delete entry' };
+    }
+  }
+
+  // Permanent delete entry and create deleted record entry
+  async permanentDeleteEntry(entryId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔄 Permanently deleting entry: ${entryId}`);
+      console.log(`🔍 Entry ID type: ${typeof entryId}, value: ${entryId}`);
+      
+      // First, get the entry details before deleting
+      let { data: entryData, error: fetchError } = await supabase
+        .from('cash_book')
+        .select('*')
+        .eq('id', entryId)
+        .single();
+
+      console.log(`🔍 Fetch result:`, { entryData: !!entryData, fetchError });
+
+      if (fetchError || !entryData) {
+        console.error('❌ Error fetching entry for deletion:', fetchError);
+        console.error('❌ Entry ID that failed:', entryId);
+        
+        // Try alternative approach - use sno instead of id
+        console.log('🔄 Trying alternative approach with sno...');
+        const { data: altEntryData, error: altFetchError } = await supabase
+          .from('cash_book')
+          .select('*')
+          .eq('sno', parseInt(entryId))
+          .single();
+        
+        if (altFetchError || !altEntryData) {
+          console.error('❌ Alternative approach also failed:', altFetchError);
+          return { success: false, error: `Failed to fetch entry details: ${fetchError?.message || 'Entry not found'}` };
+        }
+        
+        console.log('✅ Alternative approach succeeded with sno');
+        entryData = altEntryData;
+      }
+
+      console.log('📋 Entry details before deletion:', entryData);
+
+      // Create a deleted record entry with the same data but marked as deleted
+      const deletedEntry = {
+        ...entryData,
+        id: undefined, // Let Supabase generate new ID
+        sno: entryData.sno, // Keep original sno for reference
+        approved: false,
+        edited: true,
+        particulars: `DELETED: ${entryData.particulars || 'No particulars'}`, // Mark as deleted
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Insert the deleted record entry
+      const { error: insertError } = await supabase
+        .from('cash_book')
+        .insert(deletedEntry);
+
+      if (insertError) {
+        console.error('❌ Error creating deleted record entry:', insertError);
+        return { success: false, error: 'Failed to create deleted record entry' };
+      }
+
+      console.log('✅ Created deleted record entry');
+
+      // Now permanently delete the original entry
+      const { error: deleteError } = await supabase
+        .from('cash_book')
+        .delete()
+        .eq('id', entryId);
+
+      if (deleteError) {
+        console.error('❌ Error permanently deleting entry:', deleteError);
+        return { success: false, error: 'Failed to permanently delete entry' };
+      }
+
+      console.log(`✅ Successfully permanently deleted entry: ${entryId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in permanentDeleteEntry:', error);
+      return { success: false, error: 'Failed to permanently delete entry' };
+    }
+  }
+
+  // Approve entry (set approved = true)
+  async approveEntry(entryId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔄 Approving entry: ${entryId}`);
+      
+      const { error } = await supabase
+        .from('cash_book')
+        .update({ 
+          approved: true,
+          edited: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', entryId);
+
+      if (error) {
+        console.error('❌ Error approving entry:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Successfully approved entry: ${entryId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in approveEntry:', error);
+      return { success: false, error: 'Failed to approve entry' };
+    }
+  }
+
+  // Approve deletion (permanently delete)
+  async approveDeletion(entryId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔄 Approving deletion for entry: ${entryId}`);
+      
+      const { error } = await supabase
+        .from('cash_book')
+        .delete()
+        .eq('id', entryId);
+
+      if (error) {
+        console.error('❌ Error approving deletion:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Successfully approved deletion for entry: ${entryId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in approveDeletion:', error);
+      return { success: false, error: 'Failed to approve deletion' };
+    }
+  }
+
+  // Reject deletion (restore record to normal state)
+  async rejectDeletion(entryId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔄 Rejecting deletion for entry: ${entryId}`);
+      
+      // Set status to rejected (keep in approve records but don't restore)
+      const { error } = await supabase
+        .from('cash_book')
+        .update({ 
+          status: 'rejected',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', entryId);
+
+      if (error) {
+        console.error('❌ Error rejecting deletion:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Successfully rejected deletion for entry: ${entryId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in rejectDeletion:', error);
+      return { success: false, error: 'Failed to reject deletion' };
+    }
+  }
+
+  // Approve specific entries (set to approved instead of toggle)
+  async approveEntries(entryIds: string[]): Promise<{ success: number; failed: number }> {
+    try {
+      console.log(`🔄 Approving ${entryIds.length} entries...`);
+
+      const { error } = await supabase
+        .from('cash_book')
+        .update({
+          approved: true,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', entryIds);
+
+      if (error) {
+        console.error('❌ Error approving entries:', error);
+        return { success: 0, failed: entryIds.length };
+      }
+
+      console.log(`✅ Successfully approved ${entryIds.length} entries`);
+      return { success: entryIds.length, failed: 0 };
+    } catch (error) {
+      console.error('❌ Error in approveEntries:', error);
+      return { success: 0, failed: entryIds.length };
+    }
+  }
+
+  // Bulk update cash book entries
+  async bulkUpdateCashBookEntries(operations: any[]): Promise<{ success: number; failed: number }> {
+    try {
+      console.log(`🔄 Processing ${operations.length} bulk operations...`);
+      
+      let successCount = 0;
+      let failedCount = 0;
+      
+      for (const operation of operations) {
+        try {
+          if (operation.type === 'create') {
+            await this.addCashBookEntry(operation.data);
+            successCount++;
+          } else if (operation.type === 'update') {
+            await this.updateCashBookEntry(operation.id, operation.data);
+            successCount++;
+          } else if (operation.type === 'delete') {
+            await this.deleteCashBookEntry(operation.id, 'bulk_operation');
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`❌ Error in bulk operation:`, error);
+          failedCount++;
+        }
+      }
+      
+      console.log(`✅ Bulk operations completed: ${successCount} success, ${failedCount} failed`);
+      return { success: successCount, failed: failedCount };
+    } catch (error) {
+      console.error('❌ Error in bulkUpdateCashBookEntries:', error);
+      return { success: 0, failed: operations.length };
+    }
   }
 
   // Toggle approval status
@@ -1815,23 +2704,42 @@ class SupabaseDatabase {
     try {
       console.log(`🔍 [DEBUG] Fetching account names for company: "${companyName}"`);
       
-      const { data, error } = await supabase
+      // First, get accounts from cash_book table (existing transactions)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('acc_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
         .order('acc_name');
 
-      if (error) {
-        console.error('Error fetching distinct account names by company:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching account names from cash_book:', cashBookError);
       }
 
-      console.log(`📊 [DEBUG] Raw data for company "${companyName}":`, data?.length || 0, 'records');
-      console.log(`📊 [DEBUG] Sample data:`, data?.slice(0, 5));
+      // Then, get accounts from company_main_accounts table (manually created accounts)
+      const { data: mainAccountsData, error: mainAccountsError } = await supabase
+        .from('company_main_accounts')
+        .select('acc_name')
+        .eq('company_name', companyName)
+        .not('acc_name', 'is', null)
+        .order('acc_name');
 
-      const uniqueAccounts = [...new Set(data?.map(item => item.acc_name))];
-      console.log(`📊 [DEBUG] Unique accounts for company "${companyName}":`, uniqueAccounts.length, 'accounts');
+      if (mainAccountsError) {
+        console.error('Error fetching account names from company_main_accounts:', mainAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookAccounts = cashBookData?.map(item => item.acc_name) || [];
+      const mainAccounts = mainAccountsData?.map(item => item.acc_name) || [];
+      
+      console.log(`📊 [DEBUG] Cash book accounts for company "${companyName}":`, cashBookAccounts.length, 'accounts');
+      console.log(`📊 [DEBUG] Main accounts for company "${companyName}":`, mainAccounts.length, 'accounts');
+
+      // Get unique accounts from both sources
+      const allAccounts = [...cashBookAccounts, ...mainAccounts];
+      const uniqueAccounts = [...new Set(allAccounts)];
+      
+      console.log(`📊 [DEBUG] Total unique accounts for company "${companyName}":`, uniqueAccounts.length, 'accounts');
       console.log(`📊 [DEBUG] Account names:`, uniqueAccounts);
       
       return uniqueAccounts.sort();
@@ -1843,19 +2751,38 @@ class SupabaseDatabase {
 
   async getSubAccountsByAccountName(accountName: string): Promise<string[]> {
     try {
-      const { data, error } = await supabase
+      // First, get sub accounts from cash_book table (existing transactions)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('sub_acc_name')
         .eq('acc_name', accountName)
         .not('sub_acc_name', 'is', null)
         .order('sub_acc_name');
 
-      if (error) {
-        console.error('Error fetching sub accounts by account name:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching sub accounts from cash_book:', cashBookError);
       }
 
-      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      // Then, get sub accounts from company_main_sub_acc table (manually created sub accounts)
+      const { data: subAccountsData, error: subAccountsError } = await supabase
+        .from('company_main_sub_acc')
+        .select('sub_acc')
+        .eq('acc_name', accountName)
+        .not('sub_acc', 'is', null)
+        .order('sub_acc');
+
+      if (subAccountsError) {
+        console.error('Error fetching sub accounts from company_main_sub_acc:', subAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookSubAccounts = cashBookData?.map(item => item.sub_acc_name) || [];
+      const mainSubAccounts = subAccountsData?.map(item => item.sub_acc) || [];
+      
+      // Get unique sub accounts from both sources
+      const allSubAccounts = [...cashBookSubAccounts, ...mainSubAccounts];
+      const uniqueSubAccounts = [...new Set(allSubAccounts)];
+      
       return uniqueSubAccounts.sort();
     } catch (error) {
       console.error('Error in getSubAccountsByAccountName:', error);
@@ -1865,7 +2792,8 @@ class SupabaseDatabase {
 
   async getSubAccountsByAccountAndCompany(accountName: string, companyName: string): Promise<string[]> {
     try {
-      const { data, error } = await supabase
+      // First, get sub accounts from cash_book table (existing transactions)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('sub_acc_name')
         .eq('acc_name', accountName)
@@ -1873,12 +2801,31 @@ class SupabaseDatabase {
         .not('sub_acc_name', 'is', null)
         .order('sub_acc_name');
 
-      if (error) {
-        console.error('Error fetching sub accounts by account and company:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching sub accounts from cash_book:', cashBookError);
       }
 
-      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      // Then, get sub accounts from company_main_sub_acc table (manually created sub accounts)
+      const { data: subAccountsData, error: subAccountsError } = await supabase
+        .from('company_main_sub_acc')
+        .select('sub_acc')
+        .eq('acc_name', accountName)
+        .eq('company_name', companyName)
+        .not('sub_acc', 'is', null)
+        .order('sub_acc');
+
+      if (subAccountsError) {
+        console.error('Error fetching sub accounts from company_main_sub_acc:', subAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookSubAccounts = cashBookData?.map(item => item.sub_acc_name) || [];
+      const mainSubAccounts = subAccountsData?.map(item => item.sub_acc) || [];
+      
+      // Get unique sub accounts from both sources
+      const allSubAccounts = [...cashBookSubAccounts, ...mainSubAccounts];
+      const uniqueSubAccounts = [...new Set(allSubAccounts)];
+      
       return uniqueSubAccounts.sort();
     } catch (error) {
       console.error('Error in getSubAccountsByAccountAndCompany:', error);
@@ -1932,10 +2879,11 @@ class SupabaseDatabase {
     }
   }
 
-  // Get distinct sub-account names by company from cash_book
+  // Get distinct sub-account names by company from both cash_book and company_main_sub_acc
   async getDistinctSubAccountNamesByCompany(companyName: string): Promise<string[]> {
     try {
-      const { data, error } = await supabase
+      // First, get sub accounts from cash_book table (existing transactions)
+      const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('sub_acc_name')
         .eq('company_name', companyName)
@@ -1943,12 +2891,31 @@ class SupabaseDatabase {
         .not('sub_acc_name', 'eq', '')
         .order('sub_acc_name');
 
-      if (error) {
-        console.error('Error fetching distinct sub-account names by company:', error);
-        return [];
+      if (cashBookError) {
+        console.error('Error fetching sub accounts from cash_book:', cashBookError);
       }
 
-      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc_name))];
+      // Then, get sub accounts from company_main_sub_acc table (manually created sub accounts)
+      const { data: subAccountsData, error: subAccountsError } = await supabase
+        .from('company_main_sub_acc')
+        .select('sub_acc')
+        .eq('company_name', companyName)
+        .not('sub_acc', 'is', null)
+        .not('sub_acc', 'eq', '')
+        .order('sub_acc');
+
+      if (subAccountsError) {
+        console.error('Error fetching sub accounts from company_main_sub_acc:', subAccountsError);
+      }
+
+      // Combine both sources
+      const cashBookSubAccounts = cashBookData?.map(item => item.sub_acc_name) || [];
+      const mainSubAccounts = subAccountsData?.map(item => item.sub_acc) || [];
+      
+      // Get unique sub accounts from both sources
+      const allSubAccounts = [...cashBookSubAccounts, ...mainSubAccounts];
+      const uniqueSubAccounts = [...new Set(allSubAccounts)];
+      
       return uniqueSubAccounts.sort();
     } catch (error) {
       console.error('Error in getDistinctSubAccountNamesByCompany:', error);

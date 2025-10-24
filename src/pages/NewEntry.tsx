@@ -30,10 +30,6 @@ interface NewEntryForm {
   purchaseQ: string;
   credit: string;
   debit: string;
-  creditOnline: string;
-  creditOffline: string;
-  debitOnline: string;
-  debitOffline: string;
   staff: string;
   quantityChecked: boolean;
 }
@@ -44,7 +40,7 @@ const NewEntry: React.FC = () => {
   // React Query hooks
   const createEntryMutation = useCreateCashBookEntry();
   const bulkOperationsMutation = useBulkCashBookOperations();
-  const { companies, accounts } = useDropdownData();
+  const { companies } = useDropdownData();
 
   const [entry, setEntry] = useState<NewEntryForm>({
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -56,10 +52,6 @@ const NewEntry: React.FC = () => {
     purchaseQ: '',
     credit: '',
     debit: '',
-    creditOnline: '',
-    creditOffline: '',
-    debitOnline: '',
-    debitOffline: '',
     staff: user?.username || '',
     quantityChecked: false,
   });
@@ -75,18 +67,18 @@ const NewEntry: React.FC = () => {
     purchaseQ: '',
     credit: '',
     debit: '',
-    creditOnline: '',
-    creditOffline: '',
-    debitOnline: '',
-    debitOffline: '',
     staff: user?.username || '',
     quantityChecked: false,
   });
 
   // Convert React Query data to dropdown format
   const companiesOptions = companies?.data?.map(c => ({ value: c.company_name, label: c.company_name })) || [];
-  const accountsOptions = accounts?.data?.map(a => ({ value: a.acc_name, label: a.acc_name })) || [];
-  const [subAccounts, setSubAccounts] = useState<
+  
+  // New state for dependent dropdowns like in EditEntry
+  const [distinctAccountNames, setDistinctAccountNames] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [dependentSubAccounts, setDependentSubAccounts] = useState<
     { value: string; label: string }[]
   >([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
@@ -184,6 +176,7 @@ const NewEntry: React.FC = () => {
 
   useEffect(() => {
     loadUsersData();
+    loadDistinctAccountNames();
     updateDailyEntryNumber();
     updateTotalEntryCount();
   }, []);
@@ -194,13 +187,23 @@ const NewEntry: React.FC = () => {
 
   useEffect(() => {
     if (entry.companyName) {
-      loadAccountsByCompany();
+      loadAccountNamesByCompany(entry.companyName);
+      setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
+    } else {
+      loadDistinctAccountNames();
     }
   }, [entry.companyName]);
 
   useEffect(() => {
-    if (entry.companyName && entry.accountName) {
-      loadSubAccountsByAccount();
+    if (entry.accountName) {
+      if (entry.companyName) {
+        loadSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
+      } else {
+        loadDependentSubAccounts(entry.accountName);
+      }
+      setEntry(prev => ({ ...prev, subAccount: '' }));
+    } else {
+      setDependentSubAccounts([]);
     }
   }, [entry.companyName, entry.accountName]);
 
@@ -255,33 +258,60 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  const loadAccountsByCompany = async () => {
+
+  // New functions for dependent dropdowns like in EditEntry
+  const loadDistinctAccountNames = async () => {
     try {
-      await supabaseDB.getAccountsByCompany(entry.companyName);
-      // Accounts data is now managed by React Query
-      // Note: Accounts are now managed by React Query, but we still need to filter by company
-      // This will be handled by the component logic
-      setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
+      const accountNames = await supabaseDB.getDistinctAccountNames();
+      const accountNamesData = accountNames.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDistinctAccountNames(accountNamesData);
     } catch (error) {
-      console.error('Error loading accounts:', error);
-      toast.error('Failed to load accounts');
+      console.error('Error loading distinct account names:', error);
+      toast.error('Failed to load account names');
     }
   };
 
-  const loadSubAccountsByAccount = async () => {
+  const loadAccountNamesByCompany = async (companyName: string) => {
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccount(
-        entry.companyName,
-        entry.accountName
-      );
-      const subAccountsData = subAccounts.map(subAcc => ({
-        value: subAcc.sub_acc,
-        label: subAcc.sub_acc,
+      const accountNames = await supabaseDB.getDistinctAccountNamesByCompany(companyName);
+      const accountNamesData = accountNames.map(name => ({
+        value: name,
+        label: name,
       }));
-      setSubAccounts(subAccountsData);
-      setEntry(prev => ({ ...prev, subAccount: '' }));
+      setDistinctAccountNames(accountNamesData);
     } catch (error) {
-      console.error('Error loading sub accounts:', error);
+      console.error('Error loading account names by company:', error);
+      toast.error('Failed to load account names');
+    }
+  };
+
+  const loadDependentSubAccounts = async (accountName: string) => {
+    try {
+      const subAccountNames = await supabaseDB.getSubAccountsByAccountName(accountName);
+      const subAccountNamesData = subAccountNames.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDependentSubAccounts(subAccountNamesData);
+    } catch (error) {
+      console.error('Error loading dependent sub accounts:', error);
+      toast.error('Failed to load sub accounts');
+    }
+  };
+
+  const loadSubAccountsByAccountAndCompany = async (accountName: string, companyName: string) => {
+    try {
+      const subAccountNames = await supabaseDB.getSubAccountsByAccountAndCompany(accountName, companyName);
+      const subAccountNamesData = subAccountNames.map(name => ({
+        value: name,
+        label: name,
+      }));
+      setDependentSubAccounts(subAccountNamesData);
+    } catch (error) {
+      console.error('Error loading sub accounts by account and company:', error);
       toast.error('Failed to load sub accounts');
     }
   };
@@ -403,15 +433,11 @@ const NewEntry: React.FC = () => {
         purchaseQ: '',
         credit: '',
         debit: '',
-        creditOnline: '',
-        creditOffline: '',
-        debitOnline: '',
-        debitOffline: '',
         staff: user?.username || '',
         quantityChecked: false,
       });
-      // Accounts are now managed by React Query
-      setSubAccounts([]);
+      // Reset dependent dropdowns
+      setDependentSubAccounts([]);
       setDualEntry({
         date: currentDate,
         companyName: '',
@@ -422,10 +448,6 @@ const NewEntry: React.FC = () => {
         purchaseQ: '',
         credit: '',
         debit: '',
-        creditOnline: '',
-        creditOffline: '',
-        debitOnline: '',
-        debitOffline: '',
         staff: user?.username || '',
         quantityChecked: false,
       });
@@ -483,7 +505,12 @@ const NewEntry: React.FC = () => {
         entry.companyName,
         newAccountName.trim()
       );
-      // Accounts are now managed by React Query - will be refetched automatically
+      // Refresh the account names dropdown based on current company selection
+      if (entry.companyName) {
+        loadAccountNamesByCompany(entry.companyName);
+      } else {
+        loadDistinctAccountNames();
+      }
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
       setNewAccountName('');
       setShowNewAccount(false);
@@ -507,7 +534,7 @@ const NewEntry: React.FC = () => {
         entry.accountName,
         newSubAccountName.trim()
       );
-      setSubAccounts(prev => [
+      setDependentSubAccounts(prev => [
         ...prev,
         { value: subAccount.sub_acc, label: subAccount.sub_acc },
       ]);
@@ -560,7 +587,7 @@ const NewEntry: React.FC = () => {
           if (entry.companyName && entry.accountName && entry.subAccount) {
             success = await supabaseDB.deleteSubAccount(entry.subAccount);
             if (success) {
-              setSubAccounts(prev =>
+              setDependentSubAccounts(prev =>
                 prev.filter(s => s.value !== entry.subAccount)
               );
               setEntry(prev => ({ ...prev, subAccount: '' }));
@@ -1116,36 +1143,35 @@ const NewEntry: React.FC = () => {
   return (
     <div className='min-h-screen flex flex-col w-full max-w-full'>
       {/* Header - Fixed at top */}
-      <div className='flex items-center justify-between p-1 bg-white border-b border-gray-200 flex-shrink-0'>
+      <div className='flex items-center justify-between p-4 bg-white border-b border-gray-200 flex-shrink-0'>
         <div>
-          <h1 className='text-lg font-bold text-gray-900'>New Entry</h1>
-          <p className='text-xs text-gray-600'>
+          <h1 className='text-2xl font-bold text-gray-900'>New Entry</h1>
+          <p className='text-sm text-gray-600'>
             Create new cash book entries with automatic daily entry numbering
           </p>
         </div>
         <div className='text-right'>
-          <div className='flex flex-col items-end gap-1'>
-            <div className='flex items-center gap-3'>
+          <div className='flex flex-col items-end gap-2'>
+            <div className='flex items-center gap-4'>
               <div>
-                <div className='text-xs text-gray-600'>Total Entries</div>
-                <div className='text-lg font-bold text-purple-600'>
+                <div className='text-sm text-gray-600'>Total Entries</div>
+                <div className='text-xl font-bold text-purple-600'>
                   {totalEntryCount.toLocaleString()}
                 </div>
               </div>
-              <div className='w-px h-6 bg-gray-300'></div>
+              <div className='w-px h-8 bg-gray-300'></div>
               <div>
-                <div className='text-xs text-gray-600'>Daily Entry #</div>
-                <div className='text-lg font-bold text-blue-600'>
+                <div className='text-sm text-gray-600'>Daily Entry #</div>
+                <div className='text-xl font-bold text-blue-600'>
                   {currentDailyEntryNo}
                 </div>
               </div>
             </div>
-            <div className='flex gap-1'>
+            <div className='flex gap-2'>
               <Button
                 variant='secondary'
                 onClick={testDatabaseConnection}
                 size='sm'
-                className='text-xs'
               >
                 Test DB
               </Button>
@@ -1153,7 +1179,6 @@ const NewEntry: React.FC = () => {
                 variant='secondary'
                 onClick={loadUsersData}
                 size='sm'
-                className='text-xs'
                 icon={RefreshCw}
               >
                 Refresh
@@ -1172,16 +1197,16 @@ const NewEntry: React.FC = () => {
       </div>
 
       {/* Main Content - Vertical Layout */}
-      <div className='flex-1 p-1'>
+      <div className='flex-1 p-4'>
         <div className='w-full max-w-7xl mx-auto flex flex-col'>
           {/* Entry Form - Full Panel */}
           <div className='w-full'>
             <Card
-              className='p-1 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'
+              className='p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'
             >
-              <form onSubmit={handleSubmit} className='space-y-1 text-xs'>
+              <form onSubmit={handleSubmit} className='space-y-4 text-sm'>
                 {/* Dual Entry Toggle */}
-                <div className='flex items-center justify-center mb-1 p-1 bg-blue-50 rounded border border-blue-200'>
+                <div className='flex items-center justify-center mb-4 p-3 bg-blue-50 rounded border border-blue-200'>
                   <input
                     type='checkbox'
                     id='dualEntryEnabled'
@@ -1198,7 +1223,7 @@ const NewEntry: React.FC = () => {
                 </div>
 
                 {/* Basic Information */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                   <Input
                     ref={dateRef}
                     label='Date'
@@ -1209,7 +1234,7 @@ const NewEntry: React.FC = () => {
                     required
                   />
 
-                  <div className='space-y-2'>
+                  <div className='space-y-3'>
                     <SearchableSelect
                       ref={companyNameRef}
                       label='Company Name'
@@ -1250,8 +1275,8 @@ const NewEntry: React.FC = () => {
                 </div>
 
                 {/* Account Information */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
-                  <div className='space-y-1'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  <div className='space-y-3'>
                     <SearchableSelect
                       ref={mainAccountRef}
                       label='Main Account'
@@ -1259,11 +1284,10 @@ const NewEntry: React.FC = () => {
                       onChange={value =>
                         handleInputChange('accountName', value)
                       }
-                      options={accountsOptions}
+                      options={distinctAccountNames}
                       placeholder='Select account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, subAccountRef)}
                       required
-                      disabled={!entry.companyName}
                     />
                     <div className='flex gap-2'>
                       <Button
@@ -1292,16 +1316,15 @@ const NewEntry: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className='space-y-1'>
+                  <div className='space-y-3'>
                     <SearchableSelect
                       ref={subAccountRef}
                       label='Sub Account'
                       value={entry.subAccount}
                       onChange={value => handleInputChange('subAccount', value)}
-                      options={subAccounts}
+                      options={dependentSubAccounts}
                       placeholder='Select sub account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, particularsRef)}
-                      disabled={!entry.accountName}
                     />
                     <div className='flex gap-2'>
                       <Button
@@ -1343,7 +1366,7 @@ const NewEntry: React.FC = () => {
                 />
 
                 {/* Amounts */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                   <Input
                     ref={creditRef}
                     label='Credit'
@@ -1378,6 +1401,17 @@ const NewEntry: React.FC = () => {
                   onChange={value => handleInputChange('staff', value)}
                   options={users}
                   placeholder='Select staff...'
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    // Staff is the final field in the main navigation chain
+                    // Enter key will submit the form if all required fields are filled
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // Check if form is ready to submit
+                      if (entry.companyName && entry.accountName && entry.particulars && entry.staff) {
+                        handleSubmit(e as any);
+                      }
+                    }
+                  }}
                   required
                 />
 
@@ -1406,7 +1440,7 @@ const NewEntry: React.FC = () => {
                   </div>
 
                   {entry.quantityChecked && (
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                       <Input
                         label='Sale Quantity'
                         value={entry.saleQ}
@@ -1433,12 +1467,12 @@ const NewEntry: React.FC = () => {
 
                 {/* Dual Entry Section */}
                 {dualEntryEnabled && (
-                  <div className='border border-blue-300 rounded p-1 mt-1 bg-blue-50'>
-                    <h3 className='text-sm font-bold mb-1 text-blue-700 text-center'>
+                  <div className='border border-blue-300 rounded p-4 mt-4 bg-blue-50'>
+                    <h3 className='text-sm font-bold mb-4 text-blue-700 text-center'>
                       Dual Entry
                     </h3>
                     {/* Basic Information */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                       <Input
                         ref={dualDateRef}
                         label='Date'
@@ -1467,7 +1501,7 @@ const NewEntry: React.FC = () => {
                       />
                     </div>
                     {/* Account Information */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mt-4'>
                       <SearchableSelect
                         ref={dualMainAccountRef}
                         label='Main Account'
@@ -1478,11 +1512,10 @@ const NewEntry: React.FC = () => {
                             accountName: value,
                           }))
                         }
-                        options={accountsOptions}
+                        options={distinctAccountNames}
                         placeholder='Select account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualSubAccountRef)}
                         required
-                        disabled={!dualEntry.companyName}
                       />
                       <SearchableSelect
                         ref={dualSubAccountRef}
@@ -1491,10 +1524,9 @@ const NewEntry: React.FC = () => {
                         onChange={value =>
                           setDualEntry(prev => ({ ...prev, subAccount: value }))
                         }
-                        options={subAccounts}
+                        options={dependentSubAccounts}
                         placeholder='Select sub account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualParticularsRef)}
-                        disabled={!dualEntry.accountName}
                       />
                     </div>
                     {/* Particulars */}
@@ -1508,10 +1540,10 @@ const NewEntry: React.FC = () => {
                       onKeyDown={(e) => handleKeyDown(e, dualCreditRef)}
                       placeholder='Enter transaction details...'
                       required
-                      className='mt-2'
+                      className='mt-4'
                     />
                     {/* Amounts */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mt-4'>
                       <Input
                         ref={dualCreditRef}
                         label='Credit'
@@ -1548,10 +1580,22 @@ const NewEntry: React.FC = () => {
                       }
                       options={users}
                       placeholder='Select staff...'
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                        // Staff is the final field in the dual entry navigation chain
+                        // Enter key will submit the form if all required fields are filled
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          // Check if both main and dual entries are ready to submit
+                          if (entry.companyName && entry.accountName && entry.particulars && entry.staff &&
+                              dualEntry.companyName && dualEntry.accountName && dualEntry.particulars && dualEntry.staff) {
+                            handleSubmit(e as any);
+                          }
+                        }
+                      }}
                       required
                     />
                     {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
-                    <div className='space-y-4 mt-2'>
+                    <div className='space-y-4 mt-4'>
                       <div className='flex items-center gap-2'>
                         <input
                           type='checkbox'
@@ -1575,7 +1619,7 @@ const NewEntry: React.FC = () => {
                       </div>
 
                       {dualEntry.quantityChecked && (
-                        <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                           <Input
                             label='Sale Quantity'
                             value={dualEntry.saleQ}
@@ -1606,12 +1650,12 @@ const NewEntry: React.FC = () => {
                 )}
 
                 {/* Action Buttons */}
-                <div className='flex flex-col sm:flex-row gap-1 pt-1 border-t border-gray-200'>
+                <div className='flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200'>
                   <Button
                     type='submit'
                     disabled={loading}
                     size='sm'
-                    className='flex-1 text-xs py-1'
+                    className='flex-1'
                   >
                     {loading ? 'Saving...' : 'Save Entry'}
                   </Button>
@@ -1630,17 +1674,13 @@ const NewEntry: React.FC = () => {
                         purchaseQ: '',
                         credit: '',
                         debit: '',
-                        creditOnline: '',
-                        creditOffline: '',
-                        debitOnline: '',
-                        debitOffline: '',
                         staff: user?.username || '',
                         quantityChecked: false,
                       });
-                      // Accounts are now managed by React Query
-                      setSubAccounts([]);
+                      // Reset dependent dropdowns
+                      setDependentSubAccounts([]);
                     }}
-                    className='flex-1 text-xs py-1'
+                    className='flex-1'
                   >
                     Reset Form
                   </Button>

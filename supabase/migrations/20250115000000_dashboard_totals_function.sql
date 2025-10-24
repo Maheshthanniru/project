@@ -27,3 +27,8 @@ $$;
 
 -- Grant execute permission to authenticated users
 GRANT EXECUTE ON FUNCTION get_dashboard_totals() TO authenticated;
+
+
+
+
+

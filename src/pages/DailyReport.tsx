@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
-import Input from '../components/UI/Input';
-import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { format, addDays, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { Search } from 'lucide-react';
 
 interface DailyReportData {
@@ -18,16 +16,9 @@ interface DailyReportData {
   closingBalance: number;
   grandTotal: number;
   companyBalances: { [key: string]: number };
-  onlineCredit: number;
-  offlineCredit: number;
-  onlineDebit: number;
-  offlineDebit: number;
-  totalOnline: number;
-  totalOffline: number;
 }
 
 const DailyReport: React.FC = () => {
-  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
   );
@@ -41,23 +32,11 @@ const DailyReport: React.FC = () => {
     closingBalance: 0,
     grandTotal: 0,
     companyBalances: {},
-    onlineCredit: 0,
-    offlineCredit: 0,
-    onlineDebit: 0,
-    offlineDebit: 0,
-    totalOnline: 0,
-    totalOffline: 0,
   });
   const [companies, setCompanies] = useState<
     { value: string; label: string }[]
   >([]);
   const [loading, setLoading] = useState(false);
-  const [showCompanyBalances, setShowCompanyBalances] = useState(true);
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
-  
-  // Data loading states
-  const [totalEntries, setTotalEntries] = useState(0);
-  const [allLoadedEntries, setAllLoadedEntries] = useState<any[]>([]);
 
   useEffect(() => {
     loadCompanies();
@@ -143,25 +122,6 @@ const DailyReport: React.FC = () => {
       const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
       const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
 
-      // Calculate online vs offline breakdown
-      let onlineCredit = 0;
-      let offlineCredit = 0;
-      let onlineDebit = 0;
-      let offlineDebit = 0;
-
-      filteredEntries.forEach(entry => {
-        // Credit amounts
-        onlineCredit += entry.credit_online || 0;
-        offlineCredit += entry.credit_offline || 0;
-
-        // Debit amounts
-        onlineDebit += entry.debit_online || 0;
-        offlineDebit += entry.debit_offline || 0;
-      });
-
-      const totalOnline = onlineCredit + onlineDebit;
-      const totalOffline = offlineCredit + offlineDebit;
-
       const closingBalance = openingBalance + (totalCredit - totalDebit);
       const grandTotal = totalCredit + totalDebit;
 
@@ -192,18 +152,8 @@ const DailyReport: React.FC = () => {
         closingBalance,
         grandTotal,
         companyBalances,
-        onlineCredit,
-        offlineCredit,
-        onlineDebit,
-        offlineDebit,
-        totalOnline,
-        totalOffline,
       });
 
-      // Update total entries count for display
-      const totalCount = await supabaseDB.getCashBookEntriesCount();
-      setTotalEntries(totalCount);
-      setAllLoadedEntries(filteredEntries); // Store current filtered entries
 
       console.log(`✅ Daily Report generated for ${selectedDate}: ${filteredEntries.length} entries`);
       toast.success(`Daily Report generated: ${filteredEntries.length} entries for ${selectedDate}`);
@@ -215,12 +165,6 @@ const DailyReport: React.FC = () => {
     }
   };
 
-  const navigateDate = (direction: 'prev' | 'next') => {
-    const currentDate = new Date(selectedDate);
-    const newDate =
-      direction === 'prev' ? subDays(currentDate, 1) : addDays(currentDate, 1);
-    setSelectedDate(format(newDate, 'yyyy-MM-dd'));
-  };
 
   const printReport = async () => {
     try {
@@ -291,13 +235,6 @@ const DailyReport: React.FC = () => {
     toast.success('Report exported successfully!');
   };
 
-  const getRowColor = (entry: any) => {
-    if (!entry.approved) return 'bg-yellow-50 border-yellow-200';
-    if (entry.edited) return 'bg-blue-50 border-blue-200';
-    if (entry.credit > 0) return 'bg-green-50 border-green-200';
-    if (entry.debit > 0) return 'bg-red-50 border-red-200';
-    return 'bg-white border-gray-200';
-  };
 
   return (
     <div className='min-h-screen flex flex-col'>
@@ -316,20 +253,13 @@ const DailyReport: React.FC = () => {
             />
           </div>
           <div className='flex-1'>
-            <label className='block text-sm font-medium text-gray-700 mb-1'>
-              Company
-            </label>
-            <select
+            <SearchableSelect
+              label='Company'
               value={selectedCompany}
-              onChange={e => setSelectedCompany(e.target.value)}
-              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            >
-              {companies.map(c => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedCompany}
+              options={companies}
+              placeholder='Select company...'
+            />
           </div>
           <div className='flex-1'>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -428,61 +358,6 @@ const DailyReport: React.FC = () => {
                 </div>
               </div>
 
-              {/* Online vs Offline Transaction Breakdown */}
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6'>
-                <div className='bg-cyan-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-cyan-900 font-semibold text-sm'>
-                    Online Transactions:
-                  </span>
-                  <span className='text-xl font-bold text-cyan-900'>
-                    ₹{reportData.totalOnline.toLocaleString()}
-                  </span>
-                  <span className='text-cyan-700 text-xs mt-1'>
-                    Credit: ₹{reportData.onlineCredit.toLocaleString()} | Debit:
-                    ₹{reportData.onlineDebit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='bg-gray-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-gray-900 font-semibold text-sm'>
-                    Offline Transactions:
-                  </span>
-                  <span className='text-xl font-bold text-gray-900'>
-                    ₹{reportData.totalOffline.toLocaleString()}
-                  </span>
-                  <span className='text-gray-700 text-xs mt-1'>
-                    Credit: ₹{reportData.offlineCredit.toLocaleString()} |
-                    Debit: ₹{reportData.offlineDebit.toLocaleString()}
-                  </span>
-                </div>
-                <div className='bg-indigo-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-indigo-900 font-semibold text-sm'>
-                    Online Credit:
-                  </span>
-                  <span className='text-xl font-bold text-indigo-900'>
-                    ₹{reportData.onlineCredit.toLocaleString()}
-                  </span>
-                  <span className='text-indigo-700 text-xs mt-1'>
-                    {reportData.totalCredit > 0
-                      ? `${((reportData.onlineCredit / reportData.totalCredit) * 100).toFixed(1)}%`
-                      : '0%'}{' '}
-                    of total credit
-                  </span>
-                </div>
-                <div className='bg-pink-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-pink-900 font-semibold text-sm'>
-                    Online Debit:
-                  </span>
-                  <span className='text-xl font-bold text-pink-900'>
-                    ₹{reportData.onlineDebit.toLocaleString()}
-                  </span>
-                  <span className='text-pink-700 text-xs mt-1'>
-                    {reportData.totalDebit > 0
-                      ? `${((reportData.onlineDebit / reportData.totalDebit) * 100).toFixed(1)}%`
-                      : '0%'}{' '}
-                    of total debit
-                  </span>
-                </div>
-              </div>
               <table className='min-w-full text-sm'>
                 <thead className='bg-blue-100'>
                   <tr>
@@ -494,7 +369,6 @@ const DailyReport: React.FC = () => {
                     <th className='px-3 py-2 text-left'>Particulars</th>
                     <th className='px-3 py-2 text-right'>Credit</th>
                     <th className='px-3 py-2 text-right'>Debit</th>
-                    <th className='px-3 py-2 text-center'>Payment Mode</th>
                     <th className='px-3 py-2 text-left'>Staff</th>
                     <th className='px-3 py-2 text-left'>Approved</th>
                   </tr>
@@ -525,37 +399,6 @@ const DailyReport: React.FC = () => {
                         {entry.debit > 0
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
-                      </td>
-                      <td className='px-3 py-2 text-center'>
-                        {entry.credit > 0 && (
-                          <div className='space-y-1'>
-                            {entry.credit_online > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                                Online: ₹{entry.credit_online.toLocaleString()}
-                              </span>
-                            )}
-                            {entry.credit_offline > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                                Offline: ₹
-                                {entry.credit_offline.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {entry.debit > 0 && (
-                          <div className='space-y-1'>
-                            {entry.debit_online > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                                Online: ₹{entry.debit_online.toLocaleString()}
-                              </span>
-                            )}
-                            {entry.debit_offline > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                                Offline: ₹{entry.debit_offline.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </td>
                       <td className='px-3 py-2'>{entry.staff}</td>
                       <td className='px-3 py-2'>

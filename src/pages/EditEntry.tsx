@@ -79,6 +79,11 @@ const EditEntry: React.FC = () => {
   const filteredEntries = useMemo(() => {
     let filtered = entries;
     
+    // Filter out deleted-pending and rejected records (include null/undefined status as approved)
+    filtered = filtered.filter(entry => 
+      !entry.status || (entry.status !== 'deleted-pending' && entry.status !== 'rejected')
+    );
+    
     // Apply date filter from calendar selection (priority over other date filters)
     if (selectedDateFilter) {
       filtered = filtered.filter(entry => {
@@ -796,34 +801,31 @@ const EditEntry: React.FC = () => {
     // TODO: Implement locked check when Supabase schema supports it
 
     if (
-      window.confirm(`Are you sure you want to delete entry #${entry.sno}?`)
+      window.confirm(`Are you sure you want to delete entry #${entry.sno}? This will mark it for approval.`)
     ) {
       try {
         console.log(
-          'Attempting to delete entry:',
+          'Attempting to soft delete entry:',
           entry.id,
           'by user:',
           user?.username
         );
-        const success = await supabaseDB.deleteCashBookEntry(
-          entry.id,
-          user?.username || 'admin'
-        );
-        console.log('Delete result:', success);
-        if (success) {
+        const result = await supabaseDB.softDeleteEntry(entry.id);
+        console.log('Soft delete result:', result);
+        if (result.success) {
           await loadEntries();
-          toast.success('Entry deleted successfully!');
+          toast.success('Entry marked for deletion - pending approval!');
           
           // Trigger dashboard refresh
           localStorage.setItem('dashboard-refresh', Date.now().toString());
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
-          toast.error('Failed to delete entry - check console for details');
+          toast.error(result.error || 'Failed to mark entry for deletion');
         }
       } catch (error) {
-        console.error('Error deleting entry:', error);
+        console.error('Error soft deleting entry:', error);
         toast.error(
-          `Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to mark entry for deletion: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
     }
