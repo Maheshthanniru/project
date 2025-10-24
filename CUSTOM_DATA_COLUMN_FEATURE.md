@@ -180,3 +180,4 @@ const handleCustomDataChange = (accountName: string, value: string) => {
 2. **Special Characters**: Verify special characters work in custom data
 3. **Long Text**: Verify long custom data displays properly
 4. **Multiple Accounts**: Verify custom data works for multiple accounts
+

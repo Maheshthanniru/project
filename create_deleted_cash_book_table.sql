@@ -41,3 +41,4 @@ CREATE INDEX IF NOT EXISTS idx_deleted_cash_book_date ON deleted_cash_book(c_dat
 COMMENT ON TABLE deleted_cash_book IS 'Stores soft-deleted cash book entries with deletion metadata';
 COMMENT ON COLUMN deleted_cash_book.deleted_by IS 'Username of the person who deleted the entry';
 COMMENT ON COLUMN deleted_cash_book.deleted_at IS 'Timestamp when the entry was deleted';
+

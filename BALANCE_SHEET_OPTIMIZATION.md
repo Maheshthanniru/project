@@ -186,3 +186,4 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - Load balancing for multiple server instances
 - CDN integration for static assets
 - Database read replicas for heavy query loads
+

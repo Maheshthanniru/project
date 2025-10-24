@@ -204,3 +204,4 @@ Update error details: { message: "permission denied for table cash_book", code: 
 - Check if there are any database constraints
 
 The enhanced error handling and testing should now provide clear information about what's causing the delete failure and how to fix it. 🧪✅
+

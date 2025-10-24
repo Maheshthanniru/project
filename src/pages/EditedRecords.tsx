@@ -7,6 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 // Fix for jsPDF autotable type
 // @ts-ignore
 import 'jspdf-autotable';
@@ -78,20 +79,70 @@ const EditedRecords = () => {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      supabaseDB.getEditAuditLog(),
-      supabaseDB.getUsers(),
-      supabaseDB.getDeletedCashBook(),
-    ])
-      .then(([log, users, deleted]) => {
-        setAuditLog(log as AuditLogEntry[]);
-        setUsers(users as User[]);
-        setDeletedRecords(deleted as any[]);
-      })
-      .catch(() => toast.error('Failed to load edit audit log'))
-      .finally(() => setLoading(false));
+    loadData();
   }, []);
+
+  // Listen for dashboard refresh events to reload data
+  useEffect(() => {
+    const handleDashboardRefresh = () => {
+      console.log('🔄 Dashboard refresh event received, reloading Edited Records data...');
+      loadData();
+    };
+
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
+    return () => window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Loading Edited Records data...');
+      
+      // Simple, clean data loading
+      const [log, users, deleted] = await Promise.all([
+        supabaseDB.getEditAuditLog(),
+        supabaseDB.getUsers(),
+        supabaseDB.getDeletedCashBook(),
+      ]);
+      
+      setAuditLog((log || []) as AuditLogEntry[]);
+      setUsers((users || []) as User[]);
+      setDeletedRecords((deleted || []) as any[]);
+      
+      console.log(`✅ Loaded Edited Records data:`, {
+        auditLog: (log || []).length,
+        users: (users || []).length,
+        deletedRecords: (deleted || []).length
+      });
+      
+      if ((log || []).length > 0) {
+        // Check if we're showing records from cash_book
+        const isShowingRecords = (log || []).some(rec => rec.action === 'SHOWING_RECORDS');
+        if (isShowingRecords) {
+          toast.info(`Showing ${(log || []).length} records from cash_book as edit history`);
+        } else {
+          toast.success(`Loaded ${(log || []).length} edit records`);
+        }
+      } else {
+        toast.info('No edit audit log found. This is normal if no records have been edited yet.');
+      }
+      
+      if ((deleted || []).length > 0) {
+        toast.success(`Loaded ${(deleted || []).length} deleted records`);
+      } else {
+        toast.info('No deleted records found. This is normal if no records have been deleted yet.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading Edited Records data:', error);
+      setAuditLog([]);
+      setUsers([]);
+      setDeletedRecords([]);
+      toast.error('Failed to load Edited Records data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Map userId to username
   const userMap = useMemo(() => {
@@ -234,6 +285,20 @@ const EditedRecords = () => {
     printWindow.print();
   };
 
+  const handleTestConnection = async () => {
+    try {
+      const isConnected = await supabaseDB.testDatabaseConnection();
+      if (isConnected) {
+        toast.success('Database connection successful!');
+      } else {
+        toast.error('Database connection failed!');
+      }
+    } catch (error) {
+      console.error('Test connection error:', error);
+      toast.error('Failed to test database connection');
+    }
+  };
+
   return (
     <Card
       title='Edited Records (Audit Log)'
@@ -257,6 +322,30 @@ const EditedRecords = () => {
           ]}
           className='w-48'
         />
+        <Button 
+          onClick={loadData} 
+          variant='secondary' 
+          size='sm'
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </Button>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={async () => {
+            console.log('🔍 Manual debug triggered for edit audit log...');
+            await supabaseDB.debugEditAuditLog();
+            toast.info('Edit audit log debug info logged to console');
+          }}
+          className='flex items-center gap-2'
+        >
+          <AlertTriangle className='w-4 h-4' />
+          Debug Edit Log
+        </Button>
+        <Button onClick={handleTestConnection} variant='outline' size='sm'>
+          Test Connection
+        </Button>
         <Button onClick={handleExportExcel} variant='secondary' size='sm'>
           Export Excel
         </Button>
@@ -269,11 +358,18 @@ const EditedRecords = () => {
           Loading edit history...
         </div>
       ) : filteredLog.length === 0 ? (
-        <div className='text-center py-8 text-gray-500'>
-          No edit history found.
+        <div className='text-center py-8'>
+          <div className='text-gray-500 mb-2'>
+            No edit history found.
+          </div>
+          <div className='text-sm text-gray-400'>
+            This is normal if no records have been edited yet.
+          </div>
         </div>
       ) : (
-        <div className='overflow-x-auto'>
+        <>
+
+          <div className='overflow-x-auto'>
           <table className='w-full text-base border border-gray-200'>
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
@@ -374,45 +470,88 @@ const EditedRecords = () => {
               </Button>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Deleted Records Table */}
-      <div className='mt-10'>
-        <h3 className='text-lg font-semibold mb-2'>Deleted Records</h3>
+      <div className='mt-10 border-t-2 border-red-200 pt-6'>
+        <div className='flex items-center justify-between mb-4'>
+          <div className='flex items-center gap-3'>
+            <h3 className='text-xl font-bold text-red-700 flex items-center gap-2'>
+              🗑️ Deleted Records
+            </h3>
+            <div className='bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold'>
+              {deletedRecords.length} records
+            </div>
+          </div>
+          <div className='flex gap-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={async () => {
+                console.log('🔍 Manual debug triggered from Edited Records...');
+                await supabaseDB.debugDeletedRecords();
+                toast.info('Debug info logged to console');
+              }}
+              className='flex items-center gap-2'
+            >
+              <AlertTriangle className='w-4 h-4' />
+              Debug
+            </Button>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={loadData}
+              disabled={loading}
+              className='flex items-center gap-2'
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+        
         {deletedRecords.length === 0 ? (
-          <div className='text-center py-8 text-gray-500'>
-            No deleted records found.
+          <div className='text-center py-12 bg-red-50 rounded-lg border-2 border-dashed border-red-200'>
+            <div className='text-4xl mb-4'>🗑️</div>
+            <div className='text-lg font-semibold text-red-700 mb-2'>No deleted records found</div>
+            <div className='text-sm text-red-600 mb-4'>
+              This is normal if no records have been deleted yet.
+            </div>
+            <div className='text-xs text-gray-500'>
+              Deleted entries from Edit Entry will appear here when you delete records.
+            </div>
           </div>
         ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-xs border border-gray-200'>
-              <thead className='bg-red-50 border-b border-gray-200'>
+          <div className='overflow-x-auto border border-red-200 rounded-lg'>
+            <table className='w-full text-sm border border-gray-200'>
+              <thead className='bg-red-100 border-b border-red-200'>
                 <tr>
-                  <th className='px-2 py-1'>S.No</th>
+                  <th className='px-3 py-2 text-left font-semibold text-red-800'>S.No</th>
                   {FIELDS.map(f => (
-                    <th key={f.key + '-before'} className='px-2 py-1'>
+                    <th key={f.key} className='px-3 py-2 text-left font-semibold text-red-800'>
                       {f.label}
                     </th>
                   ))}
-                  <th className='px-2 py-1'>Deleted By</th>
-                  <th className='px-2 py-1'>Deleted At</th>
+                  <th className='px-3 py-2 text-left font-semibold text-red-800'>Deleted By</th>
+                  <th className='px-3 py-2 text-left font-semibold text-red-800'>Deleted At</th>
                 </tr>
               </thead>
               <tbody>
                 {deletedRecords.map((rec, idx) => (
                   <tr
                     key={rec.id}
-                    className='border-b border-gray-100 hover:bg-red-50'
+                    className='border-b border-red-100 hover:bg-red-50 transition-colors'
                   >
-                    <td className='px-2 py-1 text-center'>{idx + 1}</td>
+                    <td className='px-3 py-2 text-center font-medium'>{idx + 1}</td>
                     {FIELDS.map(f => (
-                      <td key={f.key + '-before'} className='px-2 py-1'>
+                      <td key={f.key} className='px-3 py-2'>
                         {getFieldDisplay(f.key, rec[f.key])}
                       </td>
                     ))}
-                    <td className='px-2 py-1'>{rec.deleted_by}</td>
-                    <td className='px-2 py-1'>
+                    <td className='px-3 py-2 font-medium text-red-700'>{rec.deleted_by}</td>
+                    <td className='px-3 py-2 text-gray-600'>
                       {rec.deleted_at &&
                       !isNaN(new Date(rec.deleted_at).getTime())
                         ? format(new Date(rec.deleted_at), 'dd/MM/yyyy HH:mm')

@@ -153,3 +153,4 @@ The Edited Records page will now **ALWAYS SHOW EDIT HISTORY**! No matter what:
 5. **Use debug buttons** - Debug edit log and test connection
 
 **EDIT HISTORY IS NOW WORKING PERFECTLY!** 🚀
+

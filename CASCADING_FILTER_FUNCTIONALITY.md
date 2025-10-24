@@ -254,3 +254,4 @@ WHERE
 ```
 
 The cascading filter functionality is now fully implemented! When you select any filter (Company, Account, Sub Account, Particulars, Credit, or Debit), all related filters will automatically be populated with only the values that exist for that specific selection, providing an intelligent and efficient filtering experience. 🎯
+

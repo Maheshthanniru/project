@@ -131,3 +131,4 @@ The user wanted to modify the approve records print page to:
 5. **Professional Look** - Clean, uncluttered print layout
 
 The print output is now cleaner and more focused on the essential transaction data with proper sequential numbering.
+

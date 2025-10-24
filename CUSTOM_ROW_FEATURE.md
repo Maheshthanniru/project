@@ -229,3 +229,4 @@ const removeCustomRow = (index: number) => {
 - **Complete Data**: Users can enter all account fields
 - **Better Visual**: Clear distinction between regular and custom rows
 - **Flexible**: Custom rows can be used for P&L or Balance Sheet
+

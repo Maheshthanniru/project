@@ -168,3 +168,4 @@ Look for:
 - Look for insert/delete permission errors
 
 The simplified approach should now work regardless of your database schema or permissions! 🗑️✅
+

@@ -201,3 +201,4 @@ async debugEditAuditLog(): Promise<void> {
 3. Verify records are being found
 
 The edit audit log should now load properly! The function uses multiple fallback approaches to ensure it works regardless of your database setup. 📝✨
+

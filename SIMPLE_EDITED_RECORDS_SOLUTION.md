@@ -180,3 +180,4 @@ Both Edited Records and Deleted Records pages will now **ALWAYS WORK**!
 5. **Test restore/delete** - on deleted records page
 
 **The pages are now SIMPLE and RELIABLE!** 🚀
+

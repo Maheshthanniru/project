@@ -201,3 +201,4 @@ WHERE c_date = 'selected_date'
    - Locked/Unlocked, Approved/Pending
 
 The enhanced date-based filtering feature is now fully implemented! When you select a date, all filter dropdowns (Company, Account, Sub Account, Particulars, Credit, Debit) will be populated with only the values that exist for entries on that specific date, providing a comprehensive and efficient filtering experience. 🎯
+

@@ -18,3 +18,4 @@ CREATE INDEX IF NOT EXISTS idx_cash_book_deleted_by ON cash_book(deleted_by);
 -- Add comments for documentation
 COMMENT ON COLUMN cash_book.deleted_by IS 'Username of the person who deleted the entry (NULL means not deleted)';
 COMMENT ON COLUMN cash_book.deleted_at IS 'Timestamp when the entry was deleted (NULL means not deleted)';
+

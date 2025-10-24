@@ -177,3 +177,4 @@ if (success) {
 - **Console Debugging** - Detailed logging for troubleshooting
 
 The fix ensures that deleted records from the Edit Entry form will now properly appear in the Edited Records page, either automatically through the dashboard refresh event or manually through the refresh button. 🗑️✅
+

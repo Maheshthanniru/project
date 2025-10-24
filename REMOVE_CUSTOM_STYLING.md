@@ -104,3 +104,4 @@ The user wanted to remove the yellow background color from custom rows in the ta
 - ✅ All data processing remains unchanged
 
 The only change is the visual presentation - custom rows now look exactly like regular rows in all contexts (table, print, export).
+

@@ -119,3 +119,4 @@ The user wanted to remove the "Additional Information" field and the "Clear Cach
 - **Simplified Code**: Less complexity, easier maintenance
 
 The interface is now cleaner and more focused on the core balance sheet functionality without the additional information field and cache management button.
+

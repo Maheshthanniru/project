@@ -128,3 +128,4 @@ src/pages/
 ```
 
 **The simple versions are now active and working!** 🚀
+

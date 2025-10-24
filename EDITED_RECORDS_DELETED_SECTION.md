@@ -187,3 +187,4 @@ Page Load → Debug Database → Load Deleted Records → Display in Table
 3. Verify records are being found
 
 The deleted records should now be clearly visible in the Edited Records page! The section is prominently displayed with red styling and includes debug functionality to help troubleshoot any issues. 🗑️✨
+

@@ -163,3 +163,4 @@ The user wanted to modify the ledger summary to:
 5. **Export/Print** - Includes company names when applicable
 
 The ledger summary now provides more flexible access and better visibility of account data across companies.
+

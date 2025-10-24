@@ -90,3 +90,4 @@ const [showAddRow, setShowAddRow] = useState(true);
 ```
 
 This change makes the custom row feature much more accessible and user-friendly by eliminating the need for button clicks to access the input form.
+

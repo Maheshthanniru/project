@@ -192,3 +192,4 @@ The `deleted_cash_book` table contains all fields from `cash_book` plus:
 - Confirmation dialog: "Are you sure you want to PERMANENTLY delete entry #X?"
 
 The deleted records functionality is now fully implemented! When you delete entries in the edit form, they are moved to a "trash bin" (deleted_cash_book table) and can be viewed, filtered, restored, or permanently deleted through the dedicated "Deleted Records" page. This provides complete data safety and recovery options while maintaining a clean audit trail. 🗑️✅
+
