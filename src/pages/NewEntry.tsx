@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCreateCashBookEntry, useBulkCashBookOperations } from '../hooks/useCashBookData';
 import { useDropdownData, useRecentEntries } from '../hooks/useDashboardData';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryClient';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { importFromFile } from '../utils/excel';
@@ -46,6 +48,7 @@ const NewEntry: React.FC = () => {
   const bulkOperationsMutation = useBulkCashBookOperations();
   const { companies, accounts } = useDropdownData();
   const { data: recentEntries, isLoading: recentLoading } = useRecentEntries();
+  const queryClient = useQueryClient();
 
   const [entry, setEntry] = useState<NewEntryForm>({
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -505,7 +508,10 @@ const NewEntry: React.FC = () => {
         newCompanyAddress.trim()
       );
       console.log('Company created successfully:', company);
-      // Companies are now managed by React Query - will be refetched automatically
+      
+      // Invalidate companies query to refresh the dropdown
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
       setNewCompanyAddress('');
@@ -534,6 +540,9 @@ const NewEntry: React.FC = () => {
       // Refresh account options for the current company
       const names = await supabaseDB.getDistinctAccountNamesByCompany(entry.companyName);
       setAccountOptions(names.map(name => ({ value: name, label: name })));
+      
+      // Invalidate companies query to refresh the dropdown (in case account creation affects company data)
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
       
       // Set the newly created account as selected
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
@@ -564,6 +573,9 @@ const NewEntry: React.FC = () => {
       const subs = await supabaseDB.getSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
       const data = subs.map(name => ({ value: name, label: name }));
       setSubAccounts(data);
+      
+      // Invalidate companies query to refresh the dropdown (in case sub-account creation affects company data)
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
       
       // Set the newly created sub-account as selected
       setEntry(prev => ({ ...prev, subAccount: subAccount.sub_acc }));
