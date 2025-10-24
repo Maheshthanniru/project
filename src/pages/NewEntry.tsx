@@ -206,11 +206,14 @@ const NewEntry: React.FC = () => {
     const loadAccounts = async () => {
       try {
         if (entry.companyName) {
+          console.log(`🔍 [NEW ENTRY] Loading accounts for company: "${entry.companyName}"`);
           const names = await supabaseDB.getDistinctAccountNamesByCompany(entry.companyName);
+          console.log(`🔍 [NEW ENTRY] Found ${names.length} accounts for company "${entry.companyName}":`, names);
           setAccountOptions(names.map(name => ({ value: name, label: name })));
           setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
           setSubAccounts([]);
         } else {
+          console.log('🔍 [NEW ENTRY] No company selected, clearing account options');
           setAccountOptions([]);
         }
       } catch (error) {
@@ -225,11 +228,14 @@ const NewEntry: React.FC = () => {
     const loadDualAccounts = async () => {
       try {
         if (dualEntry.companyName) {
+          console.log(`🔍 [DUAL ENTRY] Loading accounts for company: "${dualEntry.companyName}"`);
           const names = await supabaseDB.getDistinctAccountNamesByCompany(dualEntry.companyName);
+          console.log(`🔍 [DUAL ENTRY] Found ${names.length} accounts for company "${dualEntry.companyName}":`, names);
           setDualAccountOptions(names.map(name => ({ value: name, label: name })));
           setDualEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
           setDualSubAccounts([]);
         } else {
+          console.log('🔍 [DUAL ENTRY] No company selected, clearing account options');
           setDualAccountOptions([]);
         }
       } catch (error) {
@@ -244,11 +250,14 @@ const NewEntry: React.FC = () => {
     const loadSubs = async () => {
       try {
         if (entry.companyName && entry.accountName) {
+          console.log(`🔍 [NEW ENTRY] Loading sub-accounts for company: "${entry.companyName}" and account: "${entry.accountName}"`);
           const subs = await supabaseDB.getSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
+          console.log(`🔍 [NEW ENTRY] Found ${subs.length} sub-accounts for account "${entry.accountName}":`, subs);
           const data = subs.map(name => ({ value: name, label: name }));
           setSubAccounts(data);
           setEntry(prev => ({ ...prev, subAccount: '' }));
         } else {
+          console.log('🔍 [NEW ENTRY] No company or account selected, clearing sub-account options');
           setSubAccounts([]);
         }
       } catch (error) {
@@ -263,14 +272,17 @@ const NewEntry: React.FC = () => {
     const loadDualSubAccounts = async () => {
       try {
         if (dualEntry.companyName && dualEntry.accountName) {
+          console.log(`🔍 [DUAL ENTRY] Loading sub-accounts for company: "${dualEntry.companyName}" and account: "${dualEntry.accountName}"`);
           const subs = await supabaseDB.getSubAccountsByAccountAndCompany(
             dualEntry.accountName,
             dualEntry.companyName
           );
+          console.log(`🔍 [DUAL ENTRY] Found ${subs.length} sub-accounts for account "${dualEntry.accountName}":`, subs);
           const data = subs.map(name => ({ value: name, label: name }));
           setDualSubAccounts(data);
           setDualEntry(prev => ({ ...prev, subAccount: '' }));
         } else {
+          console.log('🔍 [DUAL ENTRY] No company or account selected, clearing sub-account options');
           setDualSubAccounts([]);
         }
       } catch (error) {
