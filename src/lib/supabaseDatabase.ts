@@ -367,8 +367,8 @@ class SupabaseDatabase {
   async getCashBookEntriesCount(): Promise<number> {
     try {
       const { count, error } = await supabase
-        .from('cash_book')
-        .select('*', { count: 'exact', head: true });
+          .from('cash_book')
+          .select('*', { count: 'exact', head: true });
 
       if (error) {
         console.error('Error getting count:', error);
@@ -1767,8 +1767,8 @@ class SupabaseDatabase {
         throw new Error('Cannot connect to backend server. Please ensure the server is running on port 3000.');
       }
       
-      throw error;
-    }
+        throw error;
+      }
   }
 
   // Toggle approval status
@@ -3232,7 +3232,7 @@ class SupabaseDatabase {
       // Get accounts from cash_book table (existing entries)
       const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
-        .select('acc_name')
+        .select('acc_name, company_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
         .order('acc_name');
@@ -3244,7 +3244,7 @@ class SupabaseDatabase {
       // Get accounts from company_main_accounts table (newly created accounts)
       const { data: mainAccountsData, error: mainAccountsError } = await supabase
         .from('company_main_accounts')
-        .select('acc_name')
+        .select('acc_name, company_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
         .order('acc_name');
@@ -3253,12 +3253,14 @@ class SupabaseDatabase {
         console.error('Error fetching account names from company_main_accounts:', mainAccountsError);
       }
 
-      // Combine both sources
+      // Combine both sources with additional validation
       const cashBookAccounts = cashBookData?.map(item => item.acc_name) || [];
       const mainAccounts = mainAccountsData?.map(item => item.acc_name) || [];
       
       console.log(`📊 [DEBUG] Cash book accounts for company "${companyName}":`, cashBookAccounts.length, 'accounts');
+      console.log(`📊 [DEBUG] Cash book raw data:`, cashBookData?.slice(0, 5));
       console.log(`📊 [DEBUG] Main accounts table for company "${companyName}":`, mainAccounts.length, 'accounts');
+      console.log(`📊 [DEBUG] Main accounts raw data:`, mainAccountsData?.slice(0, 5));
 
       // Get unique accounts from both sources
       const allAccounts = [...cashBookAccounts, ...mainAccounts];
@@ -3303,7 +3305,7 @@ class SupabaseDatabase {
       // Get sub-accounts from cash_book table (existing entries)
       const { data: cashBookData, error: cashBookError } = await supabase
         .from('cash_book')
-        .select('sub_acc_name')
+        .select('sub_acc_name, acc_name, company_name')
         .eq('acc_name', accountName)
         .eq('company_name', companyName)
         .not('sub_acc_name', 'is', null)
@@ -3316,7 +3318,7 @@ class SupabaseDatabase {
       // Get sub-accounts from company_sub_accounts table (newly created sub-accounts)
       const { data: subAccountsData, error: subAccountsError } = await supabase
         .from('company_sub_accounts')
-        .select('sub_acc')
+        .select('sub_acc, acc_name, company_name')
         .eq('acc_name', accountName)
         .eq('company_name', companyName)
         .not('sub_acc', 'is', null)
@@ -3326,12 +3328,14 @@ class SupabaseDatabase {
         console.error('Error fetching sub-account names from company_sub_accounts:', subAccountsError);
       }
 
-      // Combine both sources
+      // Combine both sources with additional validation
       const cashBookSubAccounts = cashBookData?.map(item => item.sub_acc_name) || [];
       const subAccounts = subAccountsData?.map(item => item.sub_acc) || [];
       
       console.log(`📊 [DEBUG] Cash book sub-accounts for account "${accountName}" and company "${companyName}":`, cashBookSubAccounts.length, 'sub-accounts');
+      console.log(`📊 [DEBUG] Cash book raw data:`, cashBookData?.slice(0, 5));
       console.log(`📊 [DEBUG] Sub-accounts table for account "${accountName}" and company "${companyName}":`, subAccounts.length, 'sub-accounts');
+      console.log(`📊 [DEBUG] Sub-accounts raw data:`, subAccountsData?.slice(0, 5));
 
       // Get unique sub-accounts from both sources
       const allSubAccounts = [...cashBookSubAccounts, ...subAccounts];
