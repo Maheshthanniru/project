@@ -3315,9 +3315,9 @@ class SupabaseDatabase {
         console.error('Error fetching sub-account names from cash_book:', cashBookError);
       }
 
-      // Get sub-accounts from company_sub_accounts table (newly created sub-accounts)
+      // Get sub-accounts from company_main_sub_acc table (newly created sub-accounts)
       const { data: subAccountsData, error: subAccountsError } = await supabase
-        .from('company_sub_accounts')
+        .from('company_main_sub_acc')
         .select('sub_acc, acc_name, company_name')
         .eq('acc_name', accountName)
         .eq('company_name', companyName)
@@ -3325,7 +3325,7 @@ class SupabaseDatabase {
         .order('sub_acc');
 
       if (subAccountsError) {
-        console.error('Error fetching sub-account names from company_sub_accounts:', subAccountsError);
+        console.error('Error fetching sub-account names from company_main_sub_acc:', subAccountsError);
       }
 
       // Combine both sources with additional validation
@@ -3334,8 +3334,8 @@ class SupabaseDatabase {
       
       console.log(`📊 [DEBUG] Cash book sub-accounts for account "${accountName}" and company "${companyName}":`, cashBookSubAccounts.length, 'sub-accounts');
       console.log(`📊 [DEBUG] Cash book raw data:`, cashBookData?.slice(0, 5));
-      console.log(`📊 [DEBUG] Sub-accounts table for account "${accountName}" and company "${companyName}":`, subAccounts.length, 'sub-accounts');
-      console.log(`📊 [DEBUG] Sub-accounts raw data:`, subAccountsData?.slice(0, 5));
+      console.log(`📊 [DEBUG] Company main sub-accounts table for account "${accountName}" and company "${companyName}":`, subAccounts.length, 'sub-accounts');
+      console.log(`📊 [DEBUG] Company main sub-accounts raw data:`, subAccountsData?.slice(0, 5));
 
       // Get unique sub-accounts from both sources
       const allSubAccounts = [...cashBookSubAccounts, ...subAccounts];
