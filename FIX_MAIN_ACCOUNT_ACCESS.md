@@ -122,3 +122,5 @@ All tabs are now accessible regardless of filter selection:
 
 The main account access issue has been resolved! Users can now access the main account tab without selecting a company first. 🎯
 
+
+

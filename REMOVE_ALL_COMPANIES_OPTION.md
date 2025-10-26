@@ -100,3 +100,5 @@ The user wanted to remove the default "All Companies" option from the company dr
 
 This change ensures that users always work with company-specific data and prevents accidental generation of reports with mixed company data.
 
+
+

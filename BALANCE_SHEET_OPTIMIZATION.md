@@ -187,3 +187,5 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - CDN integration for static assets
 - Database read replicas for heavy query loads
 
+
+

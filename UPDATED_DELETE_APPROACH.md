@@ -194,3 +194,5 @@ The delete functionality now works **regardless of your database setup**! Whethe
 
 Try deleting an entry now and check the console logs to see the step-by-step process in action.
 
+
+

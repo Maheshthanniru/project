@@ -170,3 +170,5 @@ Successfully soft deleted entry in cash_book
 
 The fix ensures that deleted records are never permanently lost and will always appear in the Edited Records page, regardless of the database schema configuration. 🗑️✅
 
+
+

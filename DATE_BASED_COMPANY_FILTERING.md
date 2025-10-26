@@ -152,3 +152,5 @@ AND company_name IS NOT NULL
 
 The date-based company filtering feature is now fully implemented! Users can select a date and immediately see which companies have entries for that date, making the filtering process much more efficient and user-friendly. 🎯
 
+
+

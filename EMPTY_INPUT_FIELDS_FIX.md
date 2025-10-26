@@ -117,3 +117,5 @@ The user wanted to remove the default zero values from the credit and debit inpu
 
 This change makes the custom row input much more user-friendly by eliminating the need to clear default zero values before entering data.
 
+
+

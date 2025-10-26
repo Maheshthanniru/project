@@ -230,3 +230,5 @@ const removeCustomRow = (index: number) => {
 - **Better Visual**: Clear distinction between regular and custom rows
 - **Flexible**: Custom rows can be used for P&L or Balance Sheet
 
+
+

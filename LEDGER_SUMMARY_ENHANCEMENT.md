@@ -164,3 +164,5 @@ The user wanted to modify the ledger summary to:
 
 The ledger summary now provides more flexible access and better visibility of account data across companies.
 
+
+
