@@ -357,7 +357,17 @@ class SupabaseDatabase {
 
       const resultCount = data?.length || 0;
       console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
-      return data || [];
+      
+      // Clean [DELETED] text from all entries
+      const cleanedData = (data || []).map(entry => ({
+        ...entry,
+        acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+      }));
+      
+      return cleanedData;
     } catch (error) {
       console.error('Error in getCashBookEntries:', error);
       return [];
@@ -406,7 +416,17 @@ class SupabaseDatabase {
 
       const resultCount = data?.length || 0;
       console.log(`✅ Fetched ${resultCount} entries for today`);
-      return data || [];
+      
+      // Clean [DELETED] text from all entries
+      const cleanedData = (data || []).map(entry => ({
+        ...entry,
+        acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+      }));
+      
+      return cleanedData;
     } catch (error) {
       console.error('Error in getTodaysCashBookEntries:', error);
       return [];
@@ -794,7 +814,17 @@ class SupabaseDatabase {
       console.error('Error fetching entries by date:', error);
       return [];
     }
-    return (data || []) as CashBookEntry[];
+    
+    // Clean [DELETED] text from all entries
+    const cleanedData = (data || []).map(entry => ({
+      ...entry,
+      acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+      sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+      particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+      company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+    }));
+    
+    return cleanedData as CashBookEntry[];
   }
 
   // Bulk insert/update operations for dual entry create (used by hooks)
@@ -3759,7 +3789,262 @@ class SupabaseDatabase {
       console.error('Error in debugCompanyAccountData:', error);
     }
   }
+
+  // Check for [DELETED] text in database
+  async checkForDeletedText(): Promise<{ hasDeletedText: boolean; counts: any; entries: any }> {
+    console.log('🔍 Checking for [DELETED] text in database...');
+    
+    try {
+      const counts = {
+        cash_book: 0,
+        deleted_cash_book: 0,
+        edit_audit_log: 0
+      };
+      
+      const entries: any = {
+        cash_book: [],
+        deleted_cash_book: [],
+        edit_audit_log: []
+      };
+      
+      // Check cash_book table
+      const { data: cashBookEntries, error: cashBookError } = await supabase
+        .from('cash_book')
+        .select('id, acc_name, sub_acc_name, particulars, company_name')
+        .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
+      
+      if (!cashBookError && cashBookEntries) {
+        counts.cash_book = cashBookEntries.length;
+        entries.cash_book = cashBookEntries;
+      }
+      
+      // Check deleted_cash_book table
+      const { data: deletedEntries, error: deletedError } = await supabase
+        .from('deleted_cash_book')
+        .select('id, acc_name, sub_acc_name, particulars, company_name')
+        .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
+      
+      if (!deletedError && deletedEntries) {
+        counts.deleted_cash_book = deletedEntries.length;
+        entries.deleted_cash_book = deletedEntries;
+      }
+      
+      // Check edit_audit_log table
+      const { data: auditEntries, error: auditError } = await supabase
+        .from('edit_audit_log')
+        .select('id, old_values, new_values')
+        .or('old_values.ilike.%[DELETED]%,new_values.ilike.%[DELETED]%');
+      
+      if (!auditError && auditEntries) {
+        counts.edit_audit_log = auditEntries.length;
+        entries.edit_audit_log = auditEntries;
+      }
+      
+      const totalCount = counts.cash_book + counts.deleted_cash_book + counts.edit_audit_log;
+      const hasDeletedText = totalCount > 0;
+      
+      console.log(`📊 Found [DELETED] text in ${totalCount} entries:`, counts);
+      
+      return {
+        hasDeletedText,
+        counts,
+        entries
+      };
+      
+    } catch (error) {
+      console.error('❌ Error checking for [DELETED] text:', error);
+      return {
+        hasDeletedText: false,
+        counts: {},
+        entries: {}
+      };
+    }
+  }
+
+  // Clean up [DELETED] text from database
+  async cleanupDeletedTextFromDatabase(): Promise<{ success: boolean; message: string; updatedCount: number }> {
+    console.log('🧹 Starting comprehensive cleanup of [DELETED] text from database...');
+    
+    try {
+      let totalUpdated = 0;
+      
+      // 1. Clean up cash_book table
+      console.log('📋 Step 1: Cleaning cash_book table...');
+      const { data: cashBookEntries, error: fetchError } = await supabase
+        .from('cash_book')
+        .select('id, acc_name, sub_acc_name, particulars, company_name')
+        .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
+      
+      if (fetchError) {
+        console.error('❌ Error fetching cash_book entries:', fetchError);
+        return { success: false, message: 'Failed to fetch cash_book entries', updatedCount: 0 };
+      }
+      
+      if (cashBookEntries && cashBookEntries.length > 0) {
+        console.log(`📋 Found ${cashBookEntries.length} cash_book entries with [DELETED] text`);
+        
+        for (const entry of cashBookEntries) {
+          const updates: any = {};
+          let hasChanges = false;
+          
+          // Clean acc_name
+          if (entry.acc_name && entry.acc_name.includes('[DELETED]')) {
+            updates.acc_name = entry.acc_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean sub_acc_name
+          if (entry.sub_acc_name && entry.sub_acc_name.includes('[DELETED]')) {
+            updates.sub_acc_name = entry.sub_acc_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean particulars
+          if (entry.particulars && entry.particulars.includes('[DELETED]')) {
+            updates.particulars = entry.particulars.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean company_name
+          if (entry.company_name && entry.company_name.includes('[DELETED]')) {
+            updates.company_name = entry.company_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          if (hasChanges) {
+            const { error: updateError } = await supabase
+              .from('cash_book')
+              .update(updates)
+              .eq('id', entry.id);
+            
+            if (updateError) {
+              console.error(`❌ Error updating cash_book entry ${entry.id}:`, updateError);
+            } else {
+              totalUpdated++;
+              console.log(`✅ Updated cash_book entry ${entry.id}`);
+            }
+          }
+        }
+      }
+      
+      // 2. Clean up deleted_cash_book table
+      console.log('📋 Step 2: Cleaning deleted_cash_book table...');
+      const { data: deletedEntries, error: deletedFetchError } = await supabase
+        .from('deleted_cash_book')
+        .select('id, acc_name, sub_acc_name, particulars, company_name')
+        .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
+      
+      if (deletedFetchError) {
+        console.error('❌ Error fetching deleted_cash_book entries:', deletedFetchError);
+      } else if (deletedEntries && deletedEntries.length > 0) {
+        console.log(`📋 Found ${deletedEntries.length} deleted_cash_book entries with [DELETED] text`);
+        
+        for (const entry of deletedEntries) {
+          const updates: any = {};
+          let hasChanges = false;
+          
+          // Clean acc_name
+          if (entry.acc_name && entry.acc_name.includes('[DELETED]')) {
+            updates.acc_name = entry.acc_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean sub_acc_name
+          if (entry.sub_acc_name && entry.sub_acc_name.includes('[DELETED]')) {
+            updates.sub_acc_name = entry.sub_acc_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean particulars
+          if (entry.particulars && entry.particulars.includes('[DELETED]')) {
+            updates.particulars = entry.particulars.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean company_name
+          if (entry.company_name && entry.company_name.includes('[DELETED]')) {
+            updates.company_name = entry.company_name.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          if (hasChanges) {
+            const { error: updateError } = await supabase
+              .from('deleted_cash_book')
+              .update(updates)
+              .eq('id', entry.id);
+            
+            if (updateError) {
+              console.error(`❌ Error updating deleted_cash_book entry ${entry.id}:`, updateError);
+            } else {
+              totalUpdated++;
+              console.log(`✅ Updated deleted_cash_book entry ${entry.id}`);
+            }
+          }
+        }
+      }
+      
+      // 3. Clean up edit_audit_log table
+      console.log('📋 Step 3: Cleaning edit_audit_log table...');
+      const { data: auditEntries, error: auditFetchError } = await supabase
+        .from('edit_audit_log')
+        .select('id, old_values, new_values')
+        .or('old_values.ilike.%[DELETED]%,new_values.ilike.%[DELETED]%');
+      
+      if (auditFetchError) {
+        console.error('❌ Error fetching edit_audit_log entries:', auditFetchError);
+      } else if (auditEntries && auditEntries.length > 0) {
+        console.log(`📋 Found ${auditEntries.length} edit_audit_log entries with [DELETED] text`);
+        
+        for (const entry of auditEntries) {
+          const updates: any = {};
+          let hasChanges = false;
+          
+          // Clean old_values
+          if (entry.old_values && entry.old_values.includes('[DELETED]')) {
+            updates.old_values = entry.old_values.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          // Clean new_values
+          if (entry.new_values && entry.new_values.includes('[DELETED]')) {
+            updates.new_values = entry.new_values.replace(/\[DELETED\]\s*/g, '').trim();
+            hasChanges = true;
+          }
+          
+          if (hasChanges) {
+            const { error: updateError } = await supabase
+              .from('edit_audit_log')
+              .update(updates)
+              .eq('id', entry.id);
+            
+            if (updateError) {
+              console.error(`❌ Error updating edit_audit_log entry ${entry.id}:`, updateError);
+            } else {
+              totalUpdated++;
+              console.log(`✅ Updated edit_audit_log entry ${entry.id}`);
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ Cleanup completed! Updated ${totalUpdated} entries across all tables`);
+      return { 
+        success: true, 
+        message: `Successfully cleaned up [DELETED] text from ${totalUpdated} entries`, 
+        updatedCount: totalUpdated 
+      };
+      
+    } catch (error) {
+      console.error('❌ Error during cleanup:', error);
+      return { 
+        success: false, 
+        message: `Cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 
+        updatedCount: 0 
+      };
+    }
+  }
 }
+
 
 // Export singleton instance
 export const supabaseDB = new SupabaseDatabase();
@@ -3785,6 +4070,18 @@ if (typeof window !== 'undefined') {
       return await supabaseDB.testDeleteFunctionality();
     },
     
+    // Clean up [DELETED] text from entire database
+    cleanupDeletedText: async () => {
+      console.log('🧹 Starting cleanup of [DELETED] text from database...');
+      return await supabaseDB.cleanupDeletedTextFromDatabase();
+    },
+    
+    // Check for [DELETED] text in database
+    checkDeletedText: async () => {
+      console.log('🔍 Checking for [DELETED] text in database...');
+      return await supabaseDB.checkForDeletedText();
+    },
+    
     // Get a sample entry ID for testing
     getSampleEntry: async () => {
       const { data } = await supabase
@@ -3804,11 +4101,11 @@ if (typeof window !== 'undefined') {
       return deleted;
     },
     
-    // Clear all deleted records from localStorage
-    clearDeletedRecords: () => {
-      localStorage.removeItem('deleted_records');
-      console.log('🗑️ Cleared all deleted records from localStorage');
-    }
+  // Clear all deleted records from localStorage
+  clearDeletedRecords: () => {
+    localStorage.removeItem('deleted_records');
+    console.log('🗑️ Cleared all deleted records from localStorage');
+  }
   };
   
   console.log('🔧 Debug functions available:');
@@ -3818,4 +4115,5 @@ if (typeof window !== 'undefined') {
   console.log('  - debugDelete.getSampleEntry()');
   console.log('  - debugDelete.getDeletedRecords()');
   console.log('  - debugDelete.clearDeletedRecords()');
+  console.log('  - debugDelete.cleanupDeletedText()');
 }
