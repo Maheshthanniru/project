@@ -180,6 +180,14 @@ const ApproveRecords: React.FC = () => {
       let deleted = await supabaseDB.getDeletedCashBook();
       console.log('[ApproveRecords] getDeletedCashBook result:', deleted);
       
+      // Debug: Check approval status of deleted records
+      if (deleted && deleted.length > 0) {
+        console.log('[ApproveRecords] Deleted records approval status:');
+        deleted.forEach((d, index) => {
+          console.log(`[ApproveRecords] Deleted ${index}: id=${d.id}, approved=${d.approved}, type=${typeof d.approved}`);
+        });
+      }
+      
       // Fallback: if none, attempt a direct minimal fetch to ensure visibility
       if (!deleted || deleted.length === 0) {
         console.log('[ApproveRecords] No deleted records from getDeletedCashBook, trying direct fetch...');
@@ -275,19 +283,25 @@ const ApproveRecords: React.FC = () => {
     if (filters.company) del = del.filter(d => d.company_name === filters.company);
     if (filters.staff) del = del.filter(d => d.staff === filters.staff);
     // Show all deleted records that haven't been approved yet
-    const pendingDeleted = del.filter(d => 
-      d.approved !== true && 
-      d.approved !== 'true' && 
-      d.approved !== 'rejected'
-    );
+    console.log('[ApproveRecords] Filtering deleted records...');
+    console.log('[ApproveRecords] Total deleted records before filtering:', del.length);
+    
+    const pendingDeleted = del.filter(d => {
+      const isPending = d.approved !== true && 
+        d.approved !== 'true' && 
+        d.approved !== 'rejected';
+      console.log(`[ApproveRecords] Deleted record ${d.id}: approved=${d.approved}, type=${typeof d.approved}, isPending=${isPending}`);
+      return isPending;
+    });
+    
     console.log('[ApproveRecords] Filtered deleted entries:', pendingDeleted);
     setFilteredDeletedEntries(pendingDeleted);
 
     // Summary will be updated by updateSummary function
 
     const totalDeleted = del.length;
-    const approvedDeleted = del.filter(d => d.approved === true).length;
-    const rejectedDeleted = del.filter(d => d.approved === false).length;
+    const approvedDeleted = del.filter(d => d.approved === true || d.approved === 'true').length;
+    const rejectedDeleted = del.filter(d => d.approved === 'rejected').length;
     const pendingDeletedCount = totalDeleted - approvedDeleted - rejectedDeleted;
     setDeletedSummary({ totalRecords: totalDeleted, approvedDeleted, rejectedDeleted, pendingDeleted: pendingDeletedCount });
   };
@@ -486,18 +500,60 @@ const ApproveRecords: React.FC = () => {
   const handleDeletedApprove = async (id: string) => {
     try {
       setLoading(true);
+      console.log('🗑️ Approving deleted record:', id);
+      
       const { error } = await supabase
         .from('deleted_cash_book')
         .update({ approved: true })
         .eq('id', id);
-      if (error) throw error;
+      
+      if (error) {
+        console.error('❌ Error approving deleted record:', error);
+        throw error;
+      }
+      
+      console.log('✅ Deleted record approved successfully');
       toast.success('Deleted record approved');
       
-      // Immediately remove the approved record from the local state
-      setDeletedEntries(prev => prev.filter(entry => entry.id !== id));
+      // Update localStorage to mark the record as approved
+      try {
+        const deletedRecordsStr = localStorage.getItem('deleted_records');
+        if (deletedRecordsStr) {
+          const deletedRecords = JSON.parse(deletedRecordsStr);
+          const updatedRecords = deletedRecords.map((record: any) => 
+            record.id === id ? { ...record, approved: true } : record
+          );
+          localStorage.setItem('deleted_records', JSON.stringify(updatedRecords));
+          console.log('✅ Updated localStorage with approved status');
+        }
+      } catch (error) {
+        console.error('❌ Error updating localStorage:', error);
+      }
+      
+      // Immediately remove the approved record from the local state and update summary
+      setDeletedEntries(prev => {
+        const updated = prev.filter(entry => entry.id !== id);
+        // Update summary immediately after state change
+        setTimeout(() => {
+          updateSummary();
+          // Also update deleted summary directly
+          setDeletedSummary(prevSummary => ({
+            ...prevSummary,
+            totalRecords: prevSummary.totalRecords - 1,
+            approvedDeleted: prevSummary.approvedDeleted + 1,
+            pendingDeleted: prevSummary.pendingDeleted - 1
+          }));
+        }, 0);
+        return updated;
+      });
+      
+      // Update filtered list immediately
+      setFilteredDeletedEntries(prev => prev.filter(entry => entry.id !== id));
       
       // Also reload to get updated data
+      console.log('🔄 Reloading entries after approval...');
       await loadEntries();
+      console.log('✅ Entries reloaded');
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -520,8 +576,40 @@ const ApproveRecords: React.FC = () => {
       if (error) throw error;
       toast.success('Deleted record rejected');
       
-      // Immediately remove the rejected record from the local state
-      setDeletedEntries(prev => prev.filter(entry => entry.id !== id));
+      // Update localStorage to mark the record as rejected
+      try {
+        const deletedRecordsStr = localStorage.getItem('deleted_records');
+        if (deletedRecordsStr) {
+          const deletedRecords = JSON.parse(deletedRecordsStr);
+          const updatedRecords = deletedRecords.map((record: any) => 
+            record.id === id ? { ...record, approved: 'rejected' } : record
+          );
+          localStorage.setItem('deleted_records', JSON.stringify(updatedRecords));
+          console.log('✅ Updated localStorage with rejected status');
+        }
+      } catch (error) {
+        console.error('❌ Error updating localStorage:', error);
+      }
+      
+      // Immediately remove the rejected record from the local state and update summary
+      setDeletedEntries(prev => {
+        const updated = prev.filter(entry => entry.id !== id);
+        // Update summary immediately after state change
+        setTimeout(() => {
+          updateSummary();
+          // Also update deleted summary directly
+          setDeletedSummary(prevSummary => ({
+            ...prevSummary,
+            totalRecords: prevSummary.totalRecords - 1,
+            rejectedDeleted: prevSummary.rejectedDeleted + 1,
+            pendingDeleted: prevSummary.pendingDeleted - 1
+          }));
+        }, 0);
+        return updated;
+      });
+      
+      // Update filtered list immediately
+      setFilteredDeletedEntries(prev => prev.filter(entry => entry.id !== id));
       
       // Also reload to get updated data
       await loadEntries();
