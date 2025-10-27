@@ -17,6 +17,8 @@ import {
   AlertCircle,
   Trash2,
   Clock,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 
 interface ApprovalFilters {
@@ -424,7 +426,12 @@ const ApproveRecords: React.FC = () => {
       }
 
       toast.success('Record approved successfully!');
-      await loadEntries(); // Reload to get updated data
+      
+      // Immediately remove the approved record from the local state
+      setEntries(prev => prev.filter(entry => entry.id !== entryId));
+      
+      // Also reload to get updated data
+      await loadEntries();
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -457,7 +464,12 @@ const ApproveRecords: React.FC = () => {
       }
 
       toast.success('Record rejected successfully!');
-      await loadEntries(); // Reload to get updated data
+      
+      // Immediately remove the rejected record from the local state
+      setEntries(prev => prev.filter(entry => entry.id !== entryId));
+      
+      // Also reload to get updated data
+      await loadEntries();
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -480,7 +492,12 @@ const ApproveRecords: React.FC = () => {
         .eq('id', id);
       if (error) throw error;
       toast.success('Deleted record approved');
-      await loadEntries(); // Reload to get updated data
+      
+      // Immediately remove the approved record from the local state
+      setDeletedEntries(prev => prev.filter(entry => entry.id !== id));
+      
+      // Also reload to get updated data
+      await loadEntries();
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -502,7 +519,12 @@ const ApproveRecords: React.FC = () => {
         .eq('id', id);
       if (error) throw error;
       toast.success('Deleted record rejected');
-      await loadEntries(); // Reload to get updated data
+      
+      // Immediately remove the rejected record from the local state
+      setDeletedEntries(prev => prev.filter(entry => entry.id !== id));
+      
+      // Also reload to get updated data
+      await loadEntries();
       
       // Trigger dashboard refresh
       localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -1544,71 +1566,142 @@ const ApproveRecords: React.FC = () => {
       {/* Deleted Records Approval */}
       {!loading && (
         <Card title='Deleted Records' subtitle={`Showing ${filteredDeletedEntries.length} of ${deletedSummary.totalRecords} deleted records`}>
+          <div className='mb-4 flex gap-2'>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={async () => {
+                console.log('🔍 Debug: Checking deleted records...');
+                console.log('🔍 Deleted entries from state:', deletedEntries);
+                console.log('🔍 Filtered deleted entries:', filteredDeletedEntries);
+                console.log('🔍 Deleted summary:', deletedSummary);
+                
+                // Try to fetch fresh data
+                const freshDeleted = await supabaseDB.getDeletedCashBook();
+                console.log('🔍 Fresh deleted records from DB:', freshDeleted);
+                
+                toast.success('Debug info logged to console');
+              }}
+              className='flex items-center gap-2'
+            >
+              <AlertTriangle className='w-4 h-4' />
+              Debug Deleted Records
+            </Button>
+            <Button
+              variant='secondary'
+              size='sm'
+              onClick={loadEntries}
+              disabled={loading}
+            >
+              <RefreshCw className='w-4 h-4' />
+              Refresh
+            </Button>
+          </div>
           <div className='overflow-x-auto'>
-            <table className='w-full text-sm'>
-              <thead className='bg-gray-50 border-b border-gray-200'>
-                <tr>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>S.No</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Date</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Company</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Account</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Sub Account</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Particulars</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Credit</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Debit</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Staff</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>User</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Deleted At</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Status</th>
-                  <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>Actions</th>
+            <table className='w-full text-xs table-fixed'>
+              <thead className='sticky top-0 bg-gray-50 z-10'>
+                <tr className='border-b border-gray-200'>
+                  <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                    S.No
+                  </th>
+                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                    Date
+                  </th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                    Company
+                  </th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                    Account
+                  </th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                    Sub Account
+                  </th>
+                  <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
+                    Particulars
+                  </th>
+                  <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
+                    Credit
+                  </th>
+                  <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
+                    Debit
+                  </th>
+                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                    Staff
+                  </th>
+                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                    User
+                  </th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                    Deleted At
+                  </th>
+                  <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
+                    Status
+                  </th>
+                  <th className='w-24 px-1 py-1 text-center font-medium text-gray-700'>
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody className='bg-white divide-y divide-gray-200'>
+              <tbody>
                 {filteredDeletedEntries.map((d, index) => (
                   <tr key={d.id} className={`border-b hover:bg-gray-50 transition-colors ${
                     d.approved !== true && d.approved !== 'true' && d.approved !== 'rejected' ? 'bg-orange-50' : ''
                   }`}>
-                    <td className='px-3 py-2'>{index + 1}</td>
-                    <td className='px-3 py-2'>{format(new Date(d.c_date), 'dd-MMM-yy')}</td>
-                    <td className='px-3 py-2 font-medium text-blue-600'>{d.company_name}</td>
-                    <td className='px-3 py-2'>{d.acc_name}</td>
-                    <td className='px-3 py-2'>{d.sub_acc_name || '-'}</td>
-                    <td className='px-3 py-2 max-w-xs truncate' title={d.particulars}>
-                      {d.particulars}
+                    <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
+                    <td className='w-16 px-1 py-1 text-xs'>
+                      {format(new Date(d.c_date), 'dd-MMM-yy')}
                     </td>
-                    <td className='px-3 py-2 text-right font-medium text-green-600'>
+                    <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={d.company_name}>
+                      {d.company_name}
+                    </td>
+                    <td className='w-20 px-1 py-1 text-xs truncate' title={d.acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                      {d.acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
+                    </td>
+                    <td className='w-20 px-1 py-1 text-xs truncate' title={d.sub_acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                      {d.sub_acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
+                    </td>
+                    <td className='w-32 px-1 py-1 text-xs truncate' title={d.particulars?.replace(/\[DELETED\]\s*/g, '')}>
+                      {d.particulars?.replace(/\[DELETED\]\s*/g, '') || '-'}
+                    </td>
+                    <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
                       {d.credit ? `₹${Number(d.credit).toLocaleString()}` : '-'}
                     </td>
-                    <td className='px-3 py-2 text-right font-medium text-red-600'>
+                    <td className='w-16 px-1 py-1 text-right font-medium text-red-600 text-xs'>
                       {d.debit ? `₹${Number(d.debit).toLocaleString()}` : '-'}
                     </td>
-                    <td className='px-3 py-2'>{d.staff}</td>
-                    <td className='px-3 py-2'>{d.users}</td>
-                    <td className='px-3 py-2'>{format(new Date(d.deleted_at), 'HH:mm:ss')}</td>
-                    <td className='px-3 py-2'>
+                    <td className='w-16 px-1 py-1 text-xs truncate' title={d.staff}>
+                      {d.staff}
+                    </td>
+                    <td className='w-16 px-1 py-1 text-xs truncate' title={d.users}>
+                      {d.users}
+                    </td>
+                    <td className='w-20 px-1 py-1 text-xs'>
+                      {format(new Date(d.deleted_at), 'HH:mm:ss')}
+                    </td>
+                    <td className='w-20 px-1 py-1 text-center'>
                       {d.approved === true || d.approved === 'true' ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                        <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
                           Approved
                         </span>
                       ) : d.approved === 'rejected' ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                        <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800'>
                           Rejected
                         </span>
                       ) : (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                        <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800'>
                           Pending
                         </span>
                       )}
                     </td>
-                    <td className='px-3 py-2'>
-                      <div className='flex flex-row gap-2'>
+                    <td className='w-24 px-1 py-1 text-center'>
+                      <div className='flex flex-row gap-1'>
                         <Button
                           variant='secondary'
                           onClick={() => {
                             handleDeletedApprove(d.id);
                           }}
                           disabled={d.approved === true || d.approved === 'true'}
-                          className='text-xs px-2 py-1'
+                          className='text-xs px-1 py-0.5'
                         >
                           Approve
                         </Button>

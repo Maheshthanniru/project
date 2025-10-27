@@ -415,23 +415,25 @@ const EditedRecords = () => {
           variant='secondary' 
           size='sm'
           disabled={loading}
+          className='flex items-center gap-2'
         >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           {loading ? 'Loading...' : 'Refresh'}
         </Button>
         <Button
-          variant='outline'
+          variant='secondary'
           size='sm'
           onClick={async () => {
             console.log('🔍 Manual debug triggered for edit audit log...');
             await supabaseDB.debugEditAuditLog();
-            toast.info('Edit audit log debug info logged to console');
+            toast.success('Edit audit log debug info logged to console');
           }}
           className='flex items-center gap-2'
         >
           <AlertTriangle className='w-4 h-4' />
-          Debug Edit Log
+          Debug
         </Button>
-        <Button onClick={handleTestConnection} variant='outline' size='sm'>
+        <Button onClick={handleTestConnection} variant='secondary' size='sm'>
           Test Connection
         </Button>
         <Button onClick={handleExportExcel} variant='secondary' size='sm'>
@@ -458,18 +460,26 @@ const EditedRecords = () => {
         <>
 
           <div className='overflow-x-auto'>
-          <table className='w-full text-base border border-gray-200'>
-            <thead className='bg-gray-50 border-b border-gray-200'>
-              <tr>
-                <th className='px-4 py-2'>S.No</th>
-                <th className='px-4 py-2'>Type</th>
+          <table className='w-full text-xs table-fixed border border-gray-200'>
+            <thead className='sticky top-0 bg-gray-50 z-10'>
+              <tr className='border-b border-gray-200'>
+                <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                  S.No
+                </th>
+                <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                  Type
+                </th>
                 {FIELDS.map(f => (
-                  <th key={f.key} className='px-4 py-2'>
+                  <th key={f.key} className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                     {f.label}
                   </th>
                 ))}
-                <th className='px-4 py-2'>Edited By</th>
-                <th className='px-4 py-2'>Edited At</th>
+                <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  Edited By
+                </th>
+                <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  Edited At
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -481,24 +491,25 @@ const EditedRecords = () => {
                   <React.Fragment key={log.id}>
                     {/* Before Edit Row (no background color) */}
                     <tr className='border-b border-gray-100 hover:bg-gray-50'>
-                      <td className='px-2 py-1 text-center' rowSpan={1}>
+                      <td className='w-12 px-1 py-1 text-center text-xs' rowSpan={1}>
                         {(page - 1) * PAGE_SIZE + idx + 1}
                       </td>
-                      <td className='px-2 py-1 font-semibold text-red-600'>
+                      <td className='w-16 px-1 py-1 font-semibold text-red-600 text-xs'>
                         {log.action === 'SHOWING_RECENT_ENTRIES' ? 'Entry' : 'Before'}
                       </td>
                       {FIELDS.map(f => (
                         <td
                           key={f.key + '-before'}
-                          className={'px-2 py-1'}
+                          className='w-20 px-1 py-1 text-xs truncate'
+                          title={getFieldDisplay(f.key, oldObj[f.key])}
                         >
                           {getFieldDisplay(f.key, oldObj[f.key])}
                         </td>
                       ))}
-                      <td className='px-2 py-1'>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={userMap[log.edited_by] || log.edited_by}>
                         {userMap[log.edited_by] || log.edited_by}
                       </td>
-                      <td className='px-2 py-1'>
+                      <td className='w-20 px-1 py-1 text-xs'>
                         {log.edited_at &&
                         !isNaN(new Date(log.edited_at).getTime())
                           ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm')
@@ -507,22 +518,23 @@ const EditedRecords = () => {
                     </tr>
                     {/* After Edit Row */}
                     <tr className='border-b border-gray-100 hover:bg-gray-50'>
-                      <td className='px-2 py-1 text-center'></td>
-                      <td className='px-2 py-1 font-semibold text-green-700'>
+                      <td className='w-12 px-1 py-1 text-center text-xs'></td>
+                      <td className='w-16 px-1 py-1 font-semibold text-green-700 text-xs'>
                         {log.action === 'SHOWING_RECENT_ENTRIES' ? 'Details' : 'After'}
                       </td>
                       {FIELDS.map(f => (
                         <td
                           key={f.key + '-after'}
-                          className={`px-2 py-1 ${changed[f.key] ? highlightClass : ''}`}
+                          className={`w-20 px-1 py-1 text-xs truncate ${changed[f.key] ? highlightClass : ''}`}
+                          title={getFieldDisplay(f.key, newObj[f.key])}
                         >
                           {getFieldDisplay(f.key, newObj[f.key])}
                         </td>
                       ))}
-                      <td className='px-2 py-1'>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={userMap[log.edited_by] || log.edited_by}>
                         {userMap[log.edited_by] || log.edited_by}
                       </td>
-                      <td className='px-2 py-1'>
+                      <td className='w-20 px-1 py-1 text-xs'>
                         {log.edited_at &&
                         !isNaN(new Date(log.edited_at).getTime())
                           ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm')
@@ -575,12 +587,12 @@ const EditedRecords = () => {
           </div>
           <div className='flex gap-2'>
             <Button
-              variant='outline'
+              variant='secondary'
               size='sm'
               onClick={async () => {
                 console.log('🔍 Manual debug triggered from Edited Records...');
                 await supabaseDB.debugDeletedRecords();
-                toast.info('Debug info logged to console');
+                toast.success('Debug info logged to console');
               }}
               className='flex items-center gap-2'
             >
@@ -613,17 +625,23 @@ const EditedRecords = () => {
           </div>
         ) : (
           <div className='overflow-x-auto border border-red-200 rounded-lg'>
-            <table className='w-full text-sm border border-gray-200'>
-              <thead className='bg-red-100 border-b border-red-200'>
-                <tr>
-                  <th className='px-3 py-2 text-left font-semibold text-red-800'>S.No</th>
+            <table className='w-full text-xs table-fixed border border-gray-200'>
+              <thead className='sticky top-0 bg-red-50 z-10'>
+                <tr className='border-b border-red-200'>
+                  <th className='w-12 px-1 py-1 text-left font-medium text-red-800'>
+                    S.No
+                  </th>
                   {FIELDS.map(f => (
-                    <th key={f.key} className='px-3 py-2 text-left font-semibold text-red-800'>
+                    <th key={f.key} className='w-20 px-1 py-1 text-left font-medium text-red-800'>
                       {f.label}
                     </th>
                   ))}
-                  <th className='px-3 py-2 text-left font-semibold text-red-800'>Deleted By</th>
-                  <th className='px-3 py-2 text-left font-semibold text-red-800'>Deleted At</th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-red-800'>
+                    Deleted By
+                  </th>
+                  <th className='w-20 px-1 py-1 text-left font-medium text-red-800'>
+                    Deleted At
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -632,14 +650,16 @@ const EditedRecords = () => {
                     key={rec.id}
                     className='border-b border-red-100 hover:bg-red-50 transition-colors'
                   >
-                    <td className='px-3 py-2 text-center font-medium'>{idx + 1}</td>
+                    <td className='w-12 px-1 py-1 text-center font-medium text-xs'>{idx + 1}</td>
                     {FIELDS.map(f => (
-                      <td key={f.key} className='px-3 py-2'>
+                      <td key={f.key} className='w-20 px-1 py-1 text-xs truncate' title={getFieldDisplay(f.key, rec[f.key])}>
                         {getFieldDisplay(f.key, rec[f.key])}
                       </td>
                     ))}
-                    <td className='px-3 py-2 font-medium text-red-700'>{rec.deleted_by}</td>
-                    <td className='px-3 py-2 text-gray-600'>
+                    <td className='w-20 px-1 py-1 font-medium text-red-700 text-xs truncate' title={rec.deleted_by}>
+                      {rec.deleted_by}
+                    </td>
+                    <td className='w-20 px-1 py-1 text-gray-600 text-xs'>
                       {rec.deleted_at &&
                       !isNaN(new Date(rec.deleted_at).getTime())
                         ? format(new Date(rec.deleted_at), 'dd/MM/yyyy HH:mm')
