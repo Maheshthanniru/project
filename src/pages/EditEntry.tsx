@@ -10,19 +10,13 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import {
   Calendar,
-  Building,
-  FileText,
-  User,
-  Calculator,
-  Lock,
-  Unlock,
   Edit,
   History,
   RefreshCw,
   Plus,
-  Database,
   ChevronLeft,
   ChevronRight,
+  Eye,
 } from 'lucide-react';
 
 interface EditHistory {
@@ -161,11 +155,7 @@ const EditEntry: React.FC = () => {
     }
     
     if (statusFilter) {
-      if (statusFilter === 'locked') {
-        filtered = filtered.filter(entry => entry.lock_record);
-      } else if (statusFilter === 'unlocked') {
-        filtered = filtered.filter(entry => !entry.lock_record);
-      } else if (statusFilter === 'approved') {
+      if (statusFilter === 'approved') {
         filtered = filtered.filter(entry => entry.approved);
       } else if (statusFilter === 'pending') {
         filtered = filtered.filter(entry => !entry.approved);
@@ -706,9 +696,6 @@ const EditEntry: React.FC = () => {
           case 'pending':
             allEntries = allEntries.filter(entry => !entry.approved);
             break;
-          case 'edited':
-            allEntries = allEntries.filter(entry => entry.edited);
-            break;
           case 'locked':
             // TODO: Implement locked filter when Supabase schema supports it
             allEntries = allEntries.filter(() => false);
@@ -1215,36 +1202,6 @@ const EditEntry: React.FC = () => {
     );
   };
 
-  const toggleLock = async (entry: any) => {
-    if (!isAdmin) {
-      toast.error('Only admins can lock/unlock records');
-      return;
-    }
-    try {
-      let result;
-      if (entry.locked || entry.lock_record) {
-        result = await supabaseDB.unlockEntry(
-          entry.id,
-          user?.username || 'admin'
-        );
-      } else {
-        result = await supabaseDB.lockEntry(
-          entry.id,
-          user?.username || 'admin'
-        );
-      }
-      if (result) {
-        await loadEntries();
-        toast.success(
-          `Entry ${entry.locked || entry.lock_record ? 'unlocked' : 'locked'} successfully!`
-        );
-      } else {
-        toast.error('Failed to update lock status');
-      }
-    } catch (error) {
-      toast.error('Error updating lock status');
-    }
-  };
 
 
   const exportData = async (
@@ -1539,8 +1496,6 @@ const EditEntry: React.FC = () => {
     { value: '', label: 'All Status' },
     { value: 'approved', label: 'Approved' },
     { value: 'pending', label: 'Pending' },
-    { value: 'edited', label: 'Edited' },
-    { value: 'locked', label: 'Locked' },
   ];
 
   // Print voucher for an entry
@@ -1840,7 +1795,7 @@ const EditEntry: React.FC = () => {
         subtitle={`Manage and edit your transaction records`}
         className='p-6 mb-6 w-full'
       >
-        <div className='space-y-4 w-full overflow-x-auto'>
+        <div className='space-y-4 w-full'>
           {loading ? (
             // Loading skeleton
             <div className='space-y-4'>
@@ -1867,41 +1822,41 @@ const EditEntry: React.FC = () => {
               No entries found matching your criteria.
             </div>
           ) : (
-            <div className='overflow-x-auto'>
-              <table className='w-full text-sm'>
+            <div className='w-full'>
+              <table className='w-full text-xs table-fixed'>
                 <thead className='bg-gray-50 border-b border-gray-200'>
                   <tr>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
                       S.No
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Date
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Company
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Account
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Sub Account
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
                       Particulars
                     </th>
-                    <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                       Credit
                     </th>
-                    <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                    <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                       Debit
                     </th>
-                    <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Staff
                     </th>
-                    <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
                       Status
                     </th>
-                    <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                    <th className='w-24 px-1 py-1 text-center font-medium text-gray-700'>
                       Actions
                     </th>
                   </tr>
@@ -1912,83 +1867,64 @@ const EditEntry: React.FC = () => {
                       key={entry.id}
                       className={`border-b hover:bg-gray-50 transition-colors cursor-pointer ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                      } ${entry.lock_record ? 'opacity-80' : ''}`}
+                      }`}
                       onClick={() => setSelectedEntry(entry)}
                     >
-                      <td className='px-3 py-2 font-medium'>{index + 1}</td>
-                      <td className='px-3 py-2'>
+                      <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
+                      <td className='w-16 px-1 py-1 text-xs'>
                         {format(new Date(entry.c_date), 'dd-MMM-yy')}
                       </td>
-                      <td className='px-3 py-2 font-medium text-blue-600'>
+                      <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
                         {entry.company_name}
                       </td>
-                      <td className='px-3 py-2'>{entry.acc_name}</td>
-                      <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={entry.acc_name}>{entry.acc_name}</td>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={entry.sub_acc_name}>{entry.sub_acc_name || '-'}</td>
                       <td
-                        className='px-3 py-2 max-w-xs truncate'
+                        className='w-32 px-1 py-1 text-xs truncate'
                         title={entry.particulars}
                       >
                         {entry.particulars}
                       </td>
-                      <td className='px-3 py-2 text-right font-medium text-green-600'>
+                      <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
                         {entry.credit > 0
                           ? `₹${entry.credit.toLocaleString()}`
                           : '-'}
                       </td>
-                      <td className='px-3 py-2 text-right font-medium text-red-600'>
+                      <td className='w-16 px-1 py-1 text-right font-medium text-red-600 text-xs'>
                         {entry.debit > 0
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
                       </td>
-                      <td className='px-3 py-2'>{entry.staff}</td>
-                      <td className='px-3 py-2 text-center'>
-                        <div className='flex flex-col gap-1'>
-                          {entry.lock_record && (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                              <Lock className='w-3 h-3 mr-1' />
-                              Locked
-                            </span>
-                          )}
-                          {entry.edited && (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800'>
-                              Edited ({entry.editCount}x)
-                            </span>
-                          )}
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
+                      <td className='w-20 px-1 py-1 text-center'>
+                        <div className='flex flex-col gap-0.5'>
                           {entry.approved ? (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                            <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
                               Approved
                             </span>
                           ) : (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                            <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800'>
                               Pending
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className='px-3 py-2 text-center'>
-                        <div className='flex gap-1 justify-center' onClick={(e) => e.stopPropagation()}>
-                          {isAdmin && (
-                            <Button
-                              size='sm'
-                              variant='secondary'
-                              icon={entry.lock_record ? Unlock : Lock}
-                              onClick={() => toggleLock(entry)}
-                            >
-                              {entry.lock_record ? 'Unlock' : 'Lock'}
-                            </Button>
-                          )}
+                      <td className='w-24 px-1 py-1 text-center'>
+                        <div className='flex gap-0.5 justify-center' onClick={(e) => e.stopPropagation()}>
                           <Button
                             size='sm'
                             variant='secondary'
+                            icon={Eye}
                             onClick={() => printVoucher(entry)}
+                            className='p-1'
                           >
-                            Voucher
+                            <span className='sr-only'>View Voucher</span>
                           </Button>
                           <Button
                             size='sm'
                             icon={Edit}
                             onClick={() => handleEdit(entry)}
-                            disabled={entry.lock_record && !isAdmin}
+                            className='p-1'
                           >
                             <span className='sr-only'>Edit</span>
                           </Button>
@@ -1997,7 +1933,7 @@ const EditEntry: React.FC = () => {
                               size='sm'
                               variant='danger'
                               onClick={() => handleDelete(entry)}
-                              disabled={entry.lock_record}
+                              className='p-1'
                             >
                               <span className='sr-only'>Delete</span>
                             </Button>
@@ -2200,7 +2136,7 @@ const EditEntry: React.FC = () => {
                   {editMode ? 'Edit Entry' : 'View Entry'} #{selectedEntry.sno}
                 </h3>
                 <div className='flex items-center gap-2'>
-                  {!editMode && !selectedEntry.lock_record && (
+                  {!editMode && (
                     <Button
                       size='sm'
                       icon={Edit}
@@ -2238,7 +2174,7 @@ const EditEntry: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setShowCalendar(!showCalendar)}
-                            disabled={selectedEntry?.lock_record}
+                            disabled={false}
                             className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Calendar className="w-4 h-4 text-gray-500" />
@@ -2284,14 +2220,14 @@ const EditEntry: React.FC = () => {
                         value={selectedEntry?.company_name || ''}
                         onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
                         options={companies}
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                       />
                       <SearchableSelect
                         label='Main Account'
                         value={selectedEntry?.acc_name || ''}
                         onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
                         options={distinctAccountNames}
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                         placeholder='Select account...'
                       />
                       <SearchableSelect
@@ -2299,7 +2235,7 @@ const EditEntry: React.FC = () => {
                         value={selectedEntry?.sub_acc_name || ''}
                         onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
                         options={dependentSubAccounts}
-                        disabled={!editMode || selectedEntry?.lock_record || !selectedEntry?.acc_name}
+                        disabled={!editMode || !selectedEntry?.acc_name}
                         placeholder='Select sub account...'
                       />
                       <SearchableSelect
@@ -2307,7 +2243,7 @@ const EditEntry: React.FC = () => {
                         value={selectedEntry?.staff || ''}
                         onChange={value => editMode ? handleInputChange('staff', value) : undefined}
                         options={users}
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                       />
                     </div>
 
@@ -2317,7 +2253,7 @@ const EditEntry: React.FC = () => {
                       value={selectedEntry?.particulars || ''}
                       onChange={value => editMode ? handleInputChange('particulars', value) : undefined}
                       placeholder='Enter transaction details...'
-                      disabled={!editMode || selectedEntry?.lock_record}
+                      disabled={!editMode}
                     />
 
                     {/* Amounts */}
@@ -2329,7 +2265,7 @@ const EditEntry: React.FC = () => {
                           editMode ? handleInputChange('credit', Number((parseFloat(val) || 0).toFixed(2))) : undefined
                         }
                         placeholder='Enter credit amount...'
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                         className={
                           (selectedEntry?.credit || 0) > 0
                             ? 'border-green-300 bg-green-50'
@@ -2346,7 +2282,7 @@ const EditEntry: React.FC = () => {
                           editMode ? handleInputChange('debit', Number((parseFloat(val) || 0).toFixed(2))) : undefined
                         }
                         placeholder='Enter debit amount...'
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                         className={
                           (selectedEntry?.debit || 0) > 0 ? 'border-red-300 bg-red-50' : ''
                         }
@@ -2366,7 +2302,7 @@ const EditEntry: React.FC = () => {
                           editMode ? handleInputChange('sale_qty', parseFloat(val) || 0) : undefined
                         }
                         placeholder='Enter sale quantity...'
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                       />
                       <Input
                         label='Purchase Quantity'
@@ -2376,7 +2312,7 @@ const EditEntry: React.FC = () => {
                           editMode ? handleInputChange('purchase_qty', parseFloat(val) || 0) : undefined
                         }
                         placeholder='Enter purchase quantity...'
-                        disabled={!editMode || selectedEntry?.lock_record}
+                        disabled={!editMode}
                       />
                     </div>
                   </form>
@@ -2436,7 +2372,7 @@ const EditEntry: React.FC = () => {
                 <div className='flex gap-4'>
                   <Button
                     onClick={handleSave}
-                    disabled={!editMode || selectedEntry.lock_record || loading}
+                    disabled={!editMode || loading}
                   >
                     {loading ? 'Saving...' : 'Save Changes'}
                   </Button>

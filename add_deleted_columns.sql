@@ -21,3 +21,4 @@ COMMENT ON COLUMN cash_book.deleted_at IS 'Timestamp when the entry was deleted 
 
 
 
+

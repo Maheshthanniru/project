@@ -14,6 +14,7 @@ interface SearchableSelectProps {
   onSelect?: (value: string) => void; // New callback for when an option is selected
   searchPlaceholder?: string;
   noOptionsMessage?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
@@ -31,6 +32,7 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
       onSelect,
       searchPlaceholder = 'Search...',
       noOptionsMessage = 'No options found',
+      size = 'md',
     },
     ref
   ) => {
@@ -171,7 +173,9 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
     return (
       <div className={`relative ${className}`} ref={dropdownRef}>
         {label && (
-          <label className='block text-sm font-medium text-gray-700 mb-1'>
+          <label className={`block font-bold text-gray-700 mb-1 ${
+            size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-base' : 'text-sm'
+          }`} style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>
             {label}
             {required && <span className='text-red-500 ml-1'>*</span>}
           </label>
@@ -188,7 +192,10 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
             placeholder={isOpen ? searchPlaceholder : placeholder}
             disabled={disabled}
             required={required}
-            className='w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed'
+            className={`w-full pr-20 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${
+              size === 'sm' ? 'px-2 py-1 text-xs' : size === 'lg' ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'
+            }`}
+            style={{ fontFamily: 'Times New Roman', fontSize: '12px' }}
           />
           
           <div className='absolute inset-y-0 right-0 flex items-center'>

@@ -83,7 +83,19 @@ const DeletedRecords: React.FC = () => {
       const records = await supabaseDB.getDeletedCashBook();
       console.log('📋 Raw records from getDeletedCashBook:', records);
       
-      setDeletedRecords(records as DeletedRecord[]);
+      // Clean up any remaining [DELETED] text (but preserve deleted_by and deleted_at)
+      const cleanedRecords = records.map(record => ({
+        ...record,
+        acc_name: record.acc_name ? record.acc_name.replace(/\[DELETED\]\s*/g, '').trim() : record.acc_name,
+        particulars: record.particulars ? record.particulars.replace(/\[DELETED\]\s*/g, '').trim() : record.particulars,
+        company_name: record.company_name ? record.company_name.replace(/\[DELETED\]\s*/g, '').trim() : record.company_name,
+        sub_acc_name: record.sub_acc_name ? record.sub_acc_name.replace(/\[DELETED\]\s*/g, '').trim() : record.sub_acc_name,
+        // Ensure deleted_by and deleted_at are preserved
+        deleted_by: record.deleted_by || record.users || record.staff || 'Unknown',
+        deleted_at: record.deleted_at || record.updated_at || record.created_at || new Date().toISOString()
+      }));
+      
+      setDeletedRecords(cleanedRecords as DeletedRecord[]);
       console.log(`✅ Loaded ${records.length} deleted records`);
       
       if (records.length === 0) {
@@ -458,22 +470,22 @@ const DeletedRecords: React.FC = () => {
                 </div>
               </div>
 
-              <table className='w-full text-sm'>
+              <table className='w-full text-xs table-fixed'>
                 <thead className='bg-red-50 border-b border-red-200'>
                   <tr>
-                    <th className='px-3 py-2 text-left'>S.No</th>
-                    <th className='px-3 py-2 text-left'>Date</th>
-                    <th className='px-3 py-2 text-left'>Company</th>
-                    <th className='px-3 py-2 text-left'>Account</th>
-                    <th className='px-3 py-2 text-left'>Sub Account</th>
-                    <th className='px-3 py-2 text-left'>Particulars</th>
-                    <th className='px-3 py-2 text-right'>Credit</th>
-                    <th className='px-3 py-2 text-right'>Debit</th>
-                    <th className='px-3 py-2 text-left'>Staff</th>
-                    <th className='px-3 py-2 text-left'>Deleted By</th>
-                    <th className='px-3 py-2 text-left'>Deleted At</th>
-                    <th className='px-3 py-2 text-center'>Status</th>
-                    <th className='px-3 py-2 text-center'>Actions</th>
+                    <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>S.No</th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>Date</th>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>Company</th>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>Main A/c</th>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>Sub Account</th>
+                    <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>Particulars</th>
+                    <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>Credit</th>
+                    <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>Debit</th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>Staff</th>
+                    <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>Deleted By</th>
+                    <th className='w-24 px-1 py-1 text-left font-medium text-gray-700'>Deleted At</th>
+                    <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>Status</th>
+                    <th className='w-24 px-1 py-1 text-center font-medium text-gray-700'>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -484,51 +496,52 @@ const DeletedRecords: React.FC = () => {
                         idx % 2 === 0 ? 'bg-white' : 'bg-red-25'
                       }`}
                     >
-                      <td className='px-3 py-2 font-medium'>{record.sno}</td>
-                      <td className='px-3 py-2'>{format(new Date(record.c_date), 'dd/MM/yyyy')}</td>
-                      <td className='px-3 py-2'>{record.company_name}</td>
-                      <td className='px-3 py-2'>{record.acc_name}</td>
-                      <td className='px-3 py-2'>{record.sub_acc_name || '-'}</td>
-                      <td className='px-3 py-2 max-w-xs truncate' title={record.particulars || ''}>
+                      <td className='w-12 px-1 py-1 font-medium text-xs'>{record.sno}</td>
+                      <td className='w-16 px-1 py-1 text-xs'>{format(new Date(record.c_date), 'dd/MM/yyyy')}</td>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={record.company_name}>{record.company_name}</td>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={record.acc_name}>{record.acc_name}</td>
+                      <td className='w-20 px-1 py-1 text-xs truncate' title={record.sub_acc_name}>{record.sub_acc_name || '-'}</td>
+                      <td className='w-32 px-1 py-1 text-xs truncate' title={record.particulars || ''}>
                         {record.particulars || '-'}
                       </td>
-                      <td className='px-3 py-2 text-right text-green-700'>
+                      <td className='w-16 px-1 py-1 text-right text-green-700 text-xs'>
                         {record.credit > 0 ? `₹${record.credit.toLocaleString()}` : '-'}
                       </td>
-                      <td className='px-3 py-2 text-right text-red-700'>
+                      <td className='w-16 px-1 py-1 text-right text-red-700 text-xs'>
                         {record.debit > 0 ? `₹${record.debit.toLocaleString()}` : '-'}
                       </td>
-                      <td className='px-3 py-2'>{record.staff || '-'}</td>
-                      <td className='px-3 py-2 font-medium text-red-700'>{record.deleted_by}</td>
-                      <td className='px-3 py-2 text-gray-600'>
-                        {format(new Date(record.deleted_at), 'dd/MM/yyyy HH:mm')}
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={record.staff}>{record.staff || '-'}</td>
+                      <td className='w-20 px-1 py-1 font-medium text-red-700 text-xs'>{record.deleted_by || record.users || record.staff || '-'}</td>
+                      <td className='w-24 px-1 py-1 text-gray-600 text-xs'>
+                        {record.deleted_at ? format(new Date(record.deleted_at), 'dd/MM/yyyy HH:mm') : 
+                         record.updated_at ? format(new Date(record.updated_at), 'dd/MM/yyyy HH:mm') : '-'}
                       </td>
-                      <td className='px-3 py-2 text-center'>
+                      <td className='w-20 px-1 py-1 text-center'>
                         {getStatusIcon(record)}
                       </td>
-                      <td className='px-3 py-2 text-center'>
-                        <div className='flex gap-1 justify-center'>
+                      <td className='w-24 px-1 py-1 text-center'>
+                        <div className='flex gap-0.5 justify-center'>
                           <Button
                             size='sm'
                             variant='secondary'
                             onClick={() => restoreRecord(record)}
                             disabled={restoring === record.id || !isAdmin}
-                            className='flex items-center gap-1 text-green-700 hover:text-green-800'
+                            className='p-1 text-green-700 hover:text-green-800'
                             title='Restore Record'
                           >
                             <RotateCcw className='w-3 h-3' />
-                            Restore
+                            <span className='sr-only'>Restore</span>
                           </Button>
                           <Button
                             size='sm'
                             variant='danger'
                             onClick={() => permanentlyDeleteRecord(record)}
                             disabled={!isAdmin}
-                            className='flex items-center gap-1'
+                            className='p-1'
                             title='Permanently Delete'
                           >
                             <Trash2 className='w-3 h-3' />
-                            Delete
+                            <span className='sr-only'>Delete</span>
                           </Button>
                         </div>
                       </td>

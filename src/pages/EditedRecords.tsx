@@ -56,6 +56,7 @@ const getFieldDisplay = (field: FieldKey, value: any) => {
       ? format(new Date(value), 'HH:mm:ss')
       : value;
   }
+  // No cleaning needed - data comes clean from database
   return value || '-';
 };
 
@@ -77,9 +78,20 @@ const EditedRecords = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Listen for dashboard refresh events to reload data when records are deleted
+  useEffect(() => {
+    const onRefresh = () => {
+      console.log('[EditedRecords] Dashboard refresh triggered, reloading data...');
+      loadData();
+    };
+    window.addEventListener('dashboard-refresh', onRefresh);
+    return () => window.removeEventListener('dashboard-refresh', onRefresh);
   }, []);
 
   // Listen for dashboard refresh events to reload data
@@ -94,7 +106,14 @@ const EditedRecords = () => {
   }, []);
 
   const loadData = async () => {
+    if (isLoadingData) {
+      console.log('⚠️ Already loading data, ignoring duplicate call');
+      return;
+    }
+    
+    setIsLoadingData(true);
     setLoading(true);
+    
     try {
       console.log('🔄 Loading Edited Records data...');
       
@@ -107,6 +126,8 @@ const EditedRecords = () => {
       
       setAuditLog((log || []) as AuditLogEntry[]);
       setUsers((users || []) as User[]);
+      
+      // No cleaning needed - deleted records come clean from deleted_cash_book table
       setDeletedRecords((deleted || []) as any[]);
       
       console.log(`✅ Loaded Edited Records data:`, {
@@ -115,22 +136,38 @@ const EditedRecords = () => {
         deletedRecords: (deleted || []).length
       });
       
-      if ((log || []).length > 0) {
-        // Check if we're showing records from cash_book
-        const isShowingRecords = (log || []).some(rec => rec.action === 'SHOWING_RECORDS');
-        if (isShowingRecords) {
-          toast.info(`Showing ${(log || []).length} records from cash_book as edit history`);
-        } else {
-          toast.success(`Loaded ${(log || []).length} edit records`);
-        }
-      } else {
-        toast.info('No edit audit log found. This is normal if no records have been edited yet.');
+      // Debug deleted records data
+      if (deleted && deleted.length > 0) {
+        console.log('📋 Sample deleted record from getDeletedCashBook:', deleted[0]);
+        console.log('📋 All deleted records keys:', deleted.map(rec => Object.keys(rec)));
       }
       
-      if ((deleted || []).length > 0) {
-        toast.success(`Loaded ${(deleted || []).length} deleted records`);
+      // Debug: Log the actual data structure
+      if (log && log.length > 0) {
+        console.log('📝 Sample audit log record:', log[0]);
+        console.log('📝 Audit log record keys:', Object.keys(log[0]));
+      }
+      
+      // Show consolidated message instead of multiple toasts
+      const totalRecords = (log || []).length + (deleted || []).length;
+      if (totalRecords > 0) {
+        const editCount = (log || []).length;
+        const deletedCount = (deleted || []).length;
+        
+        if (editCount > 0 && deletedCount > 0) {
+          toast.success(`Loaded ${editCount} edit records and ${deletedCount} deleted records`);
+        } else if (editCount > 0) {
+          const isShowingRecords = (log || []).some(rec => rec.action === 'SHOWING_RECORDS' || rec.action === 'SHOWING_RECENT_ENTRIES');
+          if (isShowingRecords) {
+            toast.info(`Showing ${editCount} recent entries from cash_book (no edit history available yet)`);
+          } else {
+            toast.success(`Loaded ${editCount} edit records`);
+          }
+        } else if (deletedCount > 0) {
+          toast.success(`Loaded ${deletedCount} deleted records`);
+        }
       } else {
-        toast.info('No deleted records found. This is normal if no records have been deleted yet.');
+        toast.info('No edit or deleted records found. This is normal if no records have been modified yet.');
       }
       
     } catch (error) {
@@ -141,6 +178,7 @@ const EditedRecords = () => {
       toast.error('Failed to load Edited Records data. Please try again.');
     } finally {
       setLoading(false);
+      setIsLoadingData(false);
     }
   };
 
@@ -167,7 +205,13 @@ const EditedRecords = () => {
 
   // Filtered and searched log
   const filteredLog = useMemo(() => {
-    return auditLog.filter(log => {
+    console.log('🔍 Filtering audit log:', {
+      totalAuditLog: auditLog.length,
+      selectedDate,
+      userFilter
+    });
+    
+    const filtered = auditLog.filter(log => {
       const oldObj: CashBookPartial = log.old_values
         ? JSON.parse(log.old_values)
         : {};
@@ -180,17 +224,58 @@ const EditedRecords = () => {
       const matchesUser = userFilter === '' || log.edited_by === userFilter;
       // Exclude deletes from main table
       const isDelete = log.new_values == null && log.old_values != null;
-      return matchesDate && matchesUser && !isDelete;
+      const result = matchesDate && matchesUser && !isDelete;
+      
+      if (!result) {
+        console.log('🔍 Filtered out record:', {
+          id: log.id,
+          editedDate,
+          selectedDate,
+          matchesDate,
+          editedBy: log.edited_by,
+          userFilter,
+          matchesUser,
+          isDelete
+        });
+      }
+      
+      return result;
     });
+    
+    console.log('🔍 Filtered result:', filtered.length, 'records');
+    return filtered;
   }, [auditLog, selectedDate, userFilter]);
 
-  // Deleted records log (from deleted_cash_book)
-  // No filtering for now, but you can add search/userFilter if needed
+  // Deleted records log (from deleted_cash_book) - show ALL deleted records
   const deletedLog = useMemo(() => {
-    return deletedRecords.filter(log => {
+    console.log('🔍 Processing deleted records:', deletedRecords.length);
+    
+    const filtered = deletedRecords.filter(log => {
       // Consider as deleted if new_values is null and old_values is present
-      return log.new_values == null && log.old_values != null;
+      const isDeleted = log.new_values == null && log.old_values != null;
+      if (!isDeleted) {
+        console.log('🔍 Filtered out record (not deleted):', {
+          id: log.id,
+          new_values: log.new_values,
+          old_values: log.old_values ? 'present' : 'null'
+        });
+      }
+      return isDeleted;
     });
+    
+    console.log('🔍 Filtered deleted records:', filtered.length);
+    
+    // Return ALL deleted records, sorted by deleted_at or created_at (most recent first)
+    const sorted = filtered
+      .sort((a, b) => {
+        const dateA = new Date(a.deleted_at || a.created_at || 0);
+        const dateB = new Date(b.deleted_at || b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      // Removed .slice(0, 10) to show ALL deleted records from entire database
+    
+    console.log('🔍 Final deleted records count:', sorted.length);
+    return sorted;
   }, [deletedRecords]);
 
   // Pagination
@@ -299,10 +384,13 @@ const EditedRecords = () => {
     }
   };
 
+  // Check if we're showing recent entries instead of actual edits
+  const isShowingRecentEntries = filteredLog.some(rec => rec.action === 'SHOWING_RECENT_ENTRIES');
+  
   return (
     <Card
-      title='Edited Records (Audit Log)'
-      subtitle={`Showing ${filteredLog.length} edits`}
+      title={isShowingRecentEntries ? 'Recent Records (No Edit History Available)' : 'Edited Records (Audit Log)'}
+      subtitle={isShowingRecentEntries ? `Showing ${filteredLog.length} recent entries` : `Showing ${filteredLog.length} edits`}
     >
       <div className='flex flex-wrap gap-3 mb-4 items-end'>
         <Select
@@ -397,7 +485,7 @@ const EditedRecords = () => {
                         {(page - 1) * PAGE_SIZE + idx + 1}
                       </td>
                       <td className='px-2 py-1 font-semibold text-red-600'>
-                        Before
+                        {log.action === 'SHOWING_RECENT_ENTRIES' ? 'Entry' : 'Before'}
                       </td>
                       {FIELDS.map(f => (
                         <td
@@ -421,7 +509,7 @@ const EditedRecords = () => {
                     <tr className='border-b border-gray-100 hover:bg-gray-50'>
                       <td className='px-2 py-1 text-center'></td>
                       <td className='px-2 py-1 font-semibold text-green-700'>
-                        After
+                        {log.action === 'SHOWING_RECENT_ENTRIES' ? 'Details' : 'After'}
                       </td>
                       {FIELDS.map(f => (
                         <td
@@ -482,7 +570,7 @@ const EditedRecords = () => {
               🗑️ Deleted Records
             </h3>
             <div className='bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold'>
-              {deletedRecords.length} records
+              All deleted records ({deletedLog.length} total)
             </div>
           </div>
           <div className='flex gap-2'>
@@ -512,7 +600,7 @@ const EditedRecords = () => {
           </div>
         </div>
         
-        {deletedRecords.length === 0 ? (
+        {deletedLog.length === 0 ? (
           <div className='text-center py-12 bg-red-50 rounded-lg border-2 border-dashed border-red-200'>
             <div className='text-4xl mb-4'>🗑️</div>
             <div className='text-lg font-semibold text-red-700 mb-2'>No deleted records found</div>
@@ -539,7 +627,7 @@ const EditedRecords = () => {
                 </tr>
               </thead>
               <tbody>
-                {deletedRecords.map((rec, idx) => (
+                {deletedLog.map((rec, idx) => (
                   <tr
                     key={rec.id}
                     className='border-b border-red-100 hover:bg-red-50 transition-colors'

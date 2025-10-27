@@ -14,6 +14,7 @@ interface InputProps {
   step?: string | number;
   suggestions?: Array<string | number>;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -32,6 +33,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       step,
       suggestions = [],
       onKeyDown,
+      size = 'md',
     },
     ref
   ) => {
@@ -62,7 +64,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className={className} style={{ position: 'relative' }}>
         {label && (
-          <label className='block text-sm font-medium text-gray-700 mb-1'>
+          <label className={`block font-bold text-gray-700 mb-1 ${
+            size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-base' : 'text-sm'
+          }`} style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>
             {label}
             {required && <span className='text-red-500 ml-1'>*</span>}
           </label>
@@ -79,13 +83,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           }
           onChange={handleInputChange}
           onKeyDown={onKeyDown}
-          placeholder={placeholder}
+          placeholder={type === 'date' ? 'dd/mm/yyyy' : placeholder}
           required={required}
           disabled={disabled}
           min={min}
           max={max}
           step={step}
-          className='w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed'
+          className={`w-full border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${
+            size === 'sm' ? 'px-2 py-1 text-xs' : size === 'lg' ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'
+          }`}
+          style={{ fontFamily: 'Times New Roman', fontSize: '12px' }}
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
         />

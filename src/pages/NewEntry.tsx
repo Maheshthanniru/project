@@ -108,9 +108,10 @@ const NewEntry: React.FC = () => {
   const [showNewCompany, setShowNewCompany] = useState(false);
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showNewSubAccount, setShowNewSubAccount] = useState(false);
+  const [showNewStaff, setShowNewStaff] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteType, setDeleteType] = useState<
-    'company' | 'account' | 'subAccount'
+    'company' | 'account' | 'subAccount' | 'staff'
   >('company');
 
 
@@ -118,6 +119,8 @@ const NewEntry: React.FC = () => {
   const [newCompanyAddress, setNewCompanyAddress] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
   const [newSubAccountName, setNewSubAccountName] = useState('');
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
 
   // Database connection test
   const testDatabaseConnection = async () => {
@@ -599,7 +602,76 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  const handleDelete = (type: 'company' | 'account' | 'subAccount') => {
+  const handleCreateStaff = async () => {
+    console.log('🔧 handleCreateStaff called with:', { newStaffName, newStaffEmail });
+    
+    if (loading) {
+      console.log('⚠️ Already creating staff, ignoring duplicate call');
+      return;
+    }
+    
+    if (!newStaffName.trim()) {
+      console.log('❌ Staff name is empty');
+      toast.error('Staff name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('🔧 Creating staff member:', newStaffName.trim());
+      
+      // Get the staff user type ID from the database
+      const { data: userTypeData, error: userTypeError } = await supabase
+        .from('user_types')
+        .select('id')
+        .eq('user_type', 'Operator')
+        .single();
+
+      if (userTypeError || !userTypeData) {
+        console.error('❌ Error getting user type:', userTypeError);
+        toast.error('Failed to get user type');
+        return;
+      }
+
+      console.log('✅ User type found:', userTypeData);
+
+      const staffData = {
+        username: newStaffName.trim(),
+        email: newStaffEmail.trim() || `${newStaffName.trim().toLowerCase().replace(/\s+/g, '')}@company.com`,
+        password_hash: 'password123', // Default password
+        user_type_id: userTypeData.id,
+        is_active: true
+      };
+
+      console.log('📝 Creating user with data:', staffData);
+
+      const staff = await supabaseDB.createUser(staffData);
+      
+      console.log('✅ Staff created successfully:', staff);
+      
+      // Refresh users data
+      await loadUsersData();
+      
+      // Invalidate users query to refresh the dropdown
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.users });
+      
+      // Set the newly created staff as selected
+      setEntry(prev => ({ ...prev, staff: staff.username }));
+      setDualEntry(prev => ({ ...prev, staff: staff.username }));
+      setNewStaffName('');
+      setNewStaffEmail('');
+      setShowNewStaff(false);
+      toast.success('Staff member created successfully!');
+    } catch (error) {
+      console.error('❌ Error creating staff:', error);
+      console.error('❌ Error details:', error.message);
+      toast.error(`Failed to create staff member: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = (type: 'company' | 'account' | 'subAccount' | 'staff') => {
     setDeleteType(type);
     setShowDeleteModal(true);
   };
@@ -644,6 +716,22 @@ const NewEntry: React.FC = () => {
               );
               setEntry(prev => ({ ...prev, subAccount: '' }));
               message = 'Sub account deleted successfully!';
+            }
+          }
+          break;
+        case 'staff':
+          if (entry.staff) {
+            // Find the user ID by username
+            const user = users.find(u => u.username === entry.staff);
+            if (user) {
+              success = await supabaseDB.deleteUser(user.id);
+              if (success) {
+                // Refresh users data
+                await loadUsersData();
+                setEntry(prev => ({ ...prev, staff: '' }));
+                setDualEntry(prev => ({ ...prev, staff: '' }));
+                message = 'Staff member deleted successfully!';
+              }
             }
           }
           break;
@@ -1256,11 +1344,11 @@ const NewEntry: React.FC = () => {
           {/* Entry Form - Full Panel */}
           <div className='w-full'>
             <Card
-              className='p-1 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'
+              className='p-2 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg'
             >
-              <form onSubmit={handleSubmit} className='space-y-1 text-xs'>
+              <form onSubmit={handleSubmit} className='space-y-2 text-xs' style={{ fontFamily: 'Times New Roman', fontSize: '12px' }}>
                 {/* Dual Entry Toggle */}
-                <div className='flex items-center justify-center mb-1 p-1 bg-blue-50 rounded border border-blue-200'>
+                <div className='flex items-center justify-center mb-0.5 p-1 bg-blue-50 rounded border border-blue-200'>
                   <input
                     type='checkbox'
                     id='dualEntryEnabled'
@@ -1270,14 +1358,15 @@ const NewEntry: React.FC = () => {
                   />
                   <label
                     htmlFor='dualEntryEnabled'
-                    className='text-sm font-medium text-blue-800'
+                    className='text-sm font-bold text-blue-800'
+                    style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}
                   >
                     Enable Dual Entry
                   </label>
                 </div>
 
-                {/* Basic Information */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                {/* Line 1: Date, Company, Main Account */}
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
                   <Input
                     ref={dateRef}
                     label='Date'
@@ -1286,9 +1375,10 @@ const NewEntry: React.FC = () => {
                     onChange={value => handleInputChange('date', value)}
                     onKeyDown={(e) => handleKeyDown(e, companyNameRef)}
                     required
+                    size='sm'
                   />
 
-                  <div className='space-y-2'>
+                  <div className='space-y-0.5'>
                     <SearchableSelect
                       ref={companyNameRef}
                       label='Company Name'
@@ -1308,17 +1398,18 @@ const NewEntry: React.FC = () => {
                       placeholder='Select company...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, mainAccountRef)}
                       required
+                      size='sm'
                     />
-                    <div className='flex gap-2'>
+                    <div className='flex gap-1'>
                       <Button
                         type='button'
                         size='sm'
                         variant='secondary'
                         onClick={() => setShowNewCompany(true)}
-                        className='flex-1'
+                        className='text-xs px-1 py-1'
+                        icon={Building}
                       >
-                        <Building className='w-4 h-4 mr-1' />
-                        Add Company
+                        Add
                       </Button>
                       {entry.companyName && (
                         <Button
@@ -1326,19 +1417,16 @@ const NewEntry: React.FC = () => {
                           size='sm'
                           variant='danger'
                           onClick={() => handleDelete('company')}
-                          className='flex-1'
+                          className='text-xs px-1 py-1'
+                          icon={Trash2}
                         >
-                          <Trash2 className='w-4 h-4 mr-1' />
-                          Delete
+                          Del
                         </Button>
                       )}
                     </div>
                   </div>
-                </div>
 
-                {/* Account Information */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
-                  <div className='space-y-1'>
+                  <div className='space-y-0.5'>
                     <SearchableSelect
                       ref={mainAccountRef}
                       label='Main Account'
@@ -1359,18 +1447,18 @@ const NewEntry: React.FC = () => {
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, subAccountRef)}
                       required
                       disabled={!entry.companyName}
+                      size='sm'
                     />
-                    <div className='flex gap-2'>
+                    <div className='flex gap-1'>
                       <Button
                         type='button'
                         size='sm'
                         variant='secondary'
                         onClick={() => setShowNewAccount(true)}
-                        className='flex-1'
-                        disabled={!entry.companyName}
+                        className='text-xs px-1 py-1'
+                        icon={FileText}
                       >
-                        <FileText className='w-4 h-4 mr-1' />
-                        Add Account
+                        Add
                       </Button>
                       {entry.accountName && (
                         <Button
@@ -1378,16 +1466,19 @@ const NewEntry: React.FC = () => {
                           size='sm'
                           variant='danger'
                           onClick={() => handleDelete('account')}
-                          className='flex-1'
+                          className='text-xs px-1 py-1'
+                          icon={Trash2}
                         >
-                          <Trash2 className='w-4 h-4 mr-1' />
-                          Delete
+                          Del
                         </Button>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  <div className='space-y-1'>
+                {/* Line 2: Sub Account, Particulars, Staff */}
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
+                  <div className='space-y-0.5'>
                     <SearchableSelect
                       ref={subAccountRef}
                       label='Sub Account'
@@ -1397,18 +1488,18 @@ const NewEntry: React.FC = () => {
                       placeholder='Select sub account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, particularsRef)}
                       disabled={!entry.accountName}
+                      size='sm'
                     />
-                    <div className='flex gap-2'>
+                    <div className='flex gap-1'>
                       <Button
                         type='button'
                         size='sm'
                         variant='secondary'
                         onClick={() => setShowNewSubAccount(true)}
-                        className='flex-1'
-                        disabled={!entry.accountName}
+                        className='text-xs px-1 py-1'
+                        icon={FileText}
                       >
-                        <FileText className='w-4 h-4 mr-1' />
-                        Add Sub Account
+                        Add
                       </Button>
                       {entry.subAccount && (
                         <Button
@@ -1416,28 +1507,68 @@ const NewEntry: React.FC = () => {
                           size='sm'
                           variant='danger'
                           onClick={() => handleDelete('subAccount')}
-                          className='flex-1'
+                          className='text-xs px-1 py-1'
+                          icon={Trash2}
                         >
-                          <Trash2 className='w-4 h-4 mr-1' />
-                          Delete
+                          Del
                         </Button>
                       )}
                     </div>
                   </div>
+
+                  <div className='space-y-0.5'>
+                    <Input
+                      ref={particularsRef}
+                      label='Particulars'
+                      value={entry.particulars}
+                      onChange={value => handleInputChange('particulars', value)}
+                      onKeyDown={(e) => handleKeyDown(e, creditRef)}
+                      placeholder='Enter transaction details...'
+                      required
+                      size='sm'
+                    />
+                  </div>
+
+                  <div className='space-y-0.5'>
+                    <SearchableSelect
+                      ref={staffRef}
+                      label='Staff'
+                      value={entry.staff}
+                      onChange={value =>
+                        setEntry(prev => ({ ...prev, staff: value }))
+                      }
+                      options={users}
+                      placeholder='Select staff...'
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, creditRef)}
+                      required
+                      size='sm'
+                    />
+                    <div className='flex gap-1'>
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        onClick={() => setShowNewStaff(true)}
+                        className='text-xs px-1 py-1'
+                        icon={Building}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='danger'
+                        size='sm'
+                        onClick={() => handleDelete('staff')}
+                        className='text-xs px-1 py-1'
+                        icon={Trash2}
+                      >
+                        Del
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Particulars */}
-                <Input
-                  ref={particularsRef}
-                  label='Particulars'
-                  value={entry.particulars}
-                  onChange={value => handleInputChange('particulars', value)}
-                  onKeyDown={(e) => handleKeyDown(e, creditRef)}
-                  placeholder='Enter transaction details...'
-                  required
-                />
-
-                {/* Amounts */}
+                {/* Line 3: Credits, Debits */}
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
                   <Input
                     ref={creditRef}
@@ -1451,6 +1582,7 @@ const NewEntry: React.FC = () => {
                     type='number'
                     min='0'
                     step='any'
+                    size='sm'
                   />
                   <Input
                     ref={debitRef}
@@ -1464,78 +1596,70 @@ const NewEntry: React.FC = () => {
                     type='number'
                     min='0'
                     step='any'
+                    size='sm'
                   />
                 </div>
 
-                {/* Staff Field - Now placed below Debit */}
-                <SearchableSelect
-                  ref={staffRef}
-                  label='Staff'
-                  value={entry.staff}
-                  onChange={value => handleInputChange('staff', value)}
-                  options={users}
-                  placeholder='Select staff...'
-                  required
-                />
-
-                {/* Combined Quantity Checkbox and Inputs */}
-                <div className='space-y-4'>
-                  <div className='flex items-center gap-2'>
-                    <input
-                      type='checkbox'
-                      checked={entry.quantityChecked}
-                      onChange={e =>
-                        setEntry(prev => ({
-                          ...prev,
-                          quantityChecked: e.target.checked,
-                          saleQ: e.target.checked ? prev.saleQ : '',
-                          purchaseQ: e.target.checked ? prev.purchaseQ : '',
-                        }))
-                      }
-                      id='quantityChecked'
-                    />
-                    <label
-                      htmlFor='quantityChecked'
-                      className='text-sm font-medium'
-                    >
-                      Quantity Details
-                    </label>
-                  </div>
-
-                  {entry.quantityChecked && (
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
-                      <Input
-                        label='Sale Quantity'
-                        value={entry.saleQ}
-                        onChange={val =>
-                          setEntry(prev => ({ ...prev, saleQ: val }))
-                        }
-                        placeholder='0'
-                        type='number'
-                        min='0'
-                      />
-                      <Input
-                        label='Purchase Quantity'
-                        value={entry.purchaseQ}
-                        onChange={val =>
-                          setEntry(prev => ({ ...prev, purchaseQ: val }))
-                        }
-                        placeholder='0'
-                        type='number'
-                        min='0'
-                      />
-                    </div>
-                  )}
+                {/* Quantity Checkbox */}
+                <div className='flex items-center space-x-2'>
+                  <input
+                    type='checkbox'
+                    id='quantityChecked'
+                    checked={entry.quantityChecked}
+                    onChange={e =>
+                      setEntry(prev => ({
+                        ...prev,
+                        quantityChecked: e.target.checked,
+                      }))
+                    }
+                    className='w-4 h-4'
+                  />
+                  <label
+                    htmlFor='quantityChecked'
+                    className='text-sm font-bold text-gray-700'
+                    style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}
+                  >
+                    Quantity Details
+                  </label>
                 </div>
+
+
+                {/* Quantity Details - Only show when checked */}
+                {entry.quantityChecked && (
+                  <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                    <Input
+                      label='Sale Quantity'
+                      value={entry.saleQ}
+                      onChange={val =>
+                        setEntry(prev => ({ ...prev, saleQ: val }))
+                      }
+                      placeholder='0'
+                      type='number'
+                      min='0'
+                      size='sm'
+                    />
+                    <Input
+                      label='Purchase Quantity'
+                      value={entry.purchaseQ}
+                      onChange={val =>
+                        setEntry(prev => ({ ...prev, purchaseQ: val }))
+                      }
+                      placeholder='0'
+                      type='number'
+                      min='0'
+                      size='sm'
+                    />
+                  </div>
+                )}
 
                 {/* Dual Entry Section */}
                 {dualEntryEnabled && (
-                  <div className='border border-blue-300 rounded p-1 mt-1 bg-blue-50'>
-                    <h3 className='text-sm font-bold mb-1 text-blue-700 text-center'>
+                  <div className='border border-blue-300 rounded p-1 mt-0.5 bg-blue-50'>
+                    <h3 className='text-sm font-bold mb-1 text-blue-700 text-center' style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>
                       Dual Entry
                     </h3>
-                    {/* Basic Information */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                    {/* Line 1: Date, Company, Main Account */}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
                       <Input
                         ref={dualDateRef}
                         label='Date'
@@ -1546,6 +1670,7 @@ const NewEntry: React.FC = () => {
                         }
                         onKeyDown={(e) => handleKeyDown(e, dualCompanyNameRef)}
                         required
+                        size='sm'
                       />
                       <SearchableSelect
                         ref={dualCompanyNameRef}
@@ -1569,10 +1694,11 @@ const NewEntry: React.FC = () => {
                         placeholder='Select company...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualMainAccountRef)}
                         required
+                        size='sm'
                       />
                     </div>
-                    {/* Account Information */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
+                    {/* Line 2: Sub Account, Particulars, Staff */}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-1 mt-1'>
                       <SearchableSelect
                         ref={dualMainAccountRef}
                         label='Main Account'
@@ -1596,6 +1722,7 @@ const NewEntry: React.FC = () => {
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualSubAccountRef)}
                         required
                         disabled={!dualEntry.companyName}
+                        size='sm'
                       />
                       <SearchableSelect
                         ref={dualSubAccountRef}
@@ -1608,6 +1735,7 @@ const NewEntry: React.FC = () => {
                         placeholder='Select sub account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualParticularsRef)}
                         disabled={!dualEntry.accountName}
+                        size='sm'
                       />
                     </div>
                     {/* Particulars */}
@@ -1622,9 +1750,10 @@ const NewEntry: React.FC = () => {
                       placeholder='Enter transaction details...'
                       required
                       className='mt-2'
+                      size='sm'
                     />
-                    {/* Amounts */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-0.5'>
+                    {/* Line 3: Credits, Debits */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-1'>
                       <Input
                         ref={dualCreditRef}
                         label='Credit'
@@ -1637,6 +1766,7 @@ const NewEntry: React.FC = () => {
                         type='number'
                         min='0'
                         step='any'
+                        size='sm'
                       />
                       <Input
                         ref={dualDebitRef}
@@ -1650,21 +1780,49 @@ const NewEntry: React.FC = () => {
                         type='number'
                         min='0'
                         step='any'
+                        size='sm'
                       />
                     </div>
 
                     {/* Staff Field - Now placed below Debit for dual entry */}
-                    <SearchableSelect
-                      ref={dualStaffRef}
-                      label='Staff'
-                      value={dualEntry.staff}
-                      onChange={value =>
-                        setDualEntry(prev => ({ ...prev, staff: value }))
-                      }
-                      options={users}
-                      placeholder='Select staff...'
-                      required
-                    />
+                    <div className='space-y-0.5'>
+                      <SearchableSelect
+                        ref={dualStaffRef}
+                        label='Staff'
+                        value={dualEntry.staff}
+                        onChange={value =>
+                          setDualEntry(prev => ({ ...prev, staff: value }))
+                        }
+                        options={users}
+                        placeholder='Select staff...'
+                        required
+                        size='sm'
+                      />
+                      <div className='flex gap-2'>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='secondary'
+                          onClick={() => setShowNewStaff(true)}
+                          className='flex-1'
+                        >
+                          <FileText className='w-4 h-4 mr-1' />
+                          Add Staff
+                        </Button>
+                        {dualEntry.staff && (
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='danger'
+                            onClick={() => handleDelete('staff')}
+                            className='flex-1'
+                          >
+                            <Trash2 className='w-4 h-4 mr-1' />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
                     <div className='space-y-4 mt-2'>
                       <div className='flex items-center gap-2'>
@@ -1721,12 +1879,12 @@ const NewEntry: React.FC = () => {
                 )}
 
                 {/* Action Buttons */}
-                <div className='flex flex-col sm:flex-row gap-1 pt-1 border-t border-gray-200'>
+                <div className='flex justify-center gap-1 pt-1 border-t border-gray-200'>
                   <Button
                     type='submit'
                     disabled={loading}
                     size='sm'
-                    className='flex-1 text-xs py-1'
+                    className='px-6 py-1 text-xs font-bold'
                   >
                     {loading ? 'Saving...' : 'Save Entry'}
                   </Button>
@@ -1755,9 +1913,9 @@ const NewEntry: React.FC = () => {
                       // Accounts are now managed by React Query
                       setSubAccounts([]);
                     }}
-                    className='flex-1 text-xs py-1'
+                    className='px-4 py-1 text-xs font-bold'
                   >
-                    Reset Form
+                    Reset
                   </Button>
                 </div>
               </form>
@@ -1964,6 +2122,51 @@ const NewEntry: React.FC = () => {
                 <Button
                   variant='secondary'
                   onClick={() => setShowNewSubAccount(false)}
+                  className='flex-1'
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Staff Modal */}
+      {showNewStaff && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
+          <div className='bg-white rounded-lg max-w-md w-full p-6'>
+            <h3 className='text-lg font-semibold mb-4'>Create New Staff Member</h3>
+            <div className='space-y-4'>
+              <Input
+                label='Staff Name'
+                value={newStaffName}
+                onChange={value => setNewStaffName(value)}
+                placeholder='Enter staff name...'
+                required
+              />
+              <Input
+                label='Email (Optional)'
+                value={newStaffEmail}
+                onChange={value => setNewStaffEmail(value)}
+                placeholder='Enter email address...'
+                type='email'
+              />
+              <div className='text-sm text-gray-600 bg-blue-50 p-3 rounded-lg'>
+                <strong>Note:</strong> A default password "password123" will be assigned. 
+                The staff member can change it after logging in.
+              </div>
+              <div className='flex gap-2'>
+                <Button onClick={handleCreateStaff} className='flex-1' disabled={loading}>
+                  {loading ? 'Creating...' : 'Create'}
+                </Button>
+                <Button
+                  variant='secondary'
+                  onClick={() => {
+                    setShowNewStaff(false);
+                    setNewStaffName('');
+                    setNewStaffEmail('');
+                  }}
                   className='flex-1'
                 >
                   Cancel

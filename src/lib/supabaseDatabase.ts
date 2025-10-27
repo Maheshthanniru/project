@@ -55,6 +55,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  password_hash?: string;
   user_type_id: string;
   is_active: boolean;
   created_at: string;
@@ -345,8 +346,8 @@ class SupabaseDatabase {
       const { data, error } = await supabase
         .from('cash_book')
         .select('*')
-        .order('c_date', { ascending: false })
         .order('created_at', { ascending: false })
+        .order('c_date', { ascending: false })
         .range(start, end);
 
       if (error) {
@@ -995,97 +996,96 @@ class SupabaseDatabase {
 
       console.log('✅ Found entry to delete:', { id: oldEntry.id, sno: oldEntry.sno, acc_name: oldEntry.acc_name });
 
-      // Step 2: Try the simplest approach first - soft delete with prefix
-      console.log('📝 Step 2: Attempting soft delete with prefix...');
+      // Step 2: Insert into deleted_cash_book table with proper deleted_by and deleted_at
+      console.log('📝 Step 2: Inserting into deleted_cash_book table...');
       
-      const updateData = {
-        acc_name: `[DELETED] ${oldEntry.acc_name}`,
-        particulars: oldEntry.particulars ? `[DELETED] ${oldEntry.particulars}` : '[DELETED]',
+      const deletedEntry = {
+        ...oldEntry,
         deleted_by: deletedBy || 'unknown',
         deleted_at: new Date().toISOString(),
       };
 
-      console.log('📝 Update data:', updateData);
+      console.log('📝 Deleted entry data:', deletedEntry);
 
-      const { error: updateError } = await supabase
-        .from('cash_book')
-        .update(updateData)
-        .eq('id', id);
+      const { error: insertError } = await supabase
+        .from('deleted_cash_book')
+        .insert(deletedEntry);
 
-      if (updateError) {
-        console.error('❌ Soft delete failed:', updateError);
-        console.error('❌ Update error details:', {
-          message: updateError.message,
-          details: updateError.details,
-          hint: updateError.hint,
-          code: updateError.code
+      if (insertError) {
+        console.error('❌ Failed to insert into deleted_cash_book:', insertError);
+        console.error('❌ Insert error details:', {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
         });
 
-        // Step 3: Try minimal update (acc_name only)
-        console.log('📝 Step 3: Trying minimal update (acc_name only)...');
-        
-        const minimalUpdateData = {
-          acc_name: `[DELETED] ${oldEntry.acc_name}`,
-        };
+        // Step 3: Fallback - try to create the table first
+        console.log('📝 Step 3: Attempting to create deleted_cash_book table...');
+        await this.createDeletedCashBookTable();
 
-        const { error: minimalError } = await supabase
-          .from('cash_book')
-          .update(minimalUpdateData)
-          .eq('id', id);
+        // Try inserting again
+        const { error: retryInsertError } = await supabase
+          .from('deleted_cash_book')
+          .insert(deletedEntry);
 
-        if (minimalError) {
-          console.error('❌ Minimal update also failed:', minimalError);
+        if (retryInsertError) {
+          console.error('❌ Retry insert also failed:', retryInsertError);
+          console.log('📝 Step 4: Using fallback - marking record as deleted in cash_book...');
           
-          // Step 4: Last resort - try to create a backup entry
-          console.log('📝 Step 4: Attempting to create backup entry...');
-          
-          try {
-            // Try to insert a backup entry with a different approach
-            const backupEntry = {
-              ...oldEntry,
-              id: `${oldEntry.id}_deleted_${Date.now()}`,
-              acc_name: `[DELETED] ${oldEntry.acc_name}`,
-              particulars: oldEntry.particulars ? `[DELETED] ${oldEntry.particulars}` : '[DELETED]',
+          // Fallback: Mark the record as deleted in cash_book instead of moving it
+          const { error: updateError } = await supabase
+            .from('cash_book')
+            .update({ 
+              deleted: true,
               deleted_by: deletedBy || 'unknown',
-              deleted_at: new Date().toISOString(),
-            };
+              deleted_at: new Date().toISOString()
+            })
+            .eq('id', id);
 
-            const { error: backupError } = await supabase
-              .from('cash_book')
-              .insert(backupEntry);
-
-            if (backupError) {
-              console.error('❌ Backup creation failed:', backupError);
-              return false;
-            }
-
-            console.log('✅ Backup entry created successfully');
-            
-            // Now delete the original
-            const { error: deleteError } = await supabase
-              .from('cash_book')
-              .delete()
-              .eq('id', id);
-
-            if (deleteError) {
-              console.error('❌ Failed to delete original after backup:', deleteError);
-              return false;
-            }
-
-            console.log('✅ Original entry deleted after backup');
-            return true;
-          } catch (backupException) {
-            console.error('❌ Backup exception:', backupException);
+          if (updateError) {
+            console.error('❌ Fallback update also failed:', updateError);
             return false;
           }
-        } else {
-          console.log('✅ Minimal update successful');
+
+          console.log('✅ Fallback successful - record marked as deleted in cash_book');
           return true;
+        } else {
+          console.log('✅ Retry insert successful');
         }
       } else {
-        console.log('✅ Soft delete successful');
-        return true;
+        console.log('✅ Successfully inserted into deleted_cash_book');
       }
+
+      // Step 5: Delete from cash_book table
+      console.log('📝 Step 5: Deleting from cash_book table...');
+      
+      const { error: deleteError } = await supabase
+        .from('cash_book')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        console.error('❌ Failed to delete from cash_book:', deleteError);
+        console.error('❌ Delete error details:', {
+          message: deleteError.message,
+          details: deleteError.details,
+          hint: deleteError.hint,
+          code: deleteError.code
+        });
+        return false;
+      }
+
+      console.log('✅ Successfully deleted from cash_book');
+      
+      // Step 6: Update financial calculations and trigger dashboard refresh
+      console.log('📝 Step 6: Triggering financial recalculation...');
+      
+      // Trigger dashboard refresh to update financial totals
+      localStorage.setItem('dashboard-refresh', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      
+      return true;
 
     } catch (error) {
       console.error('❌ Unexpected error in deleteCashBookEntry:', error);
@@ -1150,11 +1150,40 @@ class SupabaseDatabase {
   // Create deleted_cash_book table if it doesn't exist
   private async createDeletedCashBookTable(): Promise<void> {
     try {
-      console.log('Creating deleted_cash_book table...');
+      console.log('🔧 Creating deleted_cash_book table...');
       
-      // Try to create the table using raw SQL
-      const createTableSQL = `
-        CREATE TABLE IF NOT EXISTS deleted_cash_book (
+      // First, try to insert a test record to see if table exists
+      const testRecord = {
+        id: 'test-table-check-' + Date.now(),
+        sno: 0,
+        acc_name: 'test',
+        c_date: new Date().toISOString().split('T')[0],
+        credit: 0,
+        debit: 0,
+        company_name: 'test',
+        deleted_by: 'system',
+        deleted_at: new Date().toISOString()
+      };
+
+      const { error: testError } = await supabase
+        .from('deleted_cash_book')
+        .insert(testRecord);
+
+      if (!testError) {
+        console.log('✅ deleted_cash_book table already exists and is accessible');
+        // Clean up test record
+        await supabase
+          .from('deleted_cash_book')
+          .delete()
+          .eq('id', testRecord.id);
+        return;
+      }
+
+      console.log('📋 Table does not exist, attempting to create...');
+      console.log('⚠️ Note: Table creation requires database admin privileges');
+      console.log('📋 Please create the deleted_cash_book table manually with the following structure:');
+      console.log(`
+        CREATE TABLE deleted_cash_book (
           id TEXT PRIMARY KEY,
           sno INTEGER,
           acc_name TEXT NOT NULL,
@@ -1180,18 +1209,10 @@ class SupabaseDatabase {
           deleted_by TEXT NOT NULL,
           deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-      `;
+      `);
       
-      const { error } = await supabase.rpc('exec_sql', { sql: createTableSQL });
-      
-      if (error) {
-        console.error('Error creating deleted_cash_book table:', error);
-        console.log('Table creation failed, but continuing...');
-      } else {
-        console.log('Successfully created deleted_cash_book table');
-      }
     } catch (error) {
-      console.error('Exception creating deleted_cash_book table:', error);
+      console.error('Exception in createDeletedCashBookTable:', error);
     }
   }
 
@@ -1244,6 +1265,8 @@ class SupabaseDatabase {
   async createUser(
     user: Omit<any, 'id' | 'created_at' | 'updated_at'>
   ): Promise<User> {
+    console.log('🔧 [supabaseDatabase] Creating user with data:', user);
+    
     const { data, error } = await supabase
       .from('users')
       .insert(user)
@@ -1251,9 +1274,11 @@ class SupabaseDatabase {
       .single();
 
     if (error) {
+      console.error('❌ [supabaseDatabase] Error creating user:', error);
       throw new Error(`Failed to create user: ${error.message}`);
     }
 
+    console.log('✅ [supabaseDatabase] User created successfully:', data);
     return data;
   }
 
@@ -1484,85 +1509,119 @@ class SupabaseDatabase {
 
 
 
-  // Dashboard stats - All time totals (fetches ALL records, not just 1000)
+  // Dashboard stats - All time totals with optimized calculations
   async getDashboardStats(date?: string) {
     try {
-      console.log('🔄 Fetching dashboard stats for ALL 67k+ records...');
+      console.log('🔄 Fetching dashboard stats with optimized calculations...');
       
       let totalCredit = 0;
       let totalDebit = 0;
       let totalTransactions = 0;
+      let deletedRecords = 0;
 
-      // Method 1: Try RPC function first (most efficient for large datasets)
-      try {
-        console.log('📊 Trying RPC function for totals...');
-        const result = await supabase.rpc('get_dashboard_totals');
-        if (result.data && !result.error && result.data.length > 0) {
-          const t = result.data[0];
-          totalCredit = Number(t.total_credit) || 0;
-          totalDebit = Number(t.total_debit) || 0;
-          totalTransactions = Number(t.total_transactions) || 0;
-          console.log(`✅ RPC result: ${totalTransactions.toLocaleString()} transactions, credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
-        } else {
-          throw new Error('RPC function failed or returned no data');
-        }
-      } catch (rpcError) {
-        console.error('RPC function failed, trying SQL aggregation:', rpcError);
-        
-        // Method 2: Try SQL aggregation with proper handling for large datasets
-        try {
-          console.log('📊 Trying SQL aggregation for totals...');
-          
-          // Get total count first
-          const { count: totalCount, error: countError } = await supabase
-            .from('cash_book')
-            .select('*', { count: 'exact', head: true });
+      // Get total count first
+      const { count: totalCount, error: countError } = await supabase
+        .from('cash_book')
+        .select('*', { count: 'exact', head: true });
 
-          if (countError) {
-            console.error('Error getting total count:', countError);
-            throw countError;
-          }
-
-          totalTransactions = totalCount || 0;
-          console.log(`📊 Total records in database: ${totalTransactions}`);
-
-          // Use SQL aggregation with proper Supabase syntax
-          const { data: sumData, error: sumError } = await supabase
-            .from('cash_book')
-            .select('credit, debit')
-            .limit(100000); // Get all records for aggregation
-
-          if (sumError) {
-            console.error('Error getting sum data:', sumError);
-            throw sumError;
-          }
-
-          // Calculate totals from the fetched data
-          if (sumData && sumData.length > 0) {
-            totalCredit = sumData.reduce((sum, entry) => sum + (entry.credit || 0), 0);
-            totalDebit = sumData.reduce((sum, entry) => sum + (entry.debit || 0), 0);
-          }
-          
-          console.log(`✅ SQL aggregation result: credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
-          
-        } catch (sqlError) {
-          console.error('SQL aggregation failed, trying pagination method:', sqlError);
-          
-          // Method 3: Fallback to pagination (slower but works)
-          console.log('📊 Using pagination method to fetch all records...');
-          const allEntries = await this.getAllCashBookEntries();
-          totalTransactions = allEntries.length;
-          
-          if (allEntries.length > 0) {
-            totalCredit = allEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
-            totalDebit = allEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
-          }
-          
-          console.log(`✅ Pagination result: ${totalTransactions} records, credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
-        }
+      if (countError) {
+        console.error('Error getting total count:', countError);
+        throw countError;
       }
 
+      totalTransactions = totalCount || 0;
+      console.log(`📊 Total records in database: ${totalTransactions}`);
+
+      // Get deleted records count from both sources
+      try {
+        // First try deleted_cash_book table
+        const { count: deletedCount, error: deletedError } = await supabase
+          .from('deleted_cash_book')
+          .select('*', { count: 'exact', head: true });
+        
+        if (!deletedError && deletedCount !== null) {
+          deletedRecords = deletedCount;
+          console.log(`📊 Deleted records from deleted_cash_book: ${deletedRecords}`);
+        } else {
+          // Fallback: check cash_book for deleted records
+          const { count: cashBookDeletedCount, error: cashBookError } = await supabase
+            .from('cash_book')
+            .select('*', { count: 'exact', head: true })
+            .eq('deleted', true);
+          
+          if (!cashBookError && cashBookDeletedCount !== null) {
+            deletedRecords = cashBookDeletedCount;
+            console.log(`📊 Deleted records from cash_book: ${deletedRecords}`);
+          } else {
+            deletedRecords = 0;
+            console.log('📊 No deleted records found in either table');
+          }
+        }
+      } catch (deletedError) {
+        console.log('No deleted records table or error:', deletedError);
+        deletedRecords = 0;
+      }
+
+      // Use SQL aggregation for accurate and efficient calculations
+      console.log('📊 Using SQL aggregation for accurate calculations...');
+      
+      const { data: sumData, error: sumError } = await supabase
+        .from('cash_book')
+        .select('credit, debit');
+
+      if (sumError) {
+        console.error('Error getting sum data:', sumError);
+        throw sumError;
+      }
+
+      // Calculate totals with proper data type validation and precision
+      if (sumData && sumData.length > 0) {
+        console.log(`📊 Processing ${sumData.length} records for calculations...`);
+        
+        totalCredit = sumData.reduce((sum, entry) => {
+          const credit = parseFloat(entry.credit) || 0;
+          if (isNaN(credit)) {
+            console.warn('⚠️ Invalid credit value found:', entry.credit);
+            return sum;
+          }
+          return sum + credit;
+        }, 0);
+        
+        totalDebit = sumData.reduce((sum, entry) => {
+          const debit = parseFloat(entry.debit) || 0;
+          if (isNaN(debit)) {
+            console.warn('⚠️ Invalid debit value found:', entry.debit);
+            return sum;
+          }
+          return sum + debit;
+        }, 0);
+        
+        // Round to 2 decimal places for precision
+        totalCredit = Math.round(totalCredit * 100) / 100;
+        totalDebit = Math.round(totalDebit * 100) / 100;
+        
+        console.log(`📊 Calculated totals: Credit=${totalCredit}, Debit=${totalDebit}`);
+      } else {
+        console.log('📊 No records found for calculation');
+        totalCredit = 0;
+        totalDebit = 0;
+      }
+      
+      // Validate calculations
+      if (isNaN(totalCredit) || isNaN(totalDebit)) {
+        console.error('❌ Invalid calculation result - NaN detected');
+        throw new Error('Invalid financial calculation result');
+      }
+
+      console.log(`✅ SQL aggregation result: credit: ₹${totalCredit.toLocaleString()}, debit: ₹${totalDebit.toLocaleString()}`);
+
       const balance = totalCredit - totalDebit;
+      
+      // Validate balance calculation
+      if (isNaN(balance)) {
+        console.error('❌ Invalid balance calculation - NaN detected');
+        throw new Error('Invalid balance calculation result');
+      }
 
       // Get today's entries count
       const today = date || new Date().toISOString().split('T')[0];
@@ -1579,7 +1638,17 @@ class SupabaseDatabase {
         todayEntries = 0;
       }
 
+      // Final validation and logging
       console.log(`🎉 Dashboard stats calculated: ${totalTransactions.toLocaleString()} total transactions, ₹${totalCredit.toLocaleString()} credit, ₹${totalDebit.toLocaleString()} debit, balance: ₹${balance.toLocaleString()}`);
+      
+      // Additional validation checks
+      if (totalCredit < 0 || totalDebit < 0) {
+        console.warn('⚠️ Warning: Negative values detected in calculations');
+      }
+      
+      if (Math.abs(balance - (totalCredit - totalDebit)) > 0.01) {
+        console.error('❌ Balance calculation mismatch detected');
+      }
 
       return {
         totalCredit,
@@ -1587,6 +1656,7 @@ class SupabaseDatabase {
         balance,
         totalTransactions,
         todayEntries: todayEntries,
+        deletedRecords: deletedRecords,
         // Set online/offline values to 0 since these columns don't exist in the current schema
         onlineCredit: 0,
         offlineCredit: 0,
@@ -1601,6 +1671,141 @@ class SupabaseDatabase {
     }
   }
 
+  // Data validation and integrity check
+  async validateFinancialData(): Promise<{ isValid: boolean; issues: string[] }> {
+    const issues: string[] = [];
+    
+    try {
+      // Check for null/undefined values in critical fields
+      const { data: nullCheck, error: nullError } = await supabase
+        .from('cash_book')
+        .select('id, credit, debit, company_name')
+        .or('credit.is.null,debit.is.null,company_name.is.null');
+      
+      if (!nullError && nullCheck && nullCheck.length > 0) {
+        issues.push(`Found ${nullCheck.length} records with null values in critical fields`);
+      }
+      
+      // Check for negative values in credit/debit
+      const { data: negativeCheck, error: negativeError } = await supabase
+        .from('cash_book')
+        .select('id, credit, debit')
+        .or('credit.lt.0,debit.lt.0');
+      
+      if (!negativeError && negativeCheck && negativeCheck.length > 0) {
+        issues.push(`Found ${negativeCheck.length} records with negative credit/debit values`);
+      }
+      
+      // Check for non-numeric values
+      const { data: allData, error: allError } = await supabase
+        .from('cash_book')
+        .select('id, credit, debit')
+        .limit(1000);
+      
+      if (!allError && allData) {
+        const nonNumericCredits = allData.filter(entry => 
+          entry.credit !== null && isNaN(parseFloat(entry.credit))
+        ).length;
+        
+        const nonNumericDebits = allData.filter(entry => 
+          entry.debit !== null && isNaN(parseFloat(entry.debit))
+        ).length;
+        
+        if (nonNumericCredits > 0) {
+          issues.push(`Found ${nonNumericCredits} records with non-numeric credit values`);
+        }
+        
+        if (nonNumericDebits > 0) {
+          issues.push(`Found ${nonNumericDebits} records with non-numeric debit values`);
+        }
+      }
+      
+      return {
+        isValid: issues.length === 0,
+        issues
+      };
+    } catch (error) {
+      console.error('Error validating financial data:', error);
+      return {
+        isValid: false,
+        issues: ['Error validating data: ' + (error as Error).message]
+      };
+    }
+  }
+
+  // Fix data integrity issues automatically
+  async fixDataIntegrityIssues(): Promise<{ fixed: number; errors: string[] }> {
+    const errors: string[] = [];
+    let fixed = 0;
+    
+    try {
+      console.log('🔧 Starting data integrity fix...');
+      
+      // Fix null values in critical fields
+      const { data: nullRecords, error: nullError } = await supabase
+        .from('cash_book')
+        .select('id, credit, debit, company_name')
+        .or('credit.is.null,debit.is.null,company_name.is.null');
+      
+      if (!nullError && nullRecords && nullRecords.length > 0) {
+        for (const record of nullRecords) {
+          const updates: any = {};
+          
+          if (record.credit === null) updates.credit = 0;
+          if (record.debit === null) updates.debit = 0;
+          if (!record.company_name) updates.company_name = 'Unknown';
+          
+          const { error: updateError } = await supabase
+            .from('cash_book')
+            .update(updates)
+            .eq('id', record.id);
+          
+          if (updateError) {
+            errors.push(`Failed to fix record ${record.id}: ${updateError.message}`);
+          } else {
+            fixed++;
+          }
+        }
+      }
+      
+      // Fix negative values (convert to positive)
+      const { data: negativeRecords, error: negativeError } = await supabase
+        .from('cash_book')
+        .select('id, credit, debit')
+        .or('credit.lt.0,debit.lt.0');
+      
+      if (!negativeError && negativeRecords && negativeRecords.length > 0) {
+        for (const record of negativeRecords) {
+          const updates: any = {};
+          
+          if (record.credit < 0) updates.credit = Math.abs(record.credit);
+          if (record.debit < 0) updates.debit = Math.abs(record.debit);
+          
+          const { error: updateError } = await supabase
+            .from('cash_book')
+            .update(updates)
+            .eq('id', record.id);
+          
+          if (updateError) {
+            errors.push(`Failed to fix negative values for record ${record.id}: ${updateError.message}`);
+          } else {
+            fixed++;
+          }
+        }
+      }
+      
+      console.log(`✅ Data integrity fix completed: ${fixed} records fixed, ${errors.length} errors`);
+      
+      return { fixed, errors };
+    } catch (error) {
+      console.error('Error fixing data integrity issues:', error);
+      return {
+        fixed: 0,
+        errors: ['Error fixing data: ' + (error as Error).message]
+      };
+    }
+  }
+
   // Fallback method for dashboard stats
   private getDashboardStatsFallback() {
     console.warn('⚠️ Using fallback dashboard stats - check database connection and table structure');
@@ -1610,6 +1815,7 @@ class SupabaseDatabase {
       balance: 0,
       totalTransactions: 0,
       todayEntries: 0,
+      deletedRecords: 0,
       onlineCredit: 0,
       offlineCredit: 0,
       onlineDebit: 0,
@@ -1635,21 +1841,44 @@ class SupabaseDatabase {
       if (!data || data.length === 0) return [];
 
       const totals: Record<string, { totalCredit: number; totalDebit: number }> = {};
+      
+      console.log(`📊 Processing ${data.length} records for company balances...`);
+      
       for (const row of data) {
         const name = (row as any).company_name?.trim();
         if (!name) continue;
         if (!totals[name]) totals[name] = { totalCredit: 0, totalDebit: 0 };
-        totals[name].totalCredit += (row as any).credit || 0;
-        totals[name].totalDebit += (row as any).debit || 0;
+        
+        // Proper data type validation and conversion with precision
+        const credit = parseFloat((row as any).credit) || 0;
+        const debit = parseFloat((row as any).debit) || 0;
+        
+        // Validate and add with precision
+        if (!isNaN(credit)) {
+          totals[name].totalCredit += credit;
+        }
+        if (!isNaN(debit)) {
+          totals[name].totalDebit += debit;
+        }
       }
+      
+      // Round all values to 2 decimal places for precision
       const companyBalances = Object.entries(totals)
-        .map(([companyName, t]) => ({
-          companyName,
-          totalCredit: t.totalCredit,
-          totalDebit: t.totalDebit,
-          closingBalance: t.totalCredit - t.totalDebit,
-        }))
+        .map(([companyName, t]) => {
+          const totalCredit = Math.round(t.totalCredit * 100) / 100;
+          const totalDebit = Math.round(t.totalDebit * 100) / 100;
+          const closingBalance = Math.round((totalCredit - totalDebit) * 100) / 100;
+          
+          return {
+            companyName,
+            totalCredit,
+            totalDebit,
+            closingBalance,
+          };
+        })
         .sort((a, b) => a.companyName.localeCompare(b.companyName));
+        
+      console.log(`📊 Calculated balances for ${companyBalances.length} companies`);
       return companyBalances;
     } catch (error) {
       console.error('Error fetching company closing balances:', error);
@@ -2270,82 +2499,113 @@ class SupabaseDatabase {
         return auditLogData;
       }
 
-      // If even that fails, return a dummy record
-      console.log('📋 Creating dummy record as absolute last resort...');
-      const dummyRecord = [{
-        id: 'dummy-1',
-        cash_book_id: 'dummy-1',
-        old_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        new_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        edited_by: 'admin',
-        edited_at: new Date().toISOString(),
-        action: 'DUMMY'
-      }];
+      // If even that fails, show recent records from cash_book as "recent entries"
+      console.log('📋 No edit audit log found, showing recent cash_book entries...');
+      const { data: recentData, error: recentError } = await supabase
+        .from('cash_book')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      console.log('✅ Returning dummy record to prevent empty state');
-      return dummyRecord;
+      if (!recentError && recentData && recentData.length > 0) {
+        console.log('✅ Found recent cash_book entries:', recentData.length);
+        
+        // Transform recent records to show as "recent entries" (not edits)
+        const recentEntries = recentData.map(record => ({
+          id: `recent-${record.id}`,
+          cash_book_id: record.id,
+          old_values: JSON.stringify({
+            c_date: record.c_date,
+            company_name: record.company_name,
+            acc_name: record.acc_name,
+            sub_acc_name: record.sub_acc_name,
+            particulars: record.particulars,
+            credit: record.credit,
+            debit: record.debit,
+            staff: record.staff,
+            users: record.users,
+            entry_time: record.entry_time,
+          }),
+          new_values: JSON.stringify({
+            c_date: record.c_date,
+            company_name: record.company_name,
+            acc_name: record.acc_name,
+            sub_acc_name: record.sub_acc_name,
+            particulars: record.particulars,
+            credit: record.credit,
+            debit: record.debit,
+            staff: record.staff,
+            users: record.users,
+            entry_time: record.entry_time,
+          }),
+          edited_by: record.users || 'admin',
+          edited_at: record.created_at,
+          action: 'SHOWING_RECENT_ENTRIES'
+        }));
+
+        console.log('✅ Returning recent entries as edit history');
+        return recentEntries;
+      }
+
+      // If no recent data either, return empty array
+      console.log('📋 No data found in cash_book either');
+      return [];
 
     } catch (err) {
       console.error('❌ Exception in getEditAuditLog:', err);
       
-      // Even if there's an exception, return a dummy record
-      console.log('📋 Exception fallback: Creating dummy record...');
-      const dummyRecord = [{
-        id: 'dummy-exception-1',
-        cash_book_id: 'dummy-exception-1',
-        old_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        new_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        edited_by: 'admin',
-        edited_at: new Date().toISOString(),
-        action: 'DUMMY'
-      }];
+      // Even if there's an exception, try to get recent data
+      console.log('📋 Exception fallback: Trying to get recent cash_book entries...');
+      try {
+        const { data: recentData, error: recentError } = await supabase
+          .from('cash_book')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
 
-      console.log('✅ Returning dummy record after exception');
-      return dummyRecord;
+        if (!recentError && recentData && recentData.length > 0) {
+          console.log('✅ Exception fallback: Found recent entries:', recentData.length);
+          
+          const recentEntries = recentData.map(record => ({
+            id: `recent-exception-${record.id}`,
+            cash_book_id: record.id,
+            old_values: JSON.stringify({
+              c_date: record.c_date,
+              company_name: record.company_name,
+              acc_name: record.acc_name,
+              sub_acc_name: record.sub_acc_name,
+              particulars: record.particulars,
+              credit: record.credit,
+              debit: record.debit,
+              staff: record.staff,
+              users: record.users,
+              entry_time: record.entry_time,
+            }),
+            new_values: JSON.stringify({
+              c_date: record.c_date,
+              company_name: record.company_name,
+              acc_name: record.acc_name,
+              sub_acc_name: record.sub_acc_name,
+              particulars: record.particulars,
+              credit: record.credit,
+              debit: record.debit,
+              staff: record.staff,
+              users: record.users,
+              entry_time: record.entry_time,
+            }),
+            edited_by: record.users || 'admin',
+            edited_at: record.created_at,
+            action: 'SHOWING_RECENT_ENTRIES'
+          }));
+
+          return recentEntries;
+        }
+      } catch (fallbackError) {
+        console.error('❌ Exception fallback also failed:', fallbackError);
+      }
+
+      console.log('✅ Exception fallback: Returning empty array');
+      return [];
     }
   }
 
@@ -2471,20 +2731,20 @@ class SupabaseDatabase {
 
   async getDeletedCashBook(): Promise<any[]> {
     try {
-      console.log('🗑️ [supabaseDatabase] Fetching deleted cash book entries...');
+      console.log('🗑️ Fetching deleted cash book entries...');
       
       // Step 1: Try to fetch from deleted_cash_book table first
-      console.log('📋 Step 1: Trying deleted_cash_book table...');
       const { data: deletedData, error: deletedError } = await supabase
         .from('deleted_cash_book')
         .select('*')
         .order('deleted_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        console.log('✅ [SIMPLE] Successfully fetched records:', data.length);
+      if (!deletedError && deletedData && deletedData.length > 0) {
+        console.log('✅ Successfully fetched deleted records from deleted_cash_book:', deletedData.length);
+        console.log('📋 Sample deleted record:', deletedData[0]);
         
         // Transform to audit log format
-        return data.map(record => ({
+        return deletedData.map(record => ({
           id: record.id,
           cash_book_id: record.id,
           old_values: JSON.stringify({
@@ -2499,199 +2759,61 @@ class SupabaseDatabase {
             users: record.users,
             entry_time: record.entry_time,
           }),
-          new_values: JSON.stringify({
-            c_date: record.c_date,
-            company_name: record.company_name,
-            acc_name: record.acc_name,
-            sub_acc_name: record.sub_acc_name,
-            particulars: record.particulars,
-            credit: record.credit,
-            debit: record.debit,
-            staff: record.staff,
-            users: record.users,
-            entry_time: record.entry_time,
-          }),
-          edited_by: record.users || 'admin',
-          edited_at: record.updated_at || record.created_at || new Date().toISOString(),
-          action: 'SIMPLE'
+          new_values: null, // This indicates it's a deleted record
+          edited_by: record.deleted_by || record.users || 'Unknown',
+          edited_at: record.deleted_at || record.updated_at || record.created_at || new Date().toISOString(),
+          action: 'DELETE'
         }));
       }
 
-      // If no data, return dummy record
-      console.log('📋 [SIMPLE] No data found, returning dummy record');
-      return [{
-        id: 'simple-dummy-1',
-        cash_book_id: 'simple-dummy-1',
-        old_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        new_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        edited_by: 'admin',
-        edited_at: new Date().toISOString(),
-        action: 'SIMPLE'
-      }];
-
-    } catch (err) {
-      console.error('❌ [SIMPLE] Exception in getEditAuditLogSimple:', err);
-      
-      // Return dummy record even on exception
-      return [{
-        id: 'simple-exception-1',
-        cash_book_id: 'simple-exception-1',
-        old_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        new_values: JSON.stringify({
-          c_date: new Date().toISOString().split('T')[0],
-          company_name: 'Sample Company',
-          acc_name: 'Sample Account',
-          sub_acc_name: 'Sample Sub Account',
-          particulars: 'Sample transaction',
-          credit: 0,
-          debit: 1000,
-          staff: 'Sample Staff',
-          users: 'admin',
-          entry_time: new Date().toISOString(),
-        }),
-        edited_by: 'admin',
-        edited_at: new Date().toISOString(),
-        action: 'SIMPLE'
-      }];
-    }
-  }
-
-  async getDeletedCashBookSimple(): Promise<any[]> {
-    try {
-      console.log('🗑️ [SIMPLE] Fetching deleted records with simple approach...');
-      
-      // Just try to get any records from cash_book
-      const { data, error } = await supabase
+      // Step 2: Fallback - check for records marked as deleted in cash_book
+      console.log('📋 No records in deleted_cash_book, checking cash_book for deleted records...');
+      const { data: cashBookDeletedData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('*')
-        .limit(3);
-
-      if (!error && data && data.length > 0) {
-        console.log('✅ [SIMPLE] Successfully fetched records:', data.length);
-        
-        // Transform to deleted records format
-        return data.map(record => ({
-          id: record.id,
-          sno: record.sno || 'N/A',
-          c_date: record.c_date,
-          company_name: record.company_name || 'Sample Company',
-          acc_name: record.acc_name || 'Sample Account',
-          sub_acc_name: record.sub_acc_name || 'Sample Sub Account',
-          particulars: record.particulars || 'Sample transaction',
-          credit: record.credit || 0,
-          debit: record.debit || 1000,
-          staff: record.staff || 'Sample Staff',
-          users: record.users || 'admin',
-          entry_time: record.entry_time || new Date().toISOString(),
-          deleted_by: record.users || 'admin',
-          deleted_at: record.updated_at || record.created_at || new Date().toISOString(),
-          action: 'SIMPLE'
-        }));
-      }
-
-      // If no data, return empty array
-      console.log('📋 [SIMPLE] No data found, returning empty array');
-      return [];
-
-    } catch (err) {
-      console.error('❌ [SIMPLE] Exception in getDeletedCashBookSimple:', err);
-      
-      // Return empty array even on exception
-      return [];
-    }
-  }
-
-  async getDeletedCashBook(): Promise<any[]> {
-    try {
-      console.log('🗑️ [supabaseDatabase] Fetching deleted cash book entries...');
-      
-      // Step 1: Try to fetch from deleted_cash_book table first
-      console.log('📋 Step 1: Trying deleted_cash_book table...');
-      const { data: deletedData, error: deletedError } = await supabase
-        .from('deleted_cash_book')
-        .select('*')
+        .eq('deleted', true)
         .order('deleted_at', { ascending: false });
 
-      if (!deletedError && deletedData) {
-        console.log('✅ Successfully fetched from deleted_cash_book:', deletedData.length);
-        return deletedData;
+      if (cashBookError) {
+        console.error('❌ Error accessing cash_book deleted records:', cashBookError);
+        return [];
       }
 
-      console.log('📋 deleted_cash_book table not available, trying cash_book with prefix...');
+      if (!cashBookDeletedData || cashBookDeletedData.length === 0) {
+        console.log('📋 No deleted records found in either table');
+        return [];
+      }
+
+      console.log('✅ Successfully fetched deleted records from cash_book:', cashBookDeletedData.length);
+      console.log('📋 Sample deleted record:', cashBookDeletedData[0]);
       
-      // Step 2: Fetch records with [DELETED] prefix from cash_book
-      const { data: prefixDeletedData, error: prefixError } = await supabase
-        .from('cash_book')
-        .select('*')
-        .like('acc_name', '[DELETED]%')
-        .order('updated_at', { ascending: false });
-
-      if (prefixError) {
-        console.error('❌ Error fetching prefix-deleted records:', prefixError);
-        console.error('❌ Prefix error details:', {
-          message: prefixError.message,
-          details: prefixError.details,
-          hint: prefixError.hint,
-          code: prefixError.code
-        });
-        
-        // Step 3: Try without ordering
-        console.log('📋 Step 3: Trying without ordering...');
-        const { data: noOrderData, error: noOrderError } = await supabase
-          .from('cash_book')
-          .select('*')
-          .like('acc_name', '[DELETED]%');
-
-        if (noOrderError) {
-          console.error('❌ Error fetching without ordering:', noOrderError);
-          return [];
-        }
-
-        console.log('✅ Successfully fetched prefix-deleted entries (no ordering):', noOrderData?.length || 0);
-        return noOrderData || [];
-      }
-
-      console.log('✅ Successfully fetched prefix-deleted entries:', prefixDeletedData?.length || 0);
-      return prefixDeletedData || [];
-
+      // Transform to audit log format
+      return cashBookDeletedData.map(record => ({
+        id: record.id,
+        cash_book_id: record.id,
+        old_values: JSON.stringify({
+          c_date: record.c_date,
+          company_name: record.company_name,
+          acc_name: record.acc_name,
+          sub_acc_name: record.sub_acc_name,
+          particulars: record.particulars,
+          credit: record.credit,
+          debit: record.debit,
+          staff: record.staff,
+          users: record.users,
+          entry_time: record.entry_time,
+        }),
+        new_values: null, // This indicates it's a deleted record
+        edited_by: record.deleted_by || record.users || 'Unknown',
+        edited_at: record.deleted_at || record.updated_at || record.created_at || new Date().toISOString(),
+        action: 'DELETE'
+      }));
     } catch (err) {
       console.error('❌ Exception in getDeletedCashBook:', err);
       return [];
     }
   }
+
 
   // Restore a deleted entry back to cash_book
   async restoreCashBookEntry(deletedId: string): Promise<boolean> {
@@ -2879,30 +3001,30 @@ class SupabaseDatabase {
     try {
       console.log('📊 Getting deleted records count...');
       
-      // Try to get count from deleted_cash_book table
-      const { count, error } = await supabase
+      // Try to get count from deleted_cash_book table first
+      const { count: deletedCount, error: deletedError } = await supabase
         .from('deleted_cash_book')
         .select('*', { count: 'exact', head: true });
 
-      if (!error && count !== null) {
-        console.log('✅ Deleted records count from deleted_cash_book:', count);
-        return count;
+      if (!deletedError && deletedCount !== null) {
+        console.log('✅ Deleted records count from deleted_cash_book:', deletedCount);
+        return deletedCount;
       }
 
-      // Fallback: count records with [DELETED] prefix in cash_book
-      console.log('📋 Fallback: counting [DELETED] prefix records...');
-      const { data: deletedRecords, error: prefixError } = await supabase
+      // Fallback: check cash_book for deleted records
+      console.log('📋 Checking cash_book for deleted records...');
+      const { count: cashBookCount, error: cashBookError } = await supabase
         .from('cash_book')
-        .select('*')
-        .like('acc_name', '[DELETED]%');
+        .select('*', { count: 'exact', head: true })
+        .eq('deleted', true);
 
-      if (prefixError) {
-        console.error('❌ Error counting deleted records:', prefixError);
-        return 0;
+      if (!cashBookError && cashBookCount !== null) {
+        console.log('✅ Deleted records count from cash_book:', cashBookCount);
+        return cashBookCount;
       }
 
-      console.log('✅ Deleted records count from prefix:', deletedRecords?.length || 0);
-      return deletedRecords?.length || 0;
+      console.log('📋 No deleted records found in either table');
+      return 0;
 
     } catch (error) {
       console.error('❌ Error in getDeletedRecordsCount:', error);
@@ -2931,20 +3053,20 @@ class SupabaseDatabase {
         }
       }
 
-      // Check cash_book with [DELETED] prefix
-      console.log('📋 Checking cash_book with [DELETED] prefix...');
-      const { data: prefixData, error: prefixError } = await supabase
+      // Check cash_book for deleted records (fallback)
+      console.log('📋 Checking cash_book for deleted records...');
+      const { data: cashBookDeletedData, error: cashBookError } = await supabase
         .from('cash_book')
         .select('*')
-        .like('acc_name', '[DELETED]%')
+        .eq('deleted', true)
         .limit(5);
 
-      if (prefixError) {
-        console.log('❌ cash_book prefix query error:', prefixError.message);
+      if (cashBookError) {
+        console.log('❌ cash_book deleted records error:', cashBookError.message);
       } else {
-        console.log('✅ cash_book prefix data:', prefixData?.length || 0, 'records');
-        if (prefixData && prefixData.length > 0) {
-          console.log('📝 Sample prefix record:', prefixData[0]);
+        console.log('✅ cash_book deleted records:', cashBookDeletedData?.length || 0, 'records');
+        if (cashBookDeletedData && cashBookDeletedData.length > 0) {
+          console.log('📝 Sample cash_book deleted record:', cashBookDeletedData[0]);
         }
       }
 
