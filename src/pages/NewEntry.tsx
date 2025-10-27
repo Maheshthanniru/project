@@ -1946,37 +1946,37 @@ const NewEntry: React.FC = () => {
               ) : (
                 <div className='overflow-x-auto'>
                   <div className='max-h-48 overflow-y-auto'>
-                    <table className='w-full text-sm'>
+                    <table className='w-full text-xs table-fixed'>
                       <thead className='sticky top-0 bg-gray-50 z-10'>
                         <tr className='border-b border-gray-200'>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
                             S.No
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                             Date
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                             Company
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                             Account
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                             Sub Account
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
                             Particulars
                           </th>
-                          <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                             Credit
                           </th>
-                          <th className='px-3 py-2 text-right font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                             Debit
                           </th>
-                          <th className='px-3 py-2 text-left font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                             Staff
                           </th>
-                          <th className='px-3 py-2 text-center font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
                             Status
                           </th>
                         </tr>
@@ -1989,39 +1989,45 @@ const NewEntry: React.FC = () => {
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                             }`}
                           >
-                            <td className='px-3 py-2 font-medium'>{index + 1}</td>
-                            <td className='px-3 py-2'>
+                            <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
+                            <td className='w-16 px-1 py-1 text-xs'>
                               {format(new Date(entry.c_date), 'dd-MMM-yy')}
                             </td>
-                            <td className='px-3 py-2 font-medium text-blue-600'>
+                            <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
                               {entry.company_name}
                             </td>
-                            <td className='px-3 py-2'>{entry.acc_name}</td>
-                            <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
-                            <td
-                              className='px-3 py-2 max-w-xs truncate'
-                              title={entry.particulars}
-                            >
-                              {entry.particulars}
+                            <td className='w-20 px-1 py-1 text-xs truncate' title={entry.acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                              {entry.acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
                             </td>
-                            <td className='px-3 py-2 text-right font-medium text-green-600'>
+                            <td className='w-20 px-1 py-1 text-xs truncate' title={entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                              {entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
+                            </td>
+                            <td
+                              className='w-32 px-1 py-1 text-xs truncate'
+                              title={entry.particulars?.replace(/\[DELETED\]\s*/g, '')}
+                            >
+                              {entry.particulars?.replace(/\[DELETED\]\s*/g, '') || '-'}
+                            </td>
+                            <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
                               {entry.credit > 0
                                 ? `₹${entry.credit.toLocaleString()}`
                                 : '-'}
                             </td>
-                            <td className='px-3 py-2 text-right font-medium text-red-600'>
+                            <td className='w-16 px-1 py-1 text-right font-medium text-red-600 text-xs'>
                               {entry.debit > 0
                                 ? `₹${entry.debit.toLocaleString()}`
                                 : '-'}
                             </td>
-                            <td className='px-3 py-2'>{entry.staff}</td>
-                            <td className='px-3 py-2 text-center'>
+                            <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>
+                              {entry.staff}
+                            </td>
+                            <td className='w-20 px-1 py-1 text-center'>
                               {entry.approved ? (
-                                <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                                <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
                                   Approved
                                 </span>
                               ) : (
-                                <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
+                                <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800'>
                                   Pending
                                 </span>
                               )}
