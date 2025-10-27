@@ -668,7 +668,10 @@ const EditEntry: React.FC = () => {
         .from('cash_book')
         .select('*', { count: 'exact', head: true });
       console.log('📊 Total entries in database:', count);
-      setTotalEntries(count || 0);
+      
+      // Store the total count before filtering
+      const totalCount = count || 0;
+      setTotalEntries(totalCount);
 
       // Apply search filter
       if (searchTerm) {
@@ -751,6 +754,7 @@ const EditEntry: React.FC = () => {
         );
       }
 
+      console.log(`📊 After filtering: ${allEntries.length} entries (total in DB: ${totalCount})`);
       setEntries(allEntries);
       setEntriesForSelectedDate([]);
     } catch (error) {
@@ -775,25 +779,174 @@ const EditEntry: React.FC = () => {
     }
   };
 
-  const loadMoreEntries = useCallback(async () => {
+  const loadMoreEntries = useCallback(async (retryCount = 0) => {
+    if (isLoadingMore || entries.length >= totalEntries) return;
+    
+    // Prevent infinite recursion - max 10 retries
+    if (retryCount > 10) {
+      console.log('🔄 Max retries reached, stopping...');
+      toast.info('No more entries match your current filters');
+      return;
+    }
+    
+    try {
+      setIsLoadingMore(true);
+      
+      // Calculate the actual offset based on unfiltered entries
+      const currentPage = Math.floor(entries.length / pageSize);
+      const offset = currentPage * pageSize;
+      
+      console.log(`🔄 Loading more entries - Page: ${currentPage + 1}, Offset: ${offset}, Retry: ${retryCount}`);
+      
+      const moreEntries = await supabaseDB.getCashBookEntries(pageSize, offset);
+      console.log(`✅ Loaded ${moreEntries.length} more entries from database`);
+      
+      if (moreEntries.length === 0) {
+        toast.success('No more entries to load');
+        return;
+      }
+      
+      // Apply filters EXCEPT date filter for load more to get diverse data
+      let filteredEntries = moreEntries;
+      
+      // Apply search filter
+      if (searchTerm) {
+        filteredEntries = filteredEntries.filter(
+          entry =>
+            entry.particulars
+              ?.toLowerCase()
+              .includes(searchTerm.toLowerCase()) ||
+            entry.acc_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            entry.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      // SKIP date filter for load more to get data from different dates
+      // if (filterDate) {
+      //   filteredEntries = filteredEntries.filter(entry => entry.c_date === filterDate);
+      // }
+
+      // Apply status filter
+      if (statusFilter) {
+        switch (statusFilter) {
+          case 'approved':
+            filteredEntries = filteredEntries.filter(entry => entry.approved);
+            break;
+          case 'pending':
+            filteredEntries = filteredEntries.filter(entry => !entry.approved);
+            break;
+          case 'locked':
+            filteredEntries = filteredEntries.filter(() => false);
+            break;
+        }
+      }
+
+      // Apply new filters
+      if (filterCompanyName) {
+        filteredEntries = filteredEntries.filter(
+          entry =>
+            entry.company_name &&
+            entry.company_name
+              .toLowerCase()
+              .includes(filterCompanyName.toLowerCase())
+        );
+      }
+      if (filterAccountName) {
+        filteredEntries = filteredEntries.filter(
+          entry =>
+            entry.acc_name &&
+            entry.acc_name
+              .toLowerCase()
+              .includes(filterAccountName.toLowerCase())
+        );
+      }
+      if (filterSubAccountName) {
+        filteredEntries = filteredEntries.filter(
+          entry =>
+            entry.sub_acc_name &&
+            entry.sub_acc_name
+              .toLowerCase()
+              .includes(filterSubAccountName.toLowerCase())
+        );
+      }
+      if (filterParticulars) {
+        filteredEntries = filteredEntries.filter(
+          entry =>
+            entry.particulars &&
+            entry.particulars
+              .toLowerCase()
+              .includes(filterParticulars.toLowerCase())
+        );
+      }
+      if (filterSaleQ) {
+        filteredEntries = filteredEntries.filter(
+          entry => String(entry.sale_qty || '') === filterSaleQ
+        );
+      }
+      if (filterPurchaseQ) {
+        filteredEntries = filteredEntries.filter(
+          entry => String(entry.purchase_qty || '') === filterPurchaseQ
+        );
+      }
+      
+      console.log(`📊 After filtering (excluding date): ${filteredEntries.length} entries (from ${moreEntries.length} loaded)`);
+      
+      setEntries(prev => [...prev, ...filteredEntries]);
+      
+      // If all entries were filtered out, try loading the next page automatically
+      if (filteredEntries.length === 0 && moreEntries.length > 0 && entries.length < totalEntries) {
+        console.log('🔄 All entries filtered out, trying next page...');
+        // Recursively try the next page with retry count
+        setTimeout(() => {
+          loadMoreEntries(retryCount + 1);
+        }, 100);
+      } else if (filteredEntries.length > 0) {
+        // Show more detailed success message
+        const hasActiveFilters = searchTerm || statusFilter || filterCompanyName || 
+                               filterAccountName || filterSubAccountName || filterParticulars || 
+                               filterSaleQ || filterPurchaseQ;
+        
+        if (hasActiveFilters) {
+          toast.success(`Loaded ${filteredEntries.length} more entries matching your filters (from ${moreEntries.length} total loaded) - Date filter ignored for diversity`);
+        } else {
+          toast.success(`Loaded ${filteredEntries.length} more entries from different dates`);
+        }
+      } else if (moreEntries.length === 0) {
+        toast.success('No more entries to load');
+      }
+      
+    } catch (error) {
+      console.error('Error loading more entries:', error);
+      toast.error('Failed to load more entries');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [entries.length, totalEntries, pageSize, isLoadingMore, searchTerm, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterSaleQ, filterPurchaseQ]);
+
+  const loadMoreUnfiltered = useCallback(async () => {
     if (isLoadingMore || entries.length >= totalEntries) return;
     
     try {
       setIsLoadingMore(true);
       
-      // Use normal pagination for all data (client-side filtering will handle the rest)
-      const offset = entries.length;
+      // Calculate the actual offset based on unfiltered entries
+      const currentPage = Math.floor(entries.length / pageSize);
+      const offset = currentPage * pageSize;
       
-      console.log(`🔄 Loading more entries - Offset: ${offset}`);
+      console.log(`🔄 Loading more unfiltered entries - Page: ${currentPage + 1}, Offset: ${offset}`);
       
       const moreEntries = await supabaseDB.getCashBookEntries(pageSize, offset);
-      console.log(`✅ Loaded ${moreEntries.length} more entries`);
-      
-      setEntries(prev => [...prev, ...moreEntries]);
+      console.log(`✅ Loaded ${moreEntries.length} more entries from database`);
       
       if (moreEntries.length === 0) {
         toast.success('No more entries to load');
+        return;
       }
+      
+      // Add entries without any filtering
+      setEntries(prev => [...prev, ...moreEntries]);
+      toast.success(`Loaded ${moreEntries.length} more entries (unfiltered)`);
+      
     } catch (error) {
       console.error('Error loading more entries:', error);
       toast.error('Failed to load more entries');
@@ -1973,22 +2126,103 @@ const EditEntry: React.FC = () => {
               {filterCompanyName && <div>Company Filter: {filterCompanyName}</div>}
             </div>
             
+            {/* Show filter status if any filters are active */}
+            {(() => {
+              const hasActiveFilters = searchTerm || filterDate || statusFilter || filterCompanyName || 
+                                     filterAccountName || filterSubAccountName || filterParticulars || 
+                                     filterSaleQ || filterPurchaseQ;
+              
+              if (hasActiveFilters) {
+                return (
+                  <div className='text-center py-2'>
+                    <div className='text-blue-600 bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-md mx-auto'>
+                      <div className='text-sm font-medium text-blue-800 mb-1'>
+                        Filters Active
+                      </div>
+                      <div className='text-xs text-blue-700'>
+                        Showing {filteredEntries.length} filtered entries from {totalEntries} total
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              return null;
+            })()}
             
             {/* Show Load More button if we have more entries to load */}
             {entries.length < totalEntries && (
-              <Button
-                onClick={loadMoreEntries}
-                disabled={isLoadingMore || isLoadingAll}
-                variant='secondary'
-                icon={isLoadingMore ? RefreshCw : Plus}
-                className='min-w-[200px]'
-              >
-                {isLoadingMore ? 'Loading...' : 
-                  filterCompanyName ? 
-                    `Load More (${totalEntries - entries.length} remaining for ${filterCompanyName})` : 
-                    `Load More (${totalEntries - entries.length} remaining)`
-                }
-              </Button>
+              <div className='flex flex-col gap-3 items-center'>
+                <div className='flex gap-2'>
+                  <Button
+                    onClick={loadMoreEntries}
+                    disabled={isLoadingMore || isLoadingAll}
+                    variant='secondary'
+                    icon={isLoadingMore ? RefreshCw : Plus}
+                    className='min-w-[200px]'
+                  >
+                    {isLoadingMore ? 'Loading...' : `Load More (${totalEntries - entries.length} remaining)`}
+                  </Button>
+                  
+                  {/* Show unfiltered option when filters are active */}
+                  {(() => {
+                    const hasActiveFilters = searchTerm || filterDate || statusFilter || filterCompanyName || 
+                                           filterAccountName || filterSubAccountName || filterParticulars || 
+                                           filterSaleQ || filterPurchaseQ;
+                    
+                    if (hasActiveFilters) {
+                      return (
+                        <Button
+                          onClick={loadMoreUnfiltered}
+                          disabled={isLoadingMore || isLoadingAll}
+                          variant='outline'
+                          icon={Plus}
+                          className='min-w-[200px]'
+                        >
+                          Load More (Unfiltered)
+                        </Button>
+                      );
+                    }
+                    
+                    return null;
+                  })()}
+                </div>
+                
+                {/* Show additional info when filters are active */}
+                {(() => {
+                  const hasActiveFilters = searchTerm || filterDate || statusFilter || filterCompanyName || 
+                                         filterAccountName || filterSubAccountName || filterParticulars || 
+                                         filterSaleQ || filterPurchaseQ;
+                  
+                  if (hasActiveFilters) {
+                    return (
+                      <div className='text-xs text-gray-500 text-center max-w-2xl'>
+                        <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
+                          <div className='font-medium text-blue-800 mb-2'>💡 Filter Options:</div>
+                          <div className='grid grid-cols-1 md:grid-cols-2 gap-2 text-left'>
+                            <div>
+                              <div className='font-medium text-blue-700'>Load More (Filtered):</div>
+                              <div>• Loads 1000 records from database</div>
+                              <div>• Applies your filters (except date) to find matches</div>
+                              <div>• Shows entries from different dates for diversity</div>
+                              <div>• Auto-retry if no matches found</div>
+                            </div>
+                            <div>
+                              <div className='font-medium text-blue-700'>Load More (Unfiltered):</div>
+                              <div>• Loads 1000 records from database</div>
+                              <div>• Shows all records without filtering</div>
+                              <div>• Gives you more diverse data</div>
+                              <div>• You can then apply filters manually</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  return null;
+                })()}
+              </div>
             )}
             
             {/* Show message if all entries are loaded */}

@@ -12,11 +12,11 @@ export const useDashboardStats = (selectedDate?: string) => {
   });
 };
 
-// Hook for recent entries
+// Hook for recent entries (today's entries only for LIFO display)
 export const useRecentEntries = () => {
   return useQuery({
     queryKey: queryKeys.dashboard.recentEntries,
-    queryFn: () => supabaseDB.getCashBookEntries(5, 0),
+    queryFn: () => supabaseDB.getTodaysCashBookEntries(),
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     keepPreviousData: true,

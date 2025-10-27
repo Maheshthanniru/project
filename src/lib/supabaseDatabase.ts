@@ -339,10 +339,6 @@ class SupabaseDatabase {
     try {
       console.log(`🔄 Fetching cash book entries (limit: ${limit}, offset: ${offset})...`);
       
-      // Get today's date in YYYY-MM-DD format
-      const today = new Date().toISOString().split('T')[0];
-      console.log(`📅 Filtering for today's entries: ${today}`);
-      
       // Use proper range calculation for Supabase
       const start = offset;
       const end = offset + limit - 1;
@@ -350,7 +346,7 @@ class SupabaseDatabase {
       const { data, error } = await supabase
         .from('cash_book')
         .select('*')
-        .eq('c_date', today) // Filter for today's entries only
+        .order('c_date', { ascending: false }) // Most recent dates first
         .order('created_at', { ascending: false }) // LIFO - newest first
         .range(start, end);
 
@@ -360,7 +356,7 @@ class SupabaseDatabase {
       }
 
       const resultCount = data?.length || 0;
-      console.log(`✅ Fetched ${resultCount} entries for today (range: ${start}-${end})`);
+      console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
       return data || [];
     } catch (error) {
       console.error('Error in getCashBookEntries:', error);
@@ -384,6 +380,36 @@ class SupabaseDatabase {
     } catch (error) {
       console.error('Error getting count:', error);
       return 0;
+    }
+  }
+
+  // Get today's entries only (for NewEntry recent transactions)
+  async getTodaysCashBookEntries(): Promise<CashBookEntry[]> {
+    try {
+      console.log(`🔄 Fetching today's cash book entries...`);
+      
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+      console.log(`📅 Filtering for today's entries: ${today}`);
+      
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('*')
+        .eq('c_date', today) // Filter for today's entries only
+        .order('created_at', { ascending: false }) // LIFO - newest first
+        .limit(1000); // Limit to prevent too many entries
+
+      if (error) {
+        console.error(`❌ Error fetching today's cash book entries:`, error);
+        return [];
+      }
+
+      const resultCount = data?.length || 0;
+      console.log(`✅ Fetched ${resultCount} entries for today`);
+      return data || [];
+    } catch (error) {
+      console.error('Error in getTodaysCashBookEntries:', error);
+      return [];
     }
   }
 
