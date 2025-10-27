@@ -1636,6 +1636,7 @@ const NewEntry: React.FC = () => {
                       placeholder='0'
                       type='number'
                       min='0'
+                      step='0.01'
                       size='sm'
                     />
                     <Input
@@ -1647,6 +1648,7 @@ const NewEntry: React.FC = () => {
                       placeholder='0'
                       type='number'
                       min='0'
+                      step='0.01'
                       size='sm'
                     />
                   </div>

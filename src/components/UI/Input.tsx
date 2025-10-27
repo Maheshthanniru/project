@@ -44,6 +44,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       const val = e.target.value;
       setInputValue(val);
       if (type === 'number') {
+        // Allow decimal values for quantity inputs
         onChange(val === '' ? '' : val);
       } else {
         onChange(val);

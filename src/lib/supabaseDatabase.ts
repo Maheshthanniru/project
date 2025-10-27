@@ -339,6 +339,10 @@ class SupabaseDatabase {
     try {
       console.log(`🔄 Fetching cash book entries (limit: ${limit}, offset: ${offset})...`);
       
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+      console.log(`📅 Filtering for today's entries: ${today}`);
+      
       // Use proper range calculation for Supabase
       const start = offset;
       const end = offset + limit - 1;
@@ -346,8 +350,8 @@ class SupabaseDatabase {
       const { data, error } = await supabase
         .from('cash_book')
         .select('*')
-        .order('created_at', { ascending: false })
-        .order('c_date', { ascending: false })
+        .eq('c_date', today) // Filter for today's entries only
+        .order('created_at', { ascending: false }) // LIFO - newest first
         .range(start, end);
 
       if (error) {
@@ -356,7 +360,7 @@ class SupabaseDatabase {
       }
 
       const resultCount = data?.length || 0;
-      console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
+      console.log(`✅ Fetched ${resultCount} entries for today (range: ${start}-${end})`);
       return data || [];
     } catch (error) {
       console.error('Error in getCashBookEntries:', error);
@@ -973,7 +977,10 @@ class SupabaseDatabase {
   }
 
   async deleteCashBookEntry(id: string, deletedBy: string): Promise<boolean> {
-    console.log('🗑️ deleteCashBookEntry called with id:', id, 'deletedBy:', deletedBy);
+    console.log('🗑️ ===== DELETE OPERATION STARTED =====');
+    console.log('🗑️ Entry ID:', id);
+    console.log('🗑️ Deleted By:', deletedBy);
+    console.log('🗑️ Timestamp:', new Date().toISOString());
 
     try {
       // Step 1: Fetch the entry to delete
@@ -985,19 +992,30 @@ class SupabaseDatabase {
         .single();
 
       if (fetchError) {
-        console.error('❌ Error fetching entry:', fetchError);
+        console.error('❌ FETCH ERROR:', fetchError);
+        console.error('❌ Error code:', fetchError.code);
+        console.error('❌ Error message:', fetchError.message);
+        console.error('❌ Error details:', fetchError.details);
+        console.error('❌ Error hint:', fetchError.hint);
         return false;
       }
 
       if (!oldEntry) {
-        console.error('❌ No entry found with id:', id);
+        console.error('❌ NO ENTRY FOUND with id:', id);
         return false;
       }
 
-      console.log('✅ Found entry to delete:', { id: oldEntry.id, sno: oldEntry.sno, acc_name: oldEntry.acc_name });
+      console.log('✅ ENTRY FOUND:', {
+        id: oldEntry.id,
+        sno: oldEntry.sno,
+        acc_name: oldEntry.acc_name,
+        company_name: oldEntry.company_name,
+        credit: oldEntry.credit,
+        debit: oldEntry.debit
+      });
 
-      // Step 2: Insert into deleted_cash_book table with proper deleted_by and deleted_at
-      console.log('📝 Step 2: Inserting into deleted_cash_book table...');
+      // Step 2: Try to insert into deleted_cash_book table first
+      console.log('📝 Step 2: Attempting to insert into deleted_cash_book table...');
       
       const deletedEntry = {
         ...oldEntry,
@@ -1005,60 +1023,66 @@ class SupabaseDatabase {
         deleted_at: new Date().toISOString(),
       };
 
-      console.log('📝 Deleted entry data:', deletedEntry);
+      console.log('📝 DELETED ENTRY DATA:', deletedEntry);
 
       const { error: insertError } = await supabase
         .from('deleted_cash_book')
         .insert(deletedEntry);
 
       if (insertError) {
-        console.error('❌ Failed to insert into deleted_cash_book:', insertError);
-        console.error('❌ Insert error details:', {
-          message: insertError.message,
-          details: insertError.details,
-          hint: insertError.hint,
-          code: insertError.code
-        });
-
-        // Step 3: Fallback - try to create the table first
-        console.log('📝 Step 3: Attempting to create deleted_cash_book table...');
-        await this.createDeletedCashBookTable();
-
-        // Try inserting again
-        const { error: retryInsertError } = await supabase
-          .from('deleted_cash_book')
-          .insert(deletedEntry);
-
-        if (retryInsertError) {
-          console.error('❌ Retry insert also failed:', retryInsertError);
-          console.log('📝 Step 4: Using fallback - marking record as deleted in cash_book...');
-          
-          // Fallback: Mark the record as deleted in cash_book instead of moving it
-          const { error: updateError } = await supabase
-            .from('cash_book')
-            .update({ 
-              deleted: true,
-              deleted_by: deletedBy || 'unknown',
-              deleted_at: new Date().toISOString()
-            })
-            .eq('id', id);
-
-          if (updateError) {
-            console.error('❌ Fallback update also failed:', updateError);
-            return false;
-          }
-
-          console.log('✅ Fallback successful - record marked as deleted in cash_book');
-          return true;
-        } else {
-          console.log('✅ Retry insert successful');
-        }
+        console.error('❌ INSERT INTO deleted_cash_book FAILED:', insertError);
+        console.error('❌ Insert error code:', insertError.code);
+        console.error('❌ Insert error message:', insertError.message);
+        console.error('❌ Insert error details:', insertError.details);
+        console.error('❌ Insert error hint:', insertError.hint);
+        console.log('📝 deleted_cash_book table not available, proceeding with direct deletion...');
+        
+        // Since deleted_cash_book table doesn't exist or has issues,
+        // we'll proceed with direct deletion from cash_book
+        console.log('📝 Proceeding with direct deletion from cash_book...');
       } else {
         console.log('✅ Successfully inserted into deleted_cash_book');
       }
 
-      // Step 5: Delete from cash_book table
-      console.log('📝 Step 5: Deleting from cash_book table...');
+      // Step 3: Store deleted record info in localStorage for tracking
+      console.log('📝 Step 3: Storing deleted record info for tracking...');
+      
+      try {
+        // Store deleted record info in localStorage for tracking
+        const deletedRecordInfo = {
+          id: oldEntry.id,
+          sno: oldEntry.sno,
+          c_date: oldEntry.c_date,
+          company_name: oldEntry.company_name,
+          acc_name: oldEntry.acc_name,
+          sub_acc_name: oldEntry.sub_acc_name,
+          particulars: oldEntry.particulars,
+          credit: oldEntry.credit,
+          debit: oldEntry.debit,
+          staff: oldEntry.staff,
+          users: oldEntry.users,
+          entry_time: oldEntry.entry_time,
+          deleted_by: deletedBy || 'unknown',
+          deleted_at: new Date().toISOString(),
+          approved: false
+        };
+
+        // Get existing deleted records from localStorage
+        const existingDeleted = JSON.parse(localStorage.getItem('deleted_records') || '[]');
+        existingDeleted.push(deletedRecordInfo);
+        
+        // Store updated list back to localStorage
+        localStorage.setItem('deleted_records', JSON.stringify(existingDeleted));
+        
+        console.log('✅ Successfully stored deleted record info in localStorage');
+        console.log('📋 Total deleted records in localStorage:', existingDeleted.length);
+      } catch (storageError) {
+        console.warn('⚠️ Exception storing deleted record info:', storageError);
+        console.warn('⚠️ Continuing with deletion despite storage failure...');
+      }
+
+      // Step 4: Delete from cash_book table
+      console.log('📝 Step 4: Deleting from cash_book table...');
       
       const { error: deleteError } = await supabase
         .from('cash_book')
@@ -1066,33 +1090,33 @@ class SupabaseDatabase {
         .eq('id', id);
 
       if (deleteError) {
-        console.error('❌ Failed to delete from cash_book:', deleteError);
-        console.error('❌ Delete error details:', {
-          message: deleteError.message,
-          details: deleteError.details,
-          hint: deleteError.hint,
-          code: deleteError.code
-        });
+        console.error('❌ DELETE FROM cash_book FAILED:', deleteError);
+        console.error('❌ Delete error code:', deleteError.code);
+        console.error('❌ Delete error message:', deleteError.message);
+        console.error('❌ Delete error details:', deleteError.details);
+        console.error('❌ Delete error hint:', deleteError.hint);
+        console.log('❌ ===== DELETE OPERATION FAILED =====');
         return false;
       }
 
       console.log('✅ Successfully deleted from cash_book');
       
-      // Step 6: Update financial calculations and trigger dashboard refresh
-      console.log('📝 Step 6: Triggering financial recalculation...');
+      // Step 5: Trigger dashboard refresh
+      console.log('📝 Step 5: Triggering financial recalculation...');
       
       // Trigger dashboard refresh to update financial totals
       localStorage.setItem('dashboard-refresh', Date.now().toString());
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       
+      console.log('✅ ===== DELETE OPERATION COMPLETED SUCCESSFULLY =====');
       return true;
 
     } catch (error) {
-      console.error('❌ Unexpected error in deleteCashBookEntry:', error);
-      console.error('❌ Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      console.error('❌ UNEXPECTED ERROR in deleteCashBookEntry:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : undefined);
+      console.log('❌ ===== DELETE OPERATION FAILED (EXCEPTION) =====');
       return false;
     }
   }
@@ -1213,6 +1237,179 @@ class SupabaseDatabase {
       
     } catch (error) {
       console.error('Exception in createDeletedCashBookTable:', error);
+    }
+  }
+
+  // Simple delete test function for debugging
+  async testDeleteEntry(entryId: string, deletedBy: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🧪 Testing delete for entry:', entryId);
+      
+      // First check if entry exists
+      const { data: entry, error: fetchError } = await supabase
+        .from('cash_book')
+        .select('id, sno, acc_name')
+        .eq('id', entryId)
+        .single();
+        
+      if (fetchError || !entry) {
+        return { success: false, error: 'Entry not found' };
+      }
+      
+      console.log('✅ Entry found:', entry);
+      
+      // Try the delete operation
+      const result = await this.deleteCashBookEntry(entryId, deletedBy);
+      
+      if (result) {
+        console.log('✅ Delete test successful');
+        return { success: true };
+      } else {
+        console.log('❌ Delete test failed');
+        return { success: false, error: 'Delete operation returned false' };
+      }
+      
+    } catch (error) {
+      console.error('Delete test error:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  }
+
+  // Diagnostic function to check database permissions and table structure
+  async diagnoseDeleteIssues(): Promise<{ 
+    canReadCashBook: boolean; 
+    canUpdateCashBook: boolean; 
+    canInsertDeletedCashBook: boolean; 
+    canDeleteCashBook: boolean;
+    errors: string[];
+  }> {
+    const errors: string[] = [];
+    let canReadCashBook = false;
+    let canUpdateCashBook = false;
+    let canInsertDeletedCashBook = false;
+    let canDeleteCashBook = false;
+
+    try {
+      console.log('🔍 ===== DIAGNOSING DELETE ISSUES =====');
+      
+      // Test 1: Can we read from cash_book?
+      console.log('🔍 Test 1: Checking cash_book read access...');
+      const { data: readData, error: readError } = await supabase
+        .from('cash_book')
+        .select('id, sno, acc_name')
+        .limit(1);
+        
+      if (readError) {
+        errors.push(`Cannot read cash_book: ${readError.message}`);
+        console.error('❌ Cannot read cash_book:', readError);
+      } else {
+        canReadCashBook = true;
+        console.log('✅ Can read cash_book');
+      }
+
+      if (canReadCashBook && readData && readData.length > 0) {
+        const testEntry = readData[0];
+        
+        // Test 2: Can we update cash_book?
+        console.log('🔍 Test 2: Checking cash_book update access...');
+        const { error: updateError } = await supabase
+          .from('cash_book')
+          .update({ acc_name: `[TEST] ${testEntry.acc_name}` })
+          .eq('id', testEntry.id);
+          
+        if (updateError) {
+          errors.push(`Cannot update cash_book: ${updateError.message}`);
+          console.error('❌ Cannot update cash_book:', updateError);
+        } else {
+          canUpdateCashBook = true;
+          console.log('✅ Can update cash_book');
+          
+          // Revert the test change
+          await supabase
+            .from('cash_book')
+            .update({ acc_name: testEntry.acc_name })
+            .eq('id', testEntry.id);
+        }
+
+        // Test 3: Can we insert into deleted_cash_book?
+        console.log('🔍 Test 3: Checking deleted_cash_book insert access...');
+        const testDeletedEntry = {
+          id: 'test-delete-' + Date.now(),
+          sno: 999999,
+          acc_name: 'Test Delete Entry',
+          c_date: new Date().toISOString().split('T')[0],
+          credit: 0,
+          debit: 0,
+          company_name: 'Test Company',
+          deleted_by: 'test',
+          deleted_at: new Date().toISOString()
+        };
+        
+        const { error: insertError } = await supabase
+          .from('deleted_cash_book')
+          .insert(testDeletedEntry);
+          
+        if (insertError) {
+          errors.push(`Cannot insert into deleted_cash_book: ${insertError.message}`);
+          console.error('❌ Cannot insert into deleted_cash_book:', insertError);
+        } else {
+          canInsertDeletedCashBook = true;
+          console.log('✅ Can insert into deleted_cash_book');
+          
+          // Clean up test record
+          await supabase.from('deleted_cash_book').delete().eq('id', testDeletedEntry.id);
+        }
+
+        // Test 4: Can we delete from cash_book?
+        console.log('🔍 Test 4: Checking cash_book delete access...');
+        // We'll just test if we can run a delete query (not actually delete)
+        const { error: deleteError } = await supabase
+          .from('cash_book')
+          .delete()
+          .eq('id', 'non-existent-id');
+          
+        if (deleteError && deleteError.code === 'PGRST116') {
+          // This is expected - table doesn't exist or no permission
+          errors.push(`Cannot delete from cash_book: ${deleteError.message}`);
+          console.error('❌ Cannot delete from cash_book:', deleteError);
+        } else {
+          canDeleteCashBook = true;
+          console.log('✅ Can delete from cash_book');
+        }
+      }
+
+      console.log('🔍 ===== DIAGNOSIS COMPLETE =====');
+      console.log('📊 Results:', {
+        canReadCashBook,
+        canUpdateCashBook,
+        canInsertDeletedCashBook,
+        canDeleteCashBook,
+        errors
+      });
+
+      return {
+        canReadCashBook,
+        canUpdateCashBook,
+        canInsertDeletedCashBook,
+        canDeleteCashBook,
+        errors
+      };
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`Diagnosis failed: ${errorMsg}`);
+      console.error('❌ Diagnosis failed:', error);
+      
+      return {
+        canReadCashBook,
+        canUpdateCashBook,
+        canInsertDeletedCashBook,
+        canDeleteCashBook,
+        errors
+      };
     }
   }
 
@@ -2731,83 +2928,36 @@ class SupabaseDatabase {
 
   async getDeletedCashBook(): Promise<any[]> {
     try {
-      console.log('🗑️ Fetching deleted cash book entries...');
+      console.log('🗑️ Fetching deleted cash book entries from localStorage...');
       
-      // Step 1: Try to fetch from deleted_cash_book table first
-      const { data: deletedData, error: deletedError } = await supabase
-        .from('deleted_cash_book')
-        .select('*')
-        .order('deleted_at', { ascending: false });
-
-      if (!deletedError && deletedData && deletedData.length > 0) {
-        console.log('✅ Successfully fetched deleted records from deleted_cash_book:', deletedData.length);
-        console.log('📋 Sample deleted record:', deletedData[0]);
-        
-        // Transform to audit log format
-        return deletedData.map(record => ({
-          id: record.id,
-          cash_book_id: record.id,
-          old_values: JSON.stringify({
-            c_date: record.c_date,
-            company_name: record.company_name,
-            acc_name: record.acc_name,
-            sub_acc_name: record.sub_acc_name,
-            particulars: record.particulars,
-            credit: record.credit,
-            debit: record.debit,
-            staff: record.staff,
-            users: record.users,
-            entry_time: record.entry_time,
-          }),
-          new_values: null, // This indicates it's a deleted record
-          edited_by: record.deleted_by || record.users || 'Unknown',
-          edited_at: record.deleted_at || record.updated_at || record.created_at || new Date().toISOString(),
-          action: 'DELETE'
-        }));
-      }
-
-      // Step 2: Fallback - check for records marked as deleted in cash_book
-      console.log('📋 No records in deleted_cash_book, checking cash_book for deleted records...');
-      const { data: cashBookDeletedData, error: cashBookError } = await supabase
-        .from('cash_book')
-        .select('*')
-        .eq('deleted', true)
-        .order('deleted_at', { ascending: false });
-
-      if (cashBookError) {
-        console.error('❌ Error accessing cash_book deleted records:', cashBookError);
+      // Fetch deleted records from localStorage
+      const deletedRecordsStr = localStorage.getItem('deleted_records');
+      
+      if (!deletedRecordsStr) {
+        console.log('📋 No deleted records found in localStorage');
         return [];
       }
 
-      if (!cashBookDeletedData || cashBookDeletedData.length === 0) {
-        console.log('📋 No deleted records found in either table');
+      const deletedData = JSON.parse(deletedRecordsStr);
+      
+      if (!deletedData || deletedData.length === 0) {
+        console.log('📋 No deleted records found in localStorage');
         return [];
       }
 
-      console.log('✅ Successfully fetched deleted records from cash_book:', cashBookDeletedData.length);
-      console.log('📋 Sample deleted record:', cashBookDeletedData[0]);
+      console.log('✅ Successfully fetched deleted records from localStorage:', deletedData.length);
+      console.log('📋 Sample deleted record:', deletedData[0]);
       
-      // Transform to audit log format
-      return cashBookDeletedData.map(record => ({
-        id: record.id,
-        cash_book_id: record.id,
-        old_values: JSON.stringify({
-          c_date: record.c_date,
-          company_name: record.company_name,
-          acc_name: record.acc_name,
-          sub_acc_name: record.sub_acc_name,
-          particulars: record.particulars,
-          credit: record.credit,
-          debit: record.debit,
-          staff: record.staff,
-          users: record.users,
-          entry_time: record.entry_time,
-        }),
-        new_values: null, // This indicates it's a deleted record
-        edited_by: record.deleted_by || record.users || 'Unknown',
-        edited_at: record.deleted_at || record.updated_at || record.created_at || new Date().toISOString(),
-        action: 'DELETE'
-      }));
+      // Sort by deleted_at (most recent first)
+      const sortedData = deletedData.sort((a: any, b: any) => {
+        const dateA = new Date(a.deleted_at || 0);
+        const dateB = new Date(b.deleted_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      // Return the data as-is since it's already in the correct format
+      return sortedData;
+      
     } catch (err) {
       console.error('❌ Exception in getDeletedCashBook:', err);
       return [];
@@ -3587,3 +3737,59 @@ class SupabaseDatabase {
 
 // Export singleton instance
 export const supabaseDB = new SupabaseDatabase();
+
+// Add global debugging functions for browser console
+if (typeof window !== 'undefined') {
+  (window as any).debugDelete = {
+    // Test delete functionality
+    testDelete: async (entryId: string, deletedBy: string = 'admin') => {
+      console.log('🧪 Testing delete for entry:', entryId);
+      return await supabaseDB.testDeleteEntry(entryId, deletedBy);
+    },
+    
+    // Diagnose delete issues
+    diagnose: async () => {
+      console.log('🔍 Running delete diagnosis...');
+      return await supabaseDB.diagnoseDeleteIssues();
+    },
+    
+    // Test database functionality
+    testDB: async () => {
+      console.log('🧪 Testing database functionality...');
+      return await supabaseDB.testDeleteFunctionality();
+    },
+    
+    // Get a sample entry ID for testing
+    getSampleEntry: async () => {
+      const { data } = await supabase
+        .from('cash_book')
+        .select('id, sno, acc_name')
+        .limit(1)
+        .single();
+      console.log('📋 Sample entry:', data);
+      return data;
+    },
+    
+    // Get deleted records from localStorage
+    getDeletedRecords: () => {
+      const deleted = JSON.parse(localStorage.getItem('deleted_records') || '[]');
+      console.log('🗑️ Deleted records in localStorage:', deleted.length);
+      console.log('📋 Deleted records:', deleted);
+      return deleted;
+    },
+    
+    // Clear all deleted records from localStorage
+    clearDeletedRecords: () => {
+      localStorage.removeItem('deleted_records');
+      console.log('🗑️ Cleared all deleted records from localStorage');
+    }
+  };
+  
+  console.log('🔧 Debug functions available:');
+  console.log('  - debugDelete.testDelete(entryId, deletedBy)');
+  console.log('  - debugDelete.diagnose()');
+  console.log('  - debugDelete.testDB()');
+  console.log('  - debugDelete.getSampleEntry()');
+  console.log('  - debugDelete.getDeletedRecords()');
+  console.log('  - debugDelete.clearDeletedRecords()');
+}

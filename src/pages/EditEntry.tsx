@@ -2303,6 +2303,8 @@ const EditEntry: React.FC = () => {
                         }
                         placeholder='Enter sale quantity...'
                         disabled={!editMode}
+                        min='0'
+                        step='0.01'
                       />
                       <Input
                         label='Purchase Quantity'
@@ -2313,6 +2315,8 @@ const EditEntry: React.FC = () => {
                         }
                         placeholder='Enter purchase quantity...'
                         disabled={!editMode}
+                        min='0'
+                        step='0.01'
                       />
                     </div>
                   </form>

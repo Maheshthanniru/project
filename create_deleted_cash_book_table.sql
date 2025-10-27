@@ -45,3 +45,4 @@ COMMENT ON COLUMN deleted_cash_book.deleted_at IS 'Timestamp when the entry was 
 
 
 
+
