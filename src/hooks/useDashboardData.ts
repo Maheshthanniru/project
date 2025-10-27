@@ -23,6 +23,18 @@ export const useRecentEntries = () => {
   });
 };
 
+// Hook for recent entries by specific date (for NewEntry form)
+export const useRecentEntriesByDate = (date: string) => {
+  return useQuery({
+    queryKey: ['recentEntries', date],
+    queryFn: () => supabaseDB.getCashBookEntriesByDate(date),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    enabled: !!date, // Only fetch if date is provided
+  });
+};
+
 // Hook for company balances
 export const useCompanyBalances = () => {
   return useQuery({

@@ -7,7 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCreateCashBookEntry, useBulkCashBookOperations } from '../hooks/useCashBookData';
-import { useDropdownData, useRecentEntries } from '../hooks/useDashboardData';
+import { useDropdownData, useRecentEntriesByDate } from '../hooks/useDashboardData';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../lib/queryClient';
 import toast from 'react-hot-toast';
@@ -46,8 +46,7 @@ const NewEntry: React.FC = () => {
   // React Query hooks
   const createEntryMutation = useCreateCashBookEntry();
   const bulkOperationsMutation = useBulkCashBookOperations();
-  const { companies, accounts } = useDropdownData();
-  const { data: recentEntries, isLoading: recentLoading } = useRecentEntries();
+  const { companies } = useDropdownData();
   const queryClient = useQueryClient();
 
   const [entry, setEntry] = useState<NewEntryForm>({
@@ -67,6 +66,9 @@ const NewEntry: React.FC = () => {
     staff: user?.username || '',
     quantityChecked: false,
   });
+
+  // Recent entries hook - moved after entry state declaration
+  const { data: recentEntries, isLoading: recentLoading } = useRecentEntriesByDate(entry.date);
 
   const [dualEntryEnabled, setDualEntryEnabled] = useState(false);
   const [dualEntry, setDualEntry] = useState<NewEntryForm>({
@@ -1928,7 +1930,7 @@ const NewEntry: React.FC = () => {
           <div className='w-full mt-4'>
             <Card
               title='Recent Transactions'
-              subtitle='Latest entries from your cash book'
+              subtitle={`Entries for ${format(new Date(entry.date), 'dd-MMM-yyyy')} (LIFO - Last In First Out)`}
               className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
             >
               {recentLoading ? (
@@ -1938,7 +1940,8 @@ const NewEntry: React.FC = () => {
                 </div>
               ) : !recentEntries || recentEntries.length === 0 ? (
                 <div className='text-center py-8 text-gray-500'>
-                  No transactions found.
+                  <div className='text-lg font-medium mb-2'>No transactions found for {format(new Date(entry.date), 'dd-MMM-yyyy')}</div>
+                  <div className='text-sm'>Try selecting a different date or create a new entry for this date.</div>
                 </div>
               ) : (
                 <div className='overflow-x-auto'>
