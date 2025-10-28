@@ -60,6 +60,10 @@ export const useCreateCashBookEntry = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
       
+      // Invalidate date-specific queries for recent entries
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      
       toast.success('Entry created successfully!');
     },
     onError: (error: any) => {
@@ -84,6 +88,10 @@ export const useUpdateCashBookEntry = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
       
+      // Invalidate date-specific queries for recent entries
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      
       toast.success('Entry updated successfully!');
     },
     onError: (error: any) => {
@@ -107,6 +115,10 @@ export const useDeleteCashBookEntry = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
       
+      // Invalidate date-specific queries for recent entries
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      
       toast.success('Entry deleted successfully!');
     },
     onError: (error: any) => {
@@ -128,6 +140,10 @@ export const useBulkCashBookOperations = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+      
+      // Invalidate date-specific queries for recent entries
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
       
       toast.success('Bulk operations completed successfully!');
     },

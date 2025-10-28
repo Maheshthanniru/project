@@ -27,11 +27,20 @@ export const useRecentEntries = () => {
 export const useRecentEntriesByDate = (date: string) => {
   return useQuery({
     queryKey: ['recentEntries', date],
-    queryFn: () => supabaseDB.getCashBookEntriesByDate(date),
+    queryFn: () => {
+      console.log('🔍 Fetching recent entries for date:', date);
+      return supabaseDB.getCashBookEntriesByDate(date);
+    },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     keepPreviousData: true,
     enabled: !!date, // Only fetch if date is provided
+    onSuccess: (data) => {
+      console.log('✅ Recent entries fetched successfully:', data?.length || 0, 'entries for date:', date);
+    },
+    onError: (error) => {
+      console.error('❌ Error fetching recent entries for date:', date, error);
+    }
   });
 };
 
