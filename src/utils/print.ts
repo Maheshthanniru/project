@@ -426,3 +426,329 @@ export const printDrivers = (data: any[], options: PrintOptions = {}) => {
     ...options,
   });
 };
+
+// Specialized print function for Daily Reports with enhanced Thirumala Group branding
+export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
+  const {
+    title = 'Daily Report',
+    subtitle = '',
+    orientation = 'portrait',
+    paperSize = 'A4',
+    margins = { top: '1in', right: '0.5in', bottom: '1in', left: '0.5in' },
+    includeHeader = true,
+    includeFooter = true,
+    headerText = 'Thirumala Group - Daily Transaction Report',
+    footerText = `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+  } = options;
+
+  // Create print window
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    throw new Error('Popup blocked. Please allow popups for this site.');
+  }
+
+  // Basic CSS for Daily Report with simple Thirumala Group branding
+  const css = `
+    @media print {
+      @page {
+        size: ${paperSize} ${orientation};
+        margin: ${margins.top} ${margins.right} ${margins.bottom} ${margins.left};
+      }
+    }
+    
+    body {
+      font-family: 'Arial', sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .print-header {
+      text-align: center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .company-name {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      margin: 0;
+    }
+    
+    .company-subtitle {
+      font-size: 12px;
+      color: #666;
+      margin: 2px 0 0 0;
+    }
+    
+    .print-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+      margin: 10px 0 0 0;
+    }
+    
+    .print-subtitle {
+      font-size: 14px;
+      color: #666;
+      margin: 5px 0 0 0;
+    }
+    
+    .print-header-text {
+      font-size: 12px;
+      color: #333;
+      margin: 8px 0 0 0;
+    }
+    
+    .print-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    
+    .print-table th {
+      background-color: #f3f4f6;
+      border: 1px solid #d1d5db;
+      padding: 8px;
+      text-align: left;
+      font-weight: bold;
+      font-size: 11px;
+    }
+    
+    .print-table td {
+      border: 1px solid #d1d5db;
+      padding: 6px 8px;
+      font-size: 10px;
+    }
+    
+    .print-table tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    
+    .print-footer {
+      text-align: center;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+      margin-top: 20px;
+      font-size: 10px;
+      color: #666;
+    }
+    
+    .print-summary {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+    }
+    
+    .print-summary h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #333;
+    }
+    
+    .print-summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0;
+      font-size: 11px;
+    }
+    
+    .print-summary-label {
+      font-weight: bold;
+      color: #555;
+    }
+    
+    .print-summary-value {
+      color: #333;
+    }
+    
+    .text-right {
+      text-align: right;
+    }
+    
+    .text-center {
+      text-align: center;
+    }
+    
+    .text-bold {
+      font-weight: bold;
+    }
+    
+    .text-green {
+      color: #059669;
+    }
+    
+    .text-red {
+      color: #dc2626;
+    }
+    
+    .text-orange {
+      color: #ea580c;
+    }
+    
+    .print-button {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    
+    .print-button:hover {
+      background: #0056b3;
+    }
+    
+    @media print {
+      .print-button {
+        display: none;
+      }
+    }
+  `;
+
+  // Generate table HTML
+  const columns = [
+    { key: 'sno', label: 'S.No', width: '60px' },
+    { key: 'date', label: 'Date', width: '100px' },
+    { key: 'companyName', label: 'Company', width: '150px' },
+    { key: 'accountName', label: 'Account', width: '150px' },
+    { key: 'subAccount', label: 'Sub Account', width: '150px' },
+    { key: 'particulars', label: 'Particulars', width: '200px' },
+    { key: 'credit', label: 'Credit', width: '100px' },
+    { key: 'debit', label: 'Debit', width: '100px' },
+    { key: 'staff', label: 'Staff', width: '100px' },
+    { key: 'approved', label: 'Status', width: '80px' },
+  ];
+
+  const tableRows = data
+    .map(row => {
+      const cells = columns
+        .map(col => {
+          const value = row[col.key];
+          let displayValue = value;
+
+          // Format numbers
+          if (typeof value === 'number') {
+            if (
+              col.key.toLowerCase().includes('amount') ||
+              col.key.toLowerCase().includes('credit') ||
+              col.key.toLowerCase().includes('debit') ||
+              col.key.toLowerCase().includes('balance')
+            ) {
+              displayValue = `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+            } else {
+              displayValue = value.toLocaleString('en-IN');
+            }
+          }
+
+          // Format dates
+          if (col.key.toLowerCase().includes('date') && value) {
+            try {
+              displayValue = format(new Date(value), 'dd/MM/yyyy');
+            } catch (e) {
+              displayValue = value;
+            }
+          }
+
+          return `<td>${displayValue || ''}</td>`;
+        })
+        .join('');
+
+      return `<tr>${cells}</tr>`;
+    })
+    .join('');
+
+  const tableHeaders = columns
+    .map(col => `<th style="width: ${col.width || 'auto'}">${col.label}</th>`)
+    .join('');
+
+  // Generate summary
+  let summaryHTML = '';
+  if (data.length > 0) {
+    const creditTotal = data.reduce((sum, row) => sum + (parseFloat(row.credit) || 0), 0);
+    const debitTotal = data.reduce((sum, row) => sum + (parseFloat(row.debit) || 0), 0);
+    const balance = creditTotal - debitTotal;
+
+    summaryHTML = `
+      <div class="print-summary">
+        <h3>Daily Report Summary</h3>
+        <div class="print-summary-row">
+          <span class="print-summary-label">Total Credit:</span>
+          <span class="print-summary-value text-green">₹${creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div class="print-summary-row">
+          <span class="print-summary-label">Total Debit:</span>
+          <span class="print-summary-value text-red">₹${debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div class="print-summary-row">
+          <span class="print-summary-label">Net Balance:</span>
+          <span class="print-summary-value ${balance >= 0 ? 'text-green' : 'text-red'}">₹${Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${balance >= 0 ? 'CR' : 'DR'}</span>
+        </div>
+        <div class="print-summary-row">
+          <span class="print-summary-label">Total Records:</span>
+          <span class="print-summary-value">${data.length}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Complete HTML with basic Thirumala Group branding
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title} - Thirumala Group</title>
+      <style>${css}</style>
+    </head>
+    <body>
+      <button class="print-button" onclick="window.print()">Print</button>
+      
+      ${includeHeader ? `
+        <div class="print-header">
+          <h1 class="company-name">Thirumala Group</h1>
+          <p class="company-subtitle">Business Management System</p>
+          <h2 class="print-title">${title}</h2>
+          ${subtitle ? `<p class="print-subtitle">${subtitle}</p>` : ''}
+          <p class="print-header-text">${headerText}</p>
+        </div>
+      ` : ''}
+      
+      ${summaryHTML}
+      
+      <table class="print-table">
+        <thead>
+          <tr>${tableHeaders}</tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      
+      ${includeFooter ? `
+        <div class="print-footer">
+          <p><strong>Thirumala Group</strong> - ${footerText}</p>
+        </div>
+      ` : ''}
+    </body>
+    </html>
+  `;
+
+  // Write to print window
+  printWindow.document.write(html);
+  printWindow.document.close();
+
+  // Wait for content to load then focus (don't auto-print)
+  printWindow.onload = () => {
+    printWindow.focus();
+  };
+};

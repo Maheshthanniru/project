@@ -31,7 +31,7 @@ const Dashboard: React.FC = () => {
   const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
   const { data: recentEntries, isLoading: recentLoading, isFetching: recentFetching } = useRecentEntries();
   const { data: companyBalances, isLoading: companyLoading, isFetching: companyFetching } = useCompanyBalances();
-  const { companies, accounts, users, pendingApprovals, isLoading: dropdownLoading } = useDropdownData();
+  const { companies, accounts, subAccounts, users, pendingApprovals, isLoading: dropdownLoading } = useDropdownData();
   const { invalidateAll, invalidateStats, invalidateRecentEntries } = useInvalidateDashboard();
 
   // Combined loading states
@@ -193,12 +193,12 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6'>
-        <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white'>
+      <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3'>
+        <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-green-100 text-sm font-medium'>Total Credit</p>
-              <p className='text-2xl font-bold'>
+              <p className='text-green-100 text-xs font-medium'>Total Credit</p>
+              <p className='text-lg font-bold'>
                 {statsLoading ? (
                   <div className='animate-pulse'>Loading...</div>
                 ) : stats?.totalCredit !== undefined ? (
@@ -208,15 +208,15 @@ const Dashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <TrendingUp className='w-8 h-8 text-green-200' />
+            <TrendingUp className='w-5 h-5 text-green-200' />
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white'>
+        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-red-100 text-sm font-medium'>Total Debit</p>
-              <p className='text-2xl font-bold'>
+              <p className='text-red-100 text-xs font-medium'>Total Debit</p>
+              <p className='text-lg font-bold'>
                 {statsLoading ? (
                   <div className='animate-pulse'>Loading...</div>
                 ) : stats?.totalDebit !== undefined ? (
@@ -226,15 +226,15 @@ const Dashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <TrendingDown className='w-8 h-8 text-red-200' />
+            <TrendingDown className='w-5 h-5 text-red-200' />
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white'>
+        <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-blue-100 text-sm font-medium'>Net Balance</p>
-              <p className='text-2xl font-bold'>
+              <p className='text-blue-100 text-xs font-medium'>Net Balance</p>
+              <p className='text-lg font-bold'>
                 {statsLoading ? (
                   <div className='animate-pulse'>Loading...</div>
                 ) : stats?.balance !== undefined ? (
@@ -244,17 +244,17 @@ const Dashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <DollarSign className='w-8 h-8 text-blue-200' />
+            <DollarSign className='w-5 h-5 text-blue-200' />
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white'>
+        <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-purple-100 text-sm font-medium'>
+              <p className='text-purple-100 text-xs font-medium'>
                 Transactions
               </p>
-              <p className='text-2xl font-bold'>
+              <p className='text-lg font-bold'>
                 {statsLoading ? (
                   <div className='animate-pulse'>Loading...</div>
                 ) : stats?.totalTransactions !== undefined ? (
@@ -264,25 +264,25 @@ const Dashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <FileText className='w-8 h-8 text-purple-200' />
+            <FileText className='w-5 h-5 text-purple-200' />
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-orange-500 to-orange-600 text-white'>
+        <Card className='bg-gradient-to-r from-orange-500 to-orange-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-orange-100 text-sm font-medium'>Pending</p>
-              <p className='text-2xl font-bold'>{pendingApprovals?.data || 0}</p>
+              <p className='text-orange-100 text-xs font-medium'>Pending</p>
+              <p className='text-lg font-bold'>{pendingApprovals?.data || 0}</p>
             </div>
-            <AlertTriangle className='w-8 h-8 text-orange-200' />
+            <AlertTriangle className='w-5 h-5 text-orange-200' />
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white'>
+        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white p-3'>
           <div className='flex items-center justify-between'>
             <div>
-              <p className='text-red-100 text-sm font-medium'>Deleted Records</p>
-              <p className='text-2xl font-bold'>
+              <p className='text-red-100 text-xs font-medium'>Deleted Records</p>
+              <p className='text-lg font-bold'>
                 {statsLoading ? (
                   <div className='animate-pulse'>Loading...</div>
                 ) : stats?.deletedRecords !== undefined ? (
@@ -292,7 +292,7 @@ const Dashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <Trash2 className='w-8 h-8 text-red-200' />
+            <Trash2 className='w-5 h-5 text-red-200' />
           </div>
         </Card>
       </div>
@@ -301,37 +301,49 @@ const Dashboard: React.FC = () => {
       {/* Removed online and offline transaction cards */}
 
       {/* Quick Stats */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-        <Card className='bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200'>
-          <div className='flex items-center gap-3'>
-            <Building className='w-8 h-8 text-indigo-600' />
+      <div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
+        <Card className='bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200 p-3'>
+          <div className='flex items-center gap-2'>
+            <Building className='w-5 h-5 text-indigo-600' />
             <div>
-              <p className='font-medium text-indigo-800'>Total Companies</p>
-              <p className='text-2xl font-bold text-indigo-900'>
+              <p className='font-medium text-indigo-800 text-xs'>Total Companies</p>
+              <p className='text-lg font-bold text-indigo-900'>
                 {companies?.data?.length || 0}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200'>
-          <div className='flex items-center gap-3'>
-            <FileText className='w-8 h-8 text-emerald-600' />
+        <Card className='bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200 p-3'>
+          <div className='flex items-center gap-2'>
+            <FileText className='w-5 h-5 text-emerald-600' />
             <div>
-              <p className='font-medium text-emerald-800'>Total Accounts</p>
-              <p className='text-2xl font-bold text-emerald-900'>
+              <p className='font-medium text-emerald-800 text-xs'>Total Accounts</p>
+              <p className='text-lg font-bold text-emerald-900'>
                 {accounts?.data?.length || 0}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200'>
-          <div className='flex items-center gap-3'>
-            <Users className='w-8 h-8 text-amber-600' />
+        <Card className='bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 p-3'>
+          <div className='flex items-center gap-2'>
+            <FileText className='w-5 h-5 text-purple-600' />
             <div>
-              <p className='font-medium text-amber-800'>Active Users</p>
-              <p className='text-2xl font-bold text-amber-900'>
+              <p className='font-medium text-purple-800 text-xs'>Sub Accounts</p>
+              <p className='text-lg font-bold text-purple-900'>
+                {subAccounts?.data?.length || 0}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className='bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 p-3'>
+          <div className='flex items-center gap-2'>
+            <Users className='w-5 h-5 text-amber-600' />
+            <div>
+              <p className='font-medium text-amber-800 text-xs'>Active Users</p>
+              <p className='text-lg font-bold text-amber-900'>
                 {users?.data?.filter(u => u.is_active)?.length || 0}
               </p>
             </div>

@@ -34,3 +34,7 @@ SELECT
 
 -- Step 5: Show success message
 SELECT 'SUCCESS: All cash book entries cleared! Companies, accounts, subaccounts, and staff data preserved.' as result;
+
+
+
+

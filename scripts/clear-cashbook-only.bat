@@ -11,3 +11,7 @@ node clear-cashbook-only.cjs
 echo.
 echo Press any key to exit...
 pause >nul
+
+
+
+

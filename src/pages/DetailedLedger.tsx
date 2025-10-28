@@ -514,7 +514,9 @@ const DetailedLedger: React.FC = () => {
           entry.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           entry.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           entry.subAccount.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          entry.staff.toLowerCase().includes(searchTerm.toLowerCase())
+          entry.staff.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.credit.toString().includes(searchTerm) ||
+          entry.debit.toString().includes(searchTerm)
       );
     }
 
@@ -816,29 +818,41 @@ const DetailedLedger: React.FC = () => {
 
             {/* Amount Filters */}
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <Input
-                label='Credit Amount (Minimum)'
-                type='number'
-                value={filters.creditAmount}
-                onChange={value =>
-                  handleFilterChange('creditAmount', parseFloat(value) || 0)
-                }
-                placeholder='0'
-                min='0'
-                step='0.01'
-              />
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  Credit Amount (Search)
+                </label>
+                <input
+                  type='number'
+                  value={filters.creditAmount || ''}
+                  onChange={e => {
+                    const value = e.target.value;
+                    handleFilterChange('creditAmount', value ? parseFloat(value) : 0);
+                  }}
+                  placeholder='Enter credit amount to search...'
+                  min='0'
+                  step='0.01'
+                  className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                />
+              </div>
 
-              <Input
-                label='Debit Amount (Minimum)'
-                type='number'
-                value={filters.debitAmount}
-                onChange={value =>
-                  handleFilterChange('debitAmount', parseFloat(value) || 0)
-                }
-                placeholder='0'
-                min='0'
-                step='0.01'
-              />
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  Debit Amount (Search)
+                </label>
+                <input
+                  type='number'
+                  value={filters.debitAmount || ''}
+                  onChange={e => {
+                    const value = e.target.value;
+                    handleFilterChange('debitAmount', value ? parseFloat(value) : 0);
+                  }}
+                  placeholder='Enter debit amount to search...'
+                  min='0'
+                  step='0.01'
+                  className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                />
+              </div>
             </div>
 
             {/* Action Buttons */}
@@ -967,10 +981,10 @@ const DetailedLedger: React.FC = () => {
             <table className='w-full text-xs table-fixed'>
               <thead className='sticky top-0 bg-gray-50 z-10'>
                 <tr className='border-b border-gray-200'>
-                  <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='w-8 px-1 py-1 text-left font-medium text-gray-700'>
                     S.No
                   </th>
-                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='w-14 px-1 py-1 text-left font-medium text-gray-700'>
                     Date
                   </th>
                   <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
@@ -1022,8 +1036,8 @@ const DetailedLedger: React.FC = () => {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                     }`}
                   >
-                    <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
-                    <td className='w-16 px-1 py-1 text-xs'>
+                    <td className='w-8 px-1 py-1 font-medium text-xs'>{index + 1}</td>
+                    <td className='w-14 px-1 py-1 text-xs'>
                       {format(new Date(entry.date), 'dd-MMM-yy')}
                     </td>
                     <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.companyName}>
@@ -1237,7 +1251,7 @@ const DetailedLedger: React.FC = () => {
                 </div>
 
                 {/* Summary */}
-                <div className='grid grid-cols-3 gap-4 mb-6 text-sm'>
+                <div className='grid grid-cols-2 gap-4 mb-6 text-sm'>
                   <div className='text-center p-3 border border-gray-300'>
                     <div className='font-medium'>Total Credit</div>
                     <div className='text-lg font-bold'>
@@ -1248,13 +1262,6 @@ const DetailedLedger: React.FC = () => {
                     <div className='font-medium'>Total Debit</div>
                     <div className='text-lg font-bold'>
                       ₹{summary.totalDebit.toLocaleString()}
-                    </div>
-                  </div>
-                  <div className='text-center p-3 border border-gray-300'>
-                    <div className='font-medium'>Balance</div>
-                    <div className='text-lg font-bold'>
-                      ₹{Math.abs(summary.balance).toLocaleString()}
-                      {summary.balance >= 0 ? ' CR' : ' DR'}
                     </div>
                   </div>
                 </div>
@@ -1269,7 +1276,7 @@ const DetailedLedger: React.FC = () => {
                       <th className='border border-gray-300 px-2 py-1 text-left'>
                         Date
                       </th>
-                      <th className='border border-gray-300 px-2 py-1 text-left'>
+                      <th className='border border-gray-300 px-2 py-1 text-left font-bold'>
                         Company
                       </th>
                       <th className='border border-gray-300 px-2 py-1 text-left'>
@@ -1284,9 +1291,6 @@ const DetailedLedger: React.FC = () => {
                       <th className='border border-gray-300 px-2 py-1 text-right'>
                         Debit
                       </th>
-                      <th className='border border-gray-300 px-2 py-1 text-right'>
-                        Balance
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1298,7 +1302,7 @@ const DetailedLedger: React.FC = () => {
                         <td className='border border-gray-300 px-2 py-1'>
                           {format(new Date(entry.date), 'dd-MMM-yy')}
                         </td>
-                        <td className='border border-gray-300 px-2 py-1'>
+                        <td className='border border-gray-300 px-2 py-1 font-bold'>
                           {entry.companyName}
                         </td>
                         <td className='border border-gray-300 px-2 py-1'>
@@ -1314,10 +1318,6 @@ const DetailedLedger: React.FC = () => {
                         </td>
                         <td className='border border-gray-300 px-2 py-1 text-right'>
                           {entry.debit > 0 ? entry.debit.toLocaleString() : '-'}
-                        </td>
-                        <td className='border border-gray-300 px-2 py-1 text-right'>
-                          {Math.abs(entry.runningBalance).toLocaleString()}
-                          {entry.runningBalance >= 0 ? ' CR' : ' DR'}
                         </td>
                       </tr>
                     ))}

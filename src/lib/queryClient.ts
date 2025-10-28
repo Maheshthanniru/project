@@ -45,6 +45,7 @@ export const queryKeys = {
   dropdowns: {
     companies: ['dropdowns', 'companies'] as const,
     accounts: ['dropdowns', 'accounts'] as const,
+    subAccounts: ['dropdowns', 'subAccounts'] as const,
     users: ['dropdowns', 'users'] as const,
   },
   // Approval queries

@@ -54,7 +54,7 @@ export const useCompanyBalances = () => {
   });
 };
 
-// Hook for dropdown data (companies, accounts, users)
+// Hook for dropdown data (companies, accounts, sub accounts, users)
 export const useDropdownData = () => {
   const companiesQuery = useQuery({
     queryKey: queryKeys.dropdowns.companies,
@@ -66,6 +66,13 @@ export const useDropdownData = () => {
   const accountsQuery = useQuery({
     queryKey: queryKeys.dropdowns.accounts,
     queryFn: () => supabaseDB.getAccounts(),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const subAccountsQuery = useQuery({
+    queryKey: queryKeys.dropdowns.subAccounts,
+    queryFn: () => supabaseDB.getSubAccounts(),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
@@ -87,10 +94,11 @@ export const useDropdownData = () => {
   return {
     companies: companiesQuery,
     accounts: accountsQuery,
+    subAccounts: subAccountsQuery,
     users: usersQuery,
     pendingApprovals: pendingApprovalsQuery,
-    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading,
-    isError: companiesQuery.isError || accountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError,
+    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || subAccountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading,
+    isError: companiesQuery.isError || accountsQuery.isError || subAccountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError,
   };
 };
 

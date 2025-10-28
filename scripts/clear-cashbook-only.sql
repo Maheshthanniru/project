@@ -41,3 +41,7 @@ SELECT
     (SELECT COUNT(*) FROM bank_guarantees) as bank_guarantees_preserved,
     (SELECT COUNT(*) FROM vehicles) as vehicles_preserved,
     (SELECT COUNT(*) FROM drivers) as drivers_preserved;
+
+
+
+

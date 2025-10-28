@@ -1785,33 +1785,64 @@ class SupabaseDatabase {
       totalTransactions = totalCount || 0;
       console.log(`📊 Total records in database: ${totalTransactions}`);
 
-      // Get deleted records count from both sources
+      // Get deleted records count from multiple sources
       try {
-        // First try deleted_cash_book table
-        const { count: deletedCount, error: deletedError } = await supabase
+        // First try deleted_cash_book table using direct data fetch (same as ApproveRecords)
+        console.log('🔍 Attempting to fetch deleted records from deleted_cash_book table...');
+        const { data: deletedData, error: deletedError } = await supabase
           .from('deleted_cash_book')
-          .select('*', { count: 'exact', head: true });
+          .select('id')
+          .order('deleted_at', { ascending: false });
         
-        if (!deletedError && deletedCount !== null) {
-          deletedRecords = deletedCount;
-          console.log(`📊 Deleted records from deleted_cash_book: ${deletedRecords}`);
+        console.log('🔍 deleted_cash_book query result:', { deletedData, deletedError });
+        
+        if (!deletedError && deletedData) {
+          deletedRecords = deletedData.length;
+          console.log(`✅ Deleted records from deleted_cash_book: ${deletedRecords}`);
         } else {
+          console.log('⚠️ deleted_cash_book table not accessible:', deletedError?.message || 'Unknown error');
+          console.log('⚠️ deleted_cash_book error details:', {
+            code: deletedError?.code,
+            message: deletedError?.message,
+            details: deletedError?.details,
+            hint: deletedError?.hint
+          });
+          console.log('🔄 Trying fallback: checking cash_book for deleted records...');
+          
           // Fallback: check cash_book for deleted records
           const { count: cashBookDeletedCount, error: cashBookError } = await supabase
             .from('cash_book')
             .select('*', { count: 'exact', head: true })
             .eq('deleted', true);
           
+          console.log('🔍 cash_book deleted query result:', { cashBookDeletedCount, cashBookError });
+          
           if (!cashBookError && cashBookDeletedCount !== null) {
             deletedRecords = cashBookDeletedCount;
-            console.log(`📊 Deleted records from cash_book: ${deletedRecords}`);
+            console.log(`✅ Deleted records from cash_book (fallback): ${deletedRecords}`);
           } else {
-            deletedRecords = 0;
-            console.log('📊 No deleted records found in either table');
+            console.log('⚠️ No deleted records found in database tables');
+            console.log('🔄 Trying localStorage fallback...');
+            
+            // Final fallback: check localStorage for deleted records
+            try {
+              const localStorageDeleted = JSON.parse(localStorage.getItem('deleted_records') || '[]');
+              deletedRecords = localStorageDeleted.length;
+              console.log(`✅ Deleted records from localStorage: ${deletedRecords}`);
+            } catch (localStorageError) {
+              console.log('⚠️ localStorage not accessible:', localStorageError);
+              deletedRecords = 0;
+            }
+            
+            if (deletedRecords === 0) {
+              console.log('⚠️ No deleted records found in any source');
+              console.log('   - deleted_cash_book error:', deletedError?.message || 'N/A');
+              console.log('   - cash_book error:', cashBookError?.message || 'N/A');
+            }
           }
         }
       } catch (deletedError) {
-        console.log('No deleted records table or error:', deletedError);
+        console.error('❌ Error fetching deleted records:', deletedError);
         deletedRecords = 0;
       }
 

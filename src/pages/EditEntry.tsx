@@ -503,7 +503,7 @@ const EditEntry: React.FC = () => {
       if (data.length > 0) {
         toast.success(`Found ${data.length} entries on ${date} with ${summary}`);
       } else {
-        toast.info(`No entries found on ${date}`);
+        toast.error(`No entries found on ${date}`);
       }
       
     } catch (error) {
@@ -609,7 +609,7 @@ const EditEntry: React.FC = () => {
       if (data.length > 0) {
         toast.success(`Found ${data.length} entries matching ${filterType} "${filterValue}" with ${summary}`);
       } else {
-        toast.info(`No entries found matching ${filterType} "${filterValue}"`);
+        toast.error(`No entries found matching ${filterType} "${filterValue}"`);
       }
       
     } catch (error) {
@@ -785,7 +785,7 @@ const EditEntry: React.FC = () => {
     // Prevent infinite recursion - max 10 retries
     if (retryCount > 10) {
       console.log('🔄 Max retries reached, stopping...');
-      toast.info('No more entries match your current filters');
+      toast.error('No more entries match your current filters');
       return;
     }
     
@@ -1988,6 +1988,9 @@ const EditEntry: React.FC = () => {
                     <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Company
                     </th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700 bg-orange-50'>
+                      Entry Time
+                    </th>
                     <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Account
                     </th>
@@ -2006,9 +2009,6 @@ const EditEntry: React.FC = () => {
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Staff
                     </th>
-                    <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
-                      Status
-                    </th>
                     <th className='w-24 px-1 py-1 text-center font-medium text-gray-700'>
                       Actions
                     </th>
@@ -2019,7 +2019,9 @@ const EditEntry: React.FC = () => {
                     <tr
                       key={entry.id}
                       className={`border-b hover:bg-gray-50 transition-colors cursor-pointer ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
+                        !entry.approved 
+                          ? 'bg-orange-100' 
+                          : index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                       }`}
                       onClick={() => setSelectedEntry(entry)}
                     >
@@ -2029,6 +2031,9 @@ const EditEntry: React.FC = () => {
                       </td>
                       <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
                         {entry.company_name}
+                      </td>
+                      <td className='w-16 px-1 py-1 text-xs'>
+                        {format(new Date(entry.entry_time), 'hh:mm:ss a')}
                       </td>
                       <td className='w-20 px-1 py-1 text-xs truncate' title={entry.acc_name}>{entry.acc_name}</td>
                       <td className='w-20 px-1 py-1 text-xs truncate' title={entry.sub_acc_name}>{entry.sub_acc_name || '-'}</td>
@@ -2049,20 +2054,7 @@ const EditEntry: React.FC = () => {
                           : '-'}
                       </td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
-                      <td className='w-20 px-1 py-1 text-center'>
-                        <div className='flex flex-col gap-0.5'>
-                          {entry.approved ? (
-                            <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
-                              Approved
-                            </span>
-                          ) : (
-                            <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800'>
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className='w-24 px-1 py-1 text-center'>
+                      <td className='w-24 px-1 py-1 text-center ml-2'>
                         <div className='flex gap-0.5 justify-center' onClick={(e) => e.stopPropagation()}>
                           <Button
                             size='sm'
@@ -2175,7 +2167,7 @@ const EditEntry: React.FC = () => {
                         <Button
                           onClick={loadMoreUnfiltered}
                           disabled={isLoadingMore || isLoadingAll}
-                          variant='outline'
+                          variant='secondary'
                           icon={Plus}
                           className='min-w-[200px]'
                         >

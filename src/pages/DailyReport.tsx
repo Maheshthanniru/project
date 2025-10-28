@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, addDays, subDays, startOfMonth, endOfMonth } from 'date-fns';
-import { Search } from 'lucide-react';
+import { Search, Calendar } from 'lucide-react';
 
 interface DailyReportData {
   entries: any[];
@@ -24,6 +24,9 @@ const DailyReport: React.FC = () => {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
+  );
+  const [displayDate, setDisplayDate] = useState(
+    format(new Date(), 'dd/MM/yyyy')
   );
   const [selectedCompany, setSelectedCompany] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,10 +50,35 @@ const DailyReport: React.FC = () => {
   const [totalEntries, setTotalEntries] = useState(0);
   const [allLoadedEntries, setAllLoadedEntries] = useState<any[]>([]);
 
+  // Helper functions for date format conversion
+  const convertToInternalFormat = (ddMMyyyy: string): string => {
+    if (!ddMMyyyy) return '';
+    const [day, month, year] = ddMMyyyy.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  const convertToDisplayFormat = (yyyyMMdd: string): string => {
+    if (!yyyyMMdd) return '';
+    const [year, month, day] = yyyyMMdd.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const handleDatePickerChange = async (dateValue: string) => {
+    if (dateValue) {
+      setSelectedDate(dateValue);
+      setDisplayDate(convertToDisplayFormat(dateValue));
+      // Clear company selection when date changes
+      setSelectedCompany('');
+      // Load companies for the new date
+      await loadCompaniesByDate(dateValue);
+    }
+  };
+
   useEffect(() => {
     loadCompanies();
     generateReport();
   }, [selectedDate, selectedCompany, searchTerm]);
+
 
   // useEffect to load companies when date changes
   useEffect(() => {
@@ -238,7 +266,9 @@ const DailyReport: React.FC = () => {
     const newDate =
       direction === 'prev' ? subDays(currentDate, 1) : addDays(currentDate, 1);
     const newDateString = format(newDate, 'yyyy-MM-dd');
+    const newDisplayDate = format(newDate, 'dd/MM/yyyy');
     setSelectedDate(newDateString);
+    setDisplayDate(newDisplayDate);
     // Clear company selection when date changes
     setSelectedCompany('');
     // Load companies for the new date
@@ -247,7 +277,7 @@ const DailyReport: React.FC = () => {
 
   const printReport = async () => {
     try {
-      const { printCashBook } = await import('../utils/print');
+      const { printDailyReport } = await import('../utils/print');
 
       // Transform data to include all required fields
       const printData = reportData.entries.map(entry => ({
@@ -263,8 +293,8 @@ const DailyReport: React.FC = () => {
         approved: entry.approved ? 'Approved' : 'Pending',
       }));
 
-      printCashBook(printData, {
-        title: `Daily Report - ${format(new Date(selectedDate), 'dd/MM/yyyy')}`,
+      printDailyReport(printData, {
+        title: `Daily Report - ${displayDate}`,
         subtitle: selectedCompany
           ? `Company: ${selectedCompany}`
           : 'All Companies',
@@ -329,21 +359,64 @@ const DailyReport: React.FC = () => {
         <div className='flex flex-col md:flex-row gap-4 items-end'>
           <div className='flex-1'>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
-              Date
+              Date (dd/MM/yyyy)
             </label>
-            <input
-              type='date'
-              value={selectedDate}
-              onChange={async (e) => {
-                const newDate = e.target.value;
-                setSelectedDate(newDate);
-                // Clear company selection when date changes
-                setSelectedCompany('');
-                // Load companies for the new date
-                await loadCompaniesByDate(newDate);
-              }}
-              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
-            />
+            <div className='relative'>
+              <input
+                type='text'
+                value={displayDate}
+                placeholder='dd/MM/yyyy'
+                onChange={async (e) => {
+                  const inputValue = e.target.value;
+                  setDisplayDate(inputValue);
+                  
+                  // Convert to internal format for database queries
+                  const internalDate = convertToInternalFormat(inputValue);
+                  if (internalDate && internalDate !== '--') {
+                    setSelectedDate(internalDate);
+                    // Clear company selection when date changes
+                    setSelectedCompany('');
+                    // Load companies for the new date
+                    await loadCompaniesByDate(internalDate);
+                  }
+                }}
+                onBlur={async (e) => {
+                  const inputValue = e.target.value;
+                  // Validate and format the date on blur
+                  if (inputValue && inputValue.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                    const internalDate = convertToInternalFormat(inputValue);
+                    if (internalDate && internalDate !== '--') {
+                      setSelectedDate(internalDate);
+                      setDisplayDate(inputValue); // Keep the formatted input
+                      // Clear company selection when date changes
+                      setSelectedCompany('');
+                      // Load companies for the new date
+                      await loadCompaniesByDate(internalDate);
+                    }
+                  } else if (inputValue) {
+                    // If invalid format, reset to current date
+                    const currentDate = format(new Date(), 'yyyy-MM-dd');
+                    setSelectedDate(currentDate);
+                    setDisplayDate(convertToDisplayFormat(currentDate));
+                  }
+                }}
+                className='w-full border border-gray-300 rounded-lg px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500'
+              />
+              {/* Hidden date input positioned over calendar icon */}
+              <input
+                id='hidden-date-input'
+                type='date'
+                value={selectedDate}
+                onChange={(e) => handleDatePickerChange(e.target.value)}
+                className='absolute right-2 top-1/2 transform -translate-y-1/2 w-5 h-5 opacity-0 cursor-pointer'
+                style={{ zIndex: 10 }}
+              />
+              
+              {/* Calendar icon for visual reference */}
+              <div className='absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none'>
+                <Calendar className='w-5 h-5' />
+              </div>
+            </div>
           </div>
           <div className='flex-1'>
             <SearchableSelect
@@ -389,7 +462,7 @@ const DailyReport: React.FC = () => {
           {loading && (
             <div className='text-center py-8'>
               <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
-              <p className='mt-2 text-gray-600'>Generating Daily Report for {selectedDate}...</p>
+              <p className='mt-2 text-gray-600'>Generating Daily Report for {displayDate}...</p>
             </div>
           )}
           
@@ -403,7 +476,7 @@ const DailyReport: React.FC = () => {
             <>
               <div className='mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2'>
                 <div className='text-lg font-semibold'>
-                  Daily Report for {selectedDate}
+                  Daily Report for {displayDate}
                 </div>
                 <div className='flex flex-col md:flex-row md:items-center gap-4 text-sm text-gray-600'>
                   <span>Total Entries: {reportData.entries.length}</span>
@@ -549,7 +622,7 @@ const DailyReport: React.FC = () => {
         {reportData.entries.length > 0 && (
           <Card
             title='Company Closing Balances'
-            subtitle={`Current balance for each company (Credit - Debit) for ${format(new Date(selectedDate), 'dd-MMM-yyyy')}`}
+            subtitle={`Current balance for each company (Credit - Debit) for ${displayDate}`}
             className='bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
           >
             <div className='overflow-x-auto'>
