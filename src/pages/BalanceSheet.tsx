@@ -591,10 +591,12 @@ const BalanceSheet: React.FC = () => {
               background-color: #f0f0f0;
               color: #000; 
               padding: 5px 8px; 
-              margin: 0 0 8px 0; 
+              margin: 0 auto 8px auto; 
               font-size: 14px;
               font-weight: bold;
               border: 1px solid #000;
+              text-align: center;
+              width: fit-content;
             }
             table { 
               width: 100%; 
