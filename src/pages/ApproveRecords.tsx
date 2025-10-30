@@ -38,6 +38,27 @@ const ApproveRecords: React.FC = () => {
     showUnfiltered: false,
   });
 
+  // Display date in dd/MM/yyyy for UI consistency with Daily Report
+  const [displayDate, setDisplayDate] = useState<string>(format(new Date(), 'dd/MM/yyyy'));
+
+  // Helpers to convert between display and internal formats
+  const convertToInternalFormat = (ddMMyyyy: string): string => {
+    if (!ddMMyyyy) return '';
+    const parts = ddMMyyyy.split('/');
+    if (parts.length !== 3) return '';
+    const [day, month, year] = parts;
+    if (day.length !== 2 || month.length !== 2 || year.length !== 4) return '';
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  const convertToDisplayFormat = (yyyyMMdd: string): string => {
+    if (!yyyyMMdd) return '';
+    const parts = yyyyMMdd.split('-');
+    if (parts.length !== 3) return '';
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  };
+
   const [entries, setEntries] = useState<any[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
   const [deletedEntries, setDeletedEntries] = useState<any[]>([]);
@@ -112,6 +133,11 @@ const ApproveRecords: React.FC = () => {
   useEffect(() => {
     updateSummary();
   }, [entries, deletedEntries, filters, selectedEntries]);
+
+  // Keep display date in sync with internal filter date
+  useEffect(() => {
+    setDisplayDate(convertToDisplayFormat(filters.date) || format(new Date(), 'dd/MM/yyyy'));
+  }, [filters.date]);
 
   const loadDropdownData = async () => {
     try {
@@ -385,10 +411,12 @@ const ApproveRecords: React.FC = () => {
     const currentDate = new Date(filters.date);
     const newDate = new Date(currentDate);
     newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
+    const internal = format(newDate, 'yyyy-MM-dd');
     setFilters(prev => ({
       ...prev,
-      date: format(newDate, 'yyyy-MM-dd'),
+      date: internal,
     }));
+    setDisplayDate(convertToDisplayFormat(internal));
   };
 
   const handleSelectEntry = (entryId: string) => {
@@ -1154,7 +1182,7 @@ const ApproveRecords: React.FC = () => {
           {/* Date Navigation */}
           <div className='md:col-span-2 w-full'>
             <label className='block text-sm font-medium text-gray-700 mb-2'>
-              Date
+              Date (dd/MM/yyyy)
             </label>
             <div className='flex items-center gap-2 w-full'>
               <Button
@@ -1166,9 +1194,16 @@ const ApproveRecords: React.FC = () => {
                 Previous
               </Button>
               <Input
-                type='date'
-                value={filters.date}
-                onChange={value => handleFilterChange('date', value)}
+                type='text'
+                value={displayDate}
+                placeholder='dd/MM/yyyy'
+                onChange={value => {
+                  setDisplayDate(value);
+                  const internal = convertToInternalFormat(value);
+                  if (internal) {
+                    handleFilterChange('date', internal);
+                  }
+                }}
                 className='flex-1 w-full'
               />
               <Button
@@ -1440,7 +1475,7 @@ const ApproveRecords: React.FC = () => {
                     </td>
                     <td className='px-3 py-2 font-medium'>{index + 1}</td>
                     <td className='px-3 py-2'>
-                      {format(new Date(entry.c_date), 'dd-MMM-yy')}
+                      {format(new Date(entry.c_date), 'dd/MM/yyyy')}
                     </td>
                     <td className='px-3 py-2 font-medium text-blue-600'>
                       {entry.company_name}
@@ -1645,7 +1680,7 @@ const ApproveRecords: React.FC = () => {
                   }`}>
                     <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
                     <td className='w-16 px-1 py-1 text-xs'>
-                      {format(new Date(d.c_date), 'dd-MMM-yy')}
+                      {format(new Date(d.c_date), 'dd/MM/yyyy')}
                     </td>
                     <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={d.company_name}>
                       {d.company_name}

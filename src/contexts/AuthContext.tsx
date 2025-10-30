@@ -71,13 +71,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return { success: false, error: 'Username and password are required' };
       }
 
-      // Temporary hardcoded login for development
-      if (username === 'Bukka Ramesh' && password === 'ramesh@1976') {
-        const userData: User = {
-          id: 'temp-admin-id',
-          username: 'Bukka Ramesh',
-          is_admin: true,
-          features: [
+      // 1. Fetch user from users table with user type (case-insensitive)
+      const { data: dbUser, error } = await supabase
+        .from('users')
+        .select(`
+          *,
+          user_types!inner(user_type)
+        `)
+        .ilike('username', username)
+        .single();
+      if (error || !dbUser) {
+        return { success: false, error: 'Invalid username or password' };
+      }
+
+      // 2. Check password using bcryptjs
+      const passwordMatch = await bcrypt.compare(password, dbUser.password_hash);
+      if (!passwordMatch) {
+        return { success: false, error: 'Invalid username or password' };
+      }
+
+      // 3. Check if user is active (default to true if column missing)
+      if (dbUser.is_active === false) {
+        return { success: false, error: 'Account is deactivated' };
+      }
+
+      // 4. Determine if user is admin based on user type
+      const isAdmin = dbUser.user_types?.user_type === 'Admin';
+
+      // 5. Grant features to admin (others empty for now)
+      const features: string[] = isAdmin
+        ? [
             'dashboard',
             'new_entry',
             'edit_entry',
@@ -95,79 +118,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             'drivers',
             'bank_guarantees',
             'users',
-          ],
-        };
-        setUser(userData);
-        localStorage.setItem('thirumala_user', JSON.stringify(userData));
-        localStorage.setItem('thirumala_session_time', Date.now().toString());
-        return { success: true };
-      }
+          ]
+        : [];
 
-      // Original database login logic (commented out for now)
-      /*
-      // 1. Fetch user from users table with user type (case-insensitive)
-      const { data: dbUser, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          user_types!inner(user_type)
-        `)
-        .ilike('username', username)
-        .single();
-      if (error || !dbUser) {
-        return { success: false, error: 'Invalid username or password' };
-      }
-      // 2. Check password using bcryptjs
-      const passwordMatch = await bcrypt.compare(password, dbUser.password_hash);
-      if (!passwordMatch) {
-        return { success: false, error: 'Invalid username or password' };
-      }
-      
-      // 3. Check if user is active
-      if (!dbUser.is_active) {
-        return { success: false, error: 'Account is deactivated' };
-      }
-      
-      // 4. Determine if user is admin based on user type
-      const isAdmin = dbUser.user_types?.user_type === 'Admin';
-      
-      // 5. For now, give all features to admin users, empty array to others
-      let features: string[] = [];
-      if (isAdmin) {
-        // Admin gets all features - we'll implement feature management later
-        features = [
-          'dashboard', 
-          'new_entry', 
-          'edit_entry',
-          'daily_report',
-          'detailed_ledger', 
-          'ledger_summary',
-          'approve_records',
-          'edited_records',
-          'replace_form',
-          'balance_sheet', 
-          'export',
-          'csv_upload', 
-          'export_excel',
-          'vehicles', 
-          'drivers', 
-          'bank_guarantees', 
-          'users'
-        ];
-      }
-      
       const userData: User = {
         id: dbUser.id,
         username: dbUser.username,
         is_admin: isAdmin,
-        features};
+        features,
+      };
       setUser(userData);
       localStorage.setItem('thirumala_user', JSON.stringify(userData));
       localStorage.setItem('thirumala_session_time', Date.now().toString());
       return { success: true };
-      */
-
-      return { success: false, error: 'Invalid username or password' };
     } catch (err) {
       console.error('Login error:', err);
       return { success: false, error: 'Login failed. Please try again.' };

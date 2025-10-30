@@ -49,7 +49,7 @@ const EditEntry: React.FC = () => {
   const [entriesForSelectedDate, setEntriesForSelectedDate] = useState<any[]>([]);
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [loading, setLoading] = useState(false);
   
   // Performance optimization states
@@ -213,6 +213,21 @@ const EditEntry: React.FC = () => {
     console.log('🔄 Filters changed, reloading entries...');
     loadEntries();
   }, [searchTerm, filterDate, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff]);
+
+  // Listen for global dashboard refresh events (emitted after new entry creation)
+  useEffect(() => {
+    const onRefresh = () => {
+      // small delay to ensure DB commit
+      setTimeout(() => {
+        // Clear date filters so newest entries are visible
+        setSelectedDateFilter('');
+        setFilterDate('');
+        loadEntries();
+      }, 300);
+    };
+    window.addEventListener('dashboard-refresh', onRefresh);
+    return () => window.removeEventListener('dashboard-refresh', onRefresh);
+  }, []);
 
   // Sync visible date input with ISO filterDate
   useEffect(() => {

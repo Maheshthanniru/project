@@ -350,21 +350,15 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  // Load users data (companies and accounts are now handled by React Query)
+  // Load staff names from existing entries (decoupled from User Management)
   const loadUsersData = async () => {
     try {
-      const users = await supabaseDB.getUsers();
-      console.log('👥 Users loaded:', users.length);
-      const usersData = users
-        .filter(u => u.is_active)
-        .map(user => ({
-          value: user.username,
-          label: user.username,
-        }));
-      setUsers(usersData);
+      const staffOptions = await supabaseDB.getDistinctStaffNames();
+      console.log('👥 Staff options loaded:', staffOptions.length);
+      setUsers(staffOptions);
     } catch (error) {
       console.error('❌ Error loading users data:', error);
-      toast.error('Failed to load users data.');
+      toast.error('Failed to load staff list.');
     }
   };
 
@@ -435,7 +429,6 @@ const NewEntry: React.FC = () => {
         address: '',
         staff: entry.staff,
         users: user?.username || '',
-        payment_mode: entry.paymentMode,
         sale_qty: entry.quantityChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.quantityChecked
           ? parseFloat(entry.purchaseQ) || 0
@@ -462,7 +455,6 @@ const NewEntry: React.FC = () => {
           address: '',
           staff: entry.staff,
           users: user?.username || '',
-          payment_mode: dualEntry.paymentMode,
           sale_qty: dualEntry.quantityChecked
             ? parseFloat(dualEntry.saleQ) || 0
             : 0,
@@ -474,9 +466,19 @@ const NewEntry: React.FC = () => {
 
         // Use bulk operations for dual entries
         await bulkOperationsMutation.mutateAsync([mainEntryData, dualEntryData]);
+        // Notify other pages (like Edit Entry) to refresh
+        try {
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+        } catch {}
       } else {
         // Use single entry mutation
         await createEntryMutation.mutateAsync(mainEntryData);
+        // Notify other pages (like Edit Entry) to refresh
+        try {
+          localStorage.setItem('dashboard-refresh', Date.now().toString());
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+        } catch {}
       }
       
       // Reset forms
@@ -639,70 +641,25 @@ const NewEntry: React.FC = () => {
   };
 
   const handleCreateStaff = async () => {
-    console.log('🔧 handleCreateStaff called with:', { newStaffName, newStaffEmail });
-    
-    if (loading) {
-      console.log('⚠️ Already creating staff, ignoring duplicate call');
-      return;
-    }
-    
-    if (!newStaffName.trim()) {
-      console.log('❌ Staff name is empty');
+    if (loading) return;
+    const name = newStaffName.trim();
+    if (!name) {
       toast.error('Staff name is required');
       return;
     }
-
     setLoading(true);
     try {
-      console.log('🔧 Creating staff member:', newStaffName.trim());
-      
-      // Get the staff user type ID from the database
-      const { data: userTypeData, error: userTypeError } = await supabase
-        .from('user_types')
-        .select('id')
-        .eq('user_type', 'Operator')
-        .single();
-
-      if (userTypeError || !userTypeData) {
-        console.error('❌ Error getting user type:', userTypeError);
-        toast.error('Failed to get user type');
-        return;
-      }
-
-      console.log('✅ User type found:', userTypeData);
-
-      const staffData = {
-        username: newStaffName.trim(),
-        email: newStaffEmail.trim() || `${newStaffName.trim().toLowerCase().replace(/\s+/g, '')}@company.com`,
-        password_hash: 'password123', // Default password
-        user_type_id: userTypeData.id,
-        is_active: true
-      };
-
-      console.log('📝 Creating user with data:', staffData);
-
-      const staff = await supabaseDB.createUser(staffData);
-      
-      console.log('✅ Staff created successfully:', staff);
-      
-      // Refresh users data
-      await loadUsersData();
-      
-      // Invalidate users query to refresh the dropdown
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.users });
-      
-      // Set the newly created staff as selected
-      setEntry(prev => ({ ...prev, staff: staff.username }));
-      setDualEntry(prev => ({ ...prev, staff: staff.username }));
+      // Add to local staff list (decoupled from User Management)
+      setUsers(prev => {
+        const exists = prev.some(opt => opt.value.toLowerCase() === name.toLowerCase());
+        return exists ? prev : [...prev, { value: name, label: name }].sort((a, b) => a.label.localeCompare(b.label));
+      });
+      setEntry(prev => ({ ...prev, staff: name }));
+      setDualEntry(prev => ({ ...prev, staff: name }));
       setNewStaffName('');
       setNewStaffEmail('');
       setShowNewStaff(false);
-      toast.success('Staff member created successfully!');
-    } catch (error) {
-      console.error('❌ Error creating staff:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Error details:', errorMessage);
-      toast.error(`Failed to create staff member: ${errorMessage}`);
+      toast.success('Staff added');
     } finally {
       setLoading(false);
     }

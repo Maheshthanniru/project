@@ -480,13 +480,14 @@ class SupabaseDatabase {
       const resultCount = data?.length || 0;
       console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
       
-      // Clean [DELETED] text from all entries
+      // Clean fields and normalize approved flag to strict boolean
       const cleanedData = (data || []).map(entry => ({
         ...entry,
         acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        approved: entry.approved === true || entry.approved === 'true'
       }));
       
       return cleanedData;
@@ -539,13 +540,14 @@ class SupabaseDatabase {
       const resultCount = data?.length || 0;
       console.log(`✅ Fetched ${resultCount} entries for today`);
       
-      // Clean [DELETED] text from all entries
+      // Clean fields and normalize approved flag to strict boolean
       const cleanedData = (data || []).map(entry => ({
         ...entry,
         acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        approved: entry.approved === true || entry.approved === 'true'
       }));
       
       return cleanedData;
@@ -937,13 +939,14 @@ class SupabaseDatabase {
       return [];
     }
     
-    // Clean [DELETED] text from all entries
+    // Clean fields and normalize approved to strict boolean
     const cleanedData = (data || []).map(entry => ({
       ...entry,
       acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
       sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
       particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-      company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || ''
+      company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+      approved: entry.approved === true || entry.approved === 'true'
     }));
     
     return cleanedData as CashBookEntry[];
@@ -955,9 +958,20 @@ class SupabaseDatabase {
       if (!operations || operations.length === 0) return [];
 
       // Filter out undefined fields to respect DB defaults
-      const sanitized = operations.map((op) =>
-        Object.fromEntries(Object.entries(op).filter(([_, v]) => v !== undefined))
-      );
+      const sanitized = operations.map((op) => {
+        const base = Object.fromEntries(
+          Object.entries(op).filter(([_, v]) => v !== undefined)
+        );
+        // Ensure default flags are set for new inserts (pending by default)
+        return {
+          approved: false,
+          edited: false,
+          e_count: 0,
+          lock_record: false,
+          entry_time: new Date().toISOString(),
+          ...base,
+        } as Partial<CashBookEntry>;
+      });
 
       const { data, error } = await supabase
         .from('cash_book')
@@ -1607,6 +1621,29 @@ class SupabaseDatabase {
 
     const onlyStaff = (data || []).filter((u: any) => u.user_types?.user_type === 'Staff');
     return onlyStaff as any;
+  }
+
+  // Distinct staff names from cash_book for free-text staff selection
+  async getDistinctStaffNames(): Promise<{ value: string; label: string }[]> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('staff')
+        .not('staff', 'is', null)
+        .neq('staff', '')
+        .order('staff', { ascending: true });
+      if (error) {
+        console.error('Error fetching distinct staff names:', error);
+        return [];
+      }
+      const unique = Array.from(new Set((data || []).map((r: any) => (r.staff || '').trim())))
+        .filter(Boolean)
+        .map(name => ({ value: name, label: name }));
+      return unique;
+    } catch (err) {
+      console.error('Error in getDistinctStaffNames:', err);
+      return [];
+    }
   }
 
   // Get active staff members count
