@@ -22,14 +22,20 @@ interface DailyReportData {
 
 const DailyReport: React.FC = () => {
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(
-    format(new Date(), 'yyyy-MM-dd')
+  // Persisted initial date for stable mount; avoid calling helper before it's defined
+  const initialPersistedDate = ((): string => {
+    const saved = localStorage.getItem('dailyReportDate');
+    return saved || format(new Date(), 'yyyy-MM-dd');
+  })();
+  const [selectedDate, setSelectedDate] = useState(initialPersistedDate);
+  const [displayDate, setDisplayDate] = useState(() => {
+    const [y, m, d] = initialPersistedDate.split('-');
+    return `${d}/${m}/${y}`;
+  });
+  const [selectedCompany, setSelectedCompany] = useState(
+    () => localStorage.getItem('dailyReportCompany') || ''
   );
-  const [displayDate, setDisplayDate] = useState(
-    format(new Date(), 'dd/MM/yyyy')
-  );
-  const [selectedCompany, setSelectedCompany] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('dailyReportSearch') || '');
   const [reportData, setReportData] = useState<DailyReportData>({
     entries: [],
     totalCredit: 0,
@@ -67,17 +73,32 @@ const DailyReport: React.FC = () => {
     if (dateValue) {
       setSelectedDate(dateValue);
       setDisplayDate(convertToDisplayFormat(dateValue));
-      // Clear company selection when date changes
-      setSelectedCompany('');
+      // Don't clear company selection - allow multiple filters
       // Load companies for the new date
       await loadCompaniesByDate(dateValue);
     }
   };
 
+  // Load base companies once on mount
   useEffect(() => {
     loadCompanies();
+  }, []);
+
+  // Re-generate report when any filter changes
+  useEffect(() => {
     generateReport();
   }, [selectedDate, selectedCompany, searchTerm]);
+
+  // Persist filters so the page does not jump back to today automatically
+  useEffect(() => {
+    if (selectedDate) localStorage.setItem('dailyReportDate', selectedDate);
+  }, [selectedDate]);
+  useEffect(() => {
+    localStorage.setItem('dailyReportCompany', selectedCompany || '');
+  }, [selectedCompany]);
+  useEffect(() => {
+    localStorage.setItem('dailyReportSearch', searchTerm || '');
+  }, [searchTerm]);
 
 
   // useEffect to load companies when date changes
@@ -90,7 +111,7 @@ const DailyReport: React.FC = () => {
 
   const loadCompanies = async () => {
     try {
-      const companies = await supabaseDB.getCompanies();
+      const companies = await supabaseDB.getCompaniesWithData();
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name,
@@ -106,8 +127,7 @@ const DailyReport: React.FC = () => {
     try {
       console.log('🔍 Loading companies for date:', date);
       
-      // Clear company selection when date changes
-      setSelectedCompany('');
+      // Don't clear company selection - allow multiple filters
       
       // Get all entries for the specific date
       const { data, error } = await supabase
@@ -125,12 +145,19 @@ const DailyReport: React.FC = () => {
       
       console.log(`📊 Found ${uniqueCompanies.length} companies for date ${date}:`, uniqueCompanies);
       
-      // Update companies dropdown with date-specific options
+      // Update companies dropdown with date-specific options (preserve selection when possible)
       const companiesData = uniqueCompanies.map(name => ({
         value: name,
         label: name,
       }));
       setCompanies([{ value: '', label: 'All Companies' }, ...companiesData]);
+      // If current selection still exists in the new list, keep it
+      if (selectedCompany && uniqueCompanies.includes(selectedCompany)) {
+        // keep as is
+      } else if (selectedCompany) {
+        // previously selected company not available for this date
+        setSelectedCompany('');
+      }
       
       // Show toast with summary
       if (data.length > 0) {
@@ -154,7 +181,11 @@ const DailyReport: React.FC = () => {
   const generateReport = async () => {
     setLoading(true);
     try {
-      console.log('🔄 Generating Daily Report for:', selectedDate);
+      console.log('🔄 Generating Daily Report with filters:', {
+        selectedDate,
+        selectedCompany,
+        searchTerm
+      });
       
       // Use server-side filtering for much faster performance
       const { data: entries, error } = await supabase
@@ -174,13 +205,16 @@ const DailyReport: React.FC = () => {
       // Apply company filter
       let filteredEntries = entries || [];
       if (selectedCompany) {
+        const beforeCompanyFilter = filteredEntries.length;
         filteredEntries = filteredEntries.filter(
           entry => entry.company_name === selectedCompany
         );
+        console.log(`📊 Company filter: ${beforeCompanyFilter} → ${filteredEntries.length} entries`);
       }
 
       // Apply search filter
       if (searchTerm) {
+        const beforeSearchFilter = filteredEntries.length;
         filteredEntries = filteredEntries.filter(
           entry =>
             entry.particulars
@@ -193,7 +227,10 @@ const DailyReport: React.FC = () => {
                 .includes(searchTerm.toLowerCase())) ||
             entry.staff?.toLowerCase().includes(searchTerm.toLowerCase())
         );
+        console.log(`🔍 Search filter: ${beforeSearchFilter} → ${filteredEntries.length} entries`);
       }
+
+      console.log(`📈 Final filtered entries: ${filteredEntries.length}`);
 
       // Calculate opening balance efficiently using server-side query
       const { data: previousEntries, error: prevError } = await supabase
@@ -309,7 +346,7 @@ const DailyReport: React.FC = () => {
   const exportToExcel = () => {
     const exportData = reportData.entries.map(entry => ({
       'S.No': entry.sno,
-      Date: format(new Date(entry.c_date), 'dd-MMM-yyyy'),
+      Date: format(new Date(entry.c_date), 'dd/MM/yyyy'),
       Company: entry.company_name,
       'Main Account': entry.acc_name,
       'Sub Account': entry.sub_acc_name || '',
@@ -321,7 +358,7 @@ const DailyReport: React.FC = () => {
       Staff: entry.staff,
       User: entry.users,
       'Entry Time': entry.entry_time,
-      Approved: entry.approved ? 'Yes' : 'No',
+      Approved: entry.approved ? `${entry.users || 'Unknown User'} - ${entry.entry_time ? format(new Date(entry.entry_time), 'dd/MM/yyyy HH:mm') : 'N/A'}` : 'Pending',
     }));
 
     // Create CSV content
@@ -443,6 +480,18 @@ const DailyReport: React.FC = () => {
             </div>
           </div>
           <div className='flex flex-row gap-2 mt-2 md:mt-0'>
+            <Button 
+              variant='secondary' 
+              onClick={() => {
+                setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+                setDisplayDate(format(new Date(), 'dd/MM/yyyy'));
+                setSelectedCompany('');
+                setSearchTerm('');
+                loadCompanies();
+              }}
+            >
+              Clear Filters
+            </Button>
             <Button variant='secondary' onClick={generateReport}>
               Refresh
             </Button>
@@ -538,7 +587,7 @@ const DailyReport: React.FC = () => {
                     <th className='px-3 py-2 text-right'>Debit</th>
                     <th className='px-3 py-2 text-center'>Payment Mode</th>
                     <th className='px-3 py-2 text-left'>Staff</th>
-                    <th className='px-3 py-2 text-left'>Approved</th>
+                    <th className='px-3 py-2 text-left'>User</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -548,7 +597,9 @@ const DailyReport: React.FC = () => {
                       className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}
                     >
                       <td className='px-3 py-2'>{idx + 1}</td>
-                      <td className='px-3 py-2'>{entry.c_date}</td>
+                      <td className='px-3 py-2'>
+                        {entry.c_date ? format(new Date(entry.c_date), 'dd/MM/yyyy') : ''}
+                      </td>
                       <td className='px-3 py-2'>{entry.company_name}</td>
                       <td className='px-3 py-2'>{entry.acc_name}</td>
                       <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
@@ -601,7 +652,18 @@ const DailyReport: React.FC = () => {
                       </td>
                       <td className='px-3 py-2'>{entry.staff}</td>
                       <td className='px-3 py-2'>
-                        {entry.approved ? 'Yes' : 'No'}
+                        {entry.approved ? (
+                          <div className='text-xs'>
+                            <div className='font-medium text-green-700'>
+                              {entry.users || 'Unknown User'}
+                            </div>
+                            <div className='text-gray-500'>
+                              {entry.entry_time ? format(new Date(entry.entry_time), 'dd/MM/yyyy HH:mm') : 'N/A'}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className='text-orange-600 font-medium'>Pending</span>
+                        )}
                       </td>
                     </tr>
                   ))}

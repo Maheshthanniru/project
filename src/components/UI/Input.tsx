@@ -15,6 +15,7 @@ interface InputProps {
   suggestions?: Array<string | number>;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   size?: 'sm' | 'md' | 'lg';
+  uppercase?: boolean;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -34,14 +35,43 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       suggestions = [],
       onKeyDown,
       size = 'md',
+      uppercase = false,
     },
     ref
   ) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [inputValue, setInputValue] = useState(value);
+    const [dateMode, setDateMode] = useState<'text' | 'date'>(type === 'date' ? 'text' : 'text');
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
+      let val = e.target.value;
+
+      // Special handling: custom dd/MM/yyyy for date with calendar
+      if (type === 'date') {
+        setInputValue(val);
+        if (dateMode === 'date') {
+          // Native date gives ISO; pass through
+          onChange(val);
+        } else {
+          // Text mode; if dd/MM/yyyy convert to ISO before emitting
+          const m = val.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+          if (m) {
+            const [, dd, mm, yyyy] = m;
+            const iso = `${yyyy}-${mm}-${dd}`;
+            onChange(iso);
+          } else if (val === '') {
+            onChange('');
+          }
+        }
+        setShowSuggestions(false);
+        return;
+      }
+
+      // Apply uppercase transformation for text inputs when uppercase prop is true
+      if (uppercase && type !== 'number' && type !== 'date') {
+        val = val.toUpperCase();
+      }
+
       setInputValue(val);
       if (type === 'number') {
         // Allow decimal values for quantity inputs
@@ -74,17 +104,40 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <input
           ref={ref}
-          type={type}
+          type={type === 'date' ? (dateMode === 'date' ? 'date' : 'text') : type}
           value={
             typeof value === 'number' && isNaN(value)
               ? ''
               : value === null || value === undefined
                 ? ''
-                : value
+                : type === 'date'
+                  ? (() => {
+                      const v = String(value || inputValue || '');
+                      const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                      if (dateMode === 'date') {
+                        // Native date expects ISO
+                        if (m) return v;
+                        const m2 = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (m2) {
+                          const [, dd, mm, yyyy] = m2;
+                          return `${yyyy}-${mm}-${dd}`;
+                        }
+                        return '';
+                      }
+                      // Text mode shows dd/MM/yyyy
+                      if (m) {
+                        const [, yyyy, mm, dd] = m;
+                        return `${dd}/${mm}/${yyyy}`;
+                      }
+                      return v;
+                    })()
+                  : uppercase && type !== 'number' 
+                    ? String(value).toUpperCase()
+                    : value
           }
           onChange={handleInputChange}
           onKeyDown={onKeyDown}
-          placeholder={type === 'date' ? 'dd/mm/yyyy' : placeholder}
+          placeholder={type === 'date' ? 'dd/MM/yyyy' : placeholder}
           required={required}
           disabled={disabled}
           min={min}
@@ -94,8 +147,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             size === 'sm' ? 'px-2 py-1 text-xs' : size === 'lg' ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'
           }`}
           style={{ fontFamily: 'Times New Roman', fontSize: '12px' }}
-          onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
+          inputMode={type === 'date' && dateMode === 'text' ? 'numeric' : undefined}
+          pattern={type === 'date' && dateMode === 'text' ? '\\d{2}/\\d{2}/\\d{4}' : undefined}
+          onFocus={() => {
+            if (type === 'date') setDateMode('date');
+            setShowSuggestions(true);
+          }}
+          onBlur={() => {
+            if (type === 'date') setDateMode('text');
+            setTimeout(() => setShowSuggestions(false), 100);
+          }}
         />
         {showSuggestions && filteredSuggestions.length > 0 && (
           <ul className='absolute z-10 bg-white border border-gray-200 rounded shadow-md mt-1 w-full max-h-40 overflow-y-auto'>

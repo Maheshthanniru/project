@@ -208,3 +208,5 @@ entry.debit.toString().includes(searchTerm)
 The Detailed Ledger now provides a more compact and user-friendly interface with better search capabilities and cleaner print reports, while maintaining all existing functionality.
 
 
+
+

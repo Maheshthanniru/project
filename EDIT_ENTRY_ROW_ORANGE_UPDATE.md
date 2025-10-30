@@ -156,3 +156,5 @@ bg-gray-25     /* Light gray background for odd rows */
 The Edit Entry table now provides much clearer visual indication of pending entries with orange background for entire rows, making it easier for users to quickly identify and focus on entries that need approval while maintaining a clean and consistent user interface.
 
 
+
+

@@ -17,9 +17,9 @@ import {
   Upload,
   FileText,
   AlertCircle,
-  Trash2,
   Building,
   RefreshCw,
+  Calendar,
 } from 'lucide-react';
 
 interface NewEntryForm {
@@ -37,6 +37,7 @@ interface NewEntryForm {
   debitOnline: string;
   debitOffline: string;
   staff: string;
+  paymentMode: string;
   quantityChecked: boolean;
 }
 
@@ -64,6 +65,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
+    paymentMode: 'Cash',
     quantityChecked: false,
   });
 
@@ -71,6 +73,10 @@ const NewEntry: React.FC = () => {
   const { data: recentEntries, isLoading: recentLoading } = useRecentEntriesByDate(entry.date);
 
   const [dualEntryEnabled, setDualEntryEnabled] = useState(false);
+  const [mainDateInput, setMainDateInput] = useState('');
+  const [dualDateInput, setDualDateInput] = useState('');
+  const mainDatePickerRef = useRef<HTMLInputElement>(null);
+  const dualDatePickerRef = useRef<HTMLInputElement>(null);
   const [dualEntry, setDualEntry] = useState<NewEntryForm>({
     date: format(new Date(), 'yyyy-MM-dd'),
     companyName: '',
@@ -86,6 +92,7 @@ const NewEntry: React.FC = () => {
     debitOnline: '',
     debitOffline: '',
     staff: user?.username || '',
+    paymentMode: 'Cash',
     quantityChecked: false,
   });
 
@@ -167,9 +174,6 @@ const NewEntry: React.FC = () => {
   });
   const [importErrors, setImportErrors] = useState<string[]>([]);
 
-  // Clear cash book state
-  const [showClearModal, setShowClearModal] = useState(false);
-  const [clearingData, setClearingData] = useState(false);
 
   // Refs for form navigation
   const dateRef = useRef<HTMLInputElement>(null);
@@ -189,13 +193,12 @@ const NewEntry: React.FC = () => {
   const dualParticularsRef = useRef<HTMLInputElement>(null);
   const dualCreditRef = useRef<HTMLInputElement>(null);
   const dualDebitRef = useRef<HTMLInputElement>(null);
-  const dualStaffRef = useRef<HTMLInputElement>(null);
 
   // Function to handle Enter key navigation
-  const handleKeyDown = (e: React.KeyboardEvent, nextRef: React.RefObject<HTMLElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent, nextRef: React.RefObject<HTMLElement> | null) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (nextRef.current) {
+      if (nextRef && nextRef.current) {
         nextRef.current.focus();
       }
     }
@@ -206,6 +209,18 @@ const NewEntry: React.FC = () => {
     updateDailyEntryNumber();
     updateTotalEntryCount();
   }, []);
+
+  // keep visible date inputs synced to ISO values
+  useEffect(() => {
+    try {
+      setMainDateInput(entry.date ? format(new Date(entry.date), 'dd/MM/yyyy') : '');
+    } catch {}
+  }, [entry.date]);
+  useEffect(() => {
+    try {
+      setDualDateInput(dualEntry.date ? format(new Date(dualEntry.date), 'dd/MM/yyyy') : '');
+    } catch {}
+  }, [dualEntry.date]);
 
   useEffect(() => {
     updateDailyEntryNumber();
@@ -420,6 +435,7 @@ const NewEntry: React.FC = () => {
         address: '',
         staff: entry.staff,
         users: user?.username || '',
+        payment_mode: entry.paymentMode,
         sale_qty: entry.quantityChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.quantityChecked
           ? parseFloat(entry.purchaseQ) || 0
@@ -444,8 +460,9 @@ const NewEntry: React.FC = () => {
           debit_offline: 0,
           company_name: dualEntry.companyName,
           address: '',
-          staff: dualEntry.staff,
+          staff: entry.staff,
           users: user?.username || '',
+          payment_mode: dualEntry.paymentMode,
           sale_qty: dualEntry.quantityChecked
             ? parseFloat(dualEntry.saleQ) || 0
             : 0,
@@ -479,6 +496,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: entry.staff, // Preserve the current staff selection
+        paymentMode: 'Cash',
         quantityChecked: false,
       });
       // Accounts are now managed by React Query
@@ -498,6 +516,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: entry.staff, // Preserve the current staff selection
+        paymentMode: 'Cash',
         quantityChecked: false,
       });
       setDualEntryEnabled(false);
@@ -802,71 +821,6 @@ const NewEntry: React.FC = () => {
     }
   };
 
-  // Clear all cash book entries function
-  const handleClearCashBook = async () => {
-    setClearingData(true);
-    try {
-      console.log('🗑️ Starting cash book clearing...');
-      
-      // Clear cash book entries
-      const { error: cashBookError } = await supabase
-        .from('cash_book')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (cashBookError) {
-        throw new Error(`Failed to clear cash book: ${cashBookError.message}`);
-      }
-      
-      // Clear deleted cash book entries
-      const { error: deletedError } = await supabase
-        .from('deleted_cash_book')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (deletedError) {
-        console.warn('Warning: Could not clear deleted cash book entries:', deletedError.message);
-      }
-      
-      // Clear edit audit logs
-      const { error: editError } = await supabase
-        .from('edit_cash_book')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (editError) {
-        console.warn('Warning: Could not clear edit audit logs:', editError.message);
-      }
-      
-      // Reset sequence
-      try {
-        await supabase.rpc('exec_sql', {
-          sql: 'ALTER SEQUENCE IF EXISTS cash_book_sno_seq RESTART WITH 1;'
-        });
-      } catch (seqError) {
-        console.warn('Warning: Could not reset sequence:', seqError);
-      }
-      
-      // Refresh data
-      await updateTotalEntryCount();
-      await updateDailyEntryNumber();
-      
-      // Invalidate React Query cache
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      
-      console.log('✅ Cash book cleared successfully!');
-      toast.success('All cash book entries cleared successfully! Companies, accounts, and staff data preserved.');
-      
-      setShowClearModal(false);
-      
-    } catch (error) {
-      console.error('❌ Error clearing cash book:', error);
-      toast.error(`Failed to clear cash book: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setClearingData(false);
-    }
-  };
 
   const handleImportCSV = async () => {
     if (!uploadedFile || uploadPreview.length === 0) {
@@ -1361,6 +1315,34 @@ const NewEntry: React.FC = () => {
     }
   };
 
+  // Admin function to delete empty companies
+  const handleDeleteEmptyCompanies = async () => {
+    const companiesToDelete = [
+      'vijajajj',
+      'vijayyy', 
+      'Vijayyyy',
+      'CompanyName',
+      'okok',
+      'pranay'
+    ];
+
+    try {
+      console.log('🗑️ Deleting empty companies:', companiesToDelete);
+      const result = await supabaseDB.deleteEmptyCompanies(companiesToDelete);
+      
+      if (result.success) {
+        toast.success(`Successfully deleted ${result.deleted.length} empty companies: ${result.deleted.join(', ')}`);
+        // Refresh dropdown data
+        queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      } else {
+        toast.error(`Failed to delete companies: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting empty companies:', error);
+      toast.error('Failed to delete empty companies');
+    }
+  };
+
   return (
     <div className='min-h-screen flex flex-col w-full max-w-full'>
       {/* Header - Fixed at top */}
@@ -1415,13 +1397,12 @@ const NewEntry: React.FC = () => {
                 CSV
               </Button>
               <Button
-                icon={Trash2}
                 variant='danger'
                 size='sm'
-                onClick={() => setShowClearModal(true)}
+                onClick={handleDeleteEmptyCompanies}
                 className='text-xs'
               >
-                Clear Data
+                Clean Companies
               </Button>
             </div>
           </div>
@@ -1457,16 +1438,48 @@ const NewEntry: React.FC = () => {
 
                 {/* Line 1: Date, Company, Main Account */}
                 <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
-                  <Input
-                    ref={dateRef}
-                    label='Date'
-                    type='date'
-                    value={entry.date}
-                    onChange={value => handleInputChange('date', value)}
-                    onKeyDown={(e) => handleKeyDown(e, companyNameRef)}
-                    required
-                    size='sm'
-                  />
+                  <div className='relative'>
+                    <label className='block font-bold text-gray-700 mb-1 text-xs' style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>Date</label>
+                    <input
+                      ref={dateRef as any}
+                      type='text'
+                      value={mainDateInput}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setMainDateInput(v);
+                        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (m) {
+                          const [, dd, mm, yyyy] = m;
+                          handleInputChange('date', `${yyyy}-${mm}-${dd}`);
+                        }
+                      }}
+                      onKeyDown={(e) => handleKeyDown(e, companyNameRef)}
+                      placeholder='dd/MM/yyyy'
+                      className='w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => {
+                        const el = mainDatePickerRef.current as any;
+                        if (el && typeof el.showPicker === 'function') el.showPicker();
+                        else mainDatePickerRef.current?.click();
+                      }}
+                      className='absolute right-2 top-7 p-1 hover:bg-gray-100 rounded'
+                    >
+                      <Calendar className='w-4 h-4 text-gray-500' />
+                    </button>
+                    <input
+                      ref={mainDatePickerRef}
+                      type='date'
+                      value={entry.date}
+                      onChange={e => {
+                        const iso = e.target.value;
+                        handleInputChange('date', iso);
+                        try { setMainDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                      }}
+                      className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                    />
+                  </div>
 
                   <div className='space-y-0.5'>
                     <SearchableSelect
@@ -1508,7 +1521,7 @@ const NewEntry: React.FC = () => {
                           variant='danger'
                           onClick={() => handleDelete('company')}
                           className='text-xs px-1 py-1'
-                          icon={Trash2}
+                          icon={AlertCircle}
                         >
                           Del
                         </Button>
@@ -1557,7 +1570,7 @@ const NewEntry: React.FC = () => {
                           variant='danger'
                           onClick={() => handleDelete('account')}
                           className='text-xs px-1 py-1'
-                          icon={Trash2}
+                          icon={AlertCircle}
                         >
                           Del
                         </Button>
@@ -1567,8 +1580,8 @@ const NewEntry: React.FC = () => {
                 </div>
 
                 {/* Line 2: Sub Account, Particulars, Staff */}
-                <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
-                  <div className='space-y-0.5'>
+                <div className='grid grid-cols-1 md:grid-cols-12 gap-1'>
+                  <div className='space-y-0.5 md:col-span-3'>
                     <SearchableSelect
                       ref={subAccountRef}
                       label='Sub Account'
@@ -1598,7 +1611,7 @@ const NewEntry: React.FC = () => {
                           variant='danger'
                           onClick={() => handleDelete('subAccount')}
                           className='text-xs px-1 py-1'
-                          icon={Trash2}
+                          icon={AlertCircle}
                         >
                           Del
                         </Button>
@@ -1606,7 +1619,7 @@ const NewEntry: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className='space-y-0.5'>
+                  <div className='space-y-0.5 md:col-span-7'>
                     <Input
                       ref={particularsRef}
                       label='Particulars'
@@ -1616,10 +1629,11 @@ const NewEntry: React.FC = () => {
                       placeholder='Enter transaction details...'
                       required
                       size='sm'
+                      uppercase={true}
                     />
                   </div>
 
-                  <div className='space-y-0.5'>
+                  <div className='space-y-0.5 md:col-span-2'>
                     <SearchableSelect
                       ref={staffRef}
                       label='Staff'
@@ -1632,6 +1646,7 @@ const NewEntry: React.FC = () => {
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, creditRef)}
                       required
                       size='sm'
+                      className='staff-field'
                     />
                     <div className='flex gap-1'>
                       <Button
@@ -1650,7 +1665,7 @@ const NewEntry: React.FC = () => {
                         size='sm'
                         onClick={() => handleDelete('staff')}
                         className='text-xs px-1 py-1'
-                        icon={Trash2}
+                        icon={AlertCircle}
                       >
                         Del
                       </Button>
@@ -1658,8 +1673,8 @@ const NewEntry: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Line 3: Credits, Debits */}
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-1'>
+                {/* Line 3: Credits, Debits, Payment Mode */}
+                <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
                   <Input
                     ref={creditRef}
                     label='Credit'
@@ -1686,6 +1701,19 @@ const NewEntry: React.FC = () => {
                     type='number'
                     min='0'
                     step='any'
+                    size='sm'
+                  />
+                  <SearchableSelect
+                    label='Payment Mode'
+                    value={entry.paymentMode}
+                    onChange={val =>
+                      setEntry(prev => ({ ...prev, paymentMode: val }))
+                    }
+                    options={[
+                      { value: 'Cash', label: 'Cash' },
+                      { value: 'Bank Transfer', label: 'Bank Transfer' }
+                    ]}
+                    placeholder='Select payment mode'
                     size='sm'
                   />
                 </div>
@@ -1750,20 +1778,50 @@ const NewEntry: React.FC = () => {
                     <h3 className='text-sm font-bold mb-1 text-blue-700 text-center' style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>
                       Dual Entry
                     </h3>
-                    {/* Line 1: Date, Company, Main Account */}
+                    {/* Line 1: Date, Company Name, Main Account */}
                     <div className='grid grid-cols-1 md:grid-cols-3 gap-1'>
-                      <Input
-                        ref={dualDateRef}
-                        label='Date'
-                        type='date'
-                        value={dualEntry.date}
-                        onChange={value =>
-                          setDualEntry(prev => ({ ...prev, date: value }))
-                        }
-                        onKeyDown={(e) => handleKeyDown(e, dualCompanyNameRef)}
-                        required
-                        size='sm'
-                      />
+                      <div className='relative'>
+                        <label className='block font-bold text-gray-700 mb-1 text-xs' style={{ fontFamily: 'Times New Roman', fontSize: '14px', fontWeight: 'bold' }}>Date</label>
+                        <input
+                          ref={dualDateRef as any}
+                          type='text'
+                          value={dualDateInput}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setDualDateInput(v);
+                            const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                            if (m) {
+                              const [, dd, mm, yyyy] = m;
+                              setDualEntry(prev => ({ ...prev, date: `${yyyy}-${mm}-${dd}` }));
+                            }
+                          }}
+                          onKeyDown={(e) => handleKeyDown(e, dualCompanyNameRef)}
+                          placeholder='dd/MM/yyyy'
+                          className='w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500'
+                        />
+                        <button
+                          type='button'
+                          onClick={() => {
+                            const el = dualDatePickerRef.current as any;
+                            if (el && typeof el.showPicker === 'function') el.showPicker();
+                            else dualDatePickerRef.current?.click();
+                          }}
+                          className='absolute right-2 top-7 p-1 hover:bg-gray-100 rounded'
+                        >
+                          <Calendar className='w-4 h-4 text-gray-500' />
+                        </button>
+                        <input
+                          ref={dualDatePickerRef}
+                          type='date'
+                          value={dualEntry.date}
+                          onChange={e => {
+                            const iso = e.target.value;
+                            setDualEntry(prev => ({ ...prev, date: iso }));
+                            try { setDualDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                          }}
+                          className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                        />
+                      </div>
                       <SearchableSelect
                         ref={dualCompanyNameRef}
                         label='Company Name'
@@ -1788,9 +1846,6 @@ const NewEntry: React.FC = () => {
                         required
                         size='sm'
                       />
-                    </div>
-                    {/* Line 2: Sub Account, Particulars, Staff */}
-                    <div className='grid grid-cols-1 md:grid-cols-3 gap-1 mt-1'>
                       <SearchableSelect
                         ref={dualMainAccountRef}
                         label='Main Account'
@@ -1816,6 +1871,9 @@ const NewEntry: React.FC = () => {
                         disabled={!dualEntry.companyName}
                         size='sm'
                       />
+                    </div>
+                    {/* Line 2: Sub Account, Particulars */}
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-1'>
                       <SearchableSelect
                         ref={dualSubAccountRef}
                         label='Sub Account'
@@ -1829,23 +1887,22 @@ const NewEntry: React.FC = () => {
                         disabled={!dualEntry.accountName}
                         size='sm'
                       />
+                      <Input
+                        ref={dualParticularsRef}
+                        label='Particulars'
+                        value={dualEntry.particulars}
+                        onChange={value =>
+                          setDualEntry(prev => ({ ...prev, particulars: value }))
+                        }
+                        onKeyDown={(e) => handleKeyDown(e, dualCreditRef)}
+                        placeholder='Enter transaction details...'
+                        required
+                        size='sm'
+                        uppercase={true}
+                      />
                     </div>
-                    {/* Particulars */}
-                    <Input
-                      ref={dualParticularsRef}
-                      label='Particulars'
-                      value={dualEntry.particulars}
-                      onChange={value =>
-                        setDualEntry(prev => ({ ...prev, particulars: value }))
-                      }
-                      onKeyDown={(e) => handleKeyDown(e, dualCreditRef)}
-                      placeholder='Enter transaction details...'
-                      required
-                      className='mt-2'
-                      size='sm'
-                    />
-                    {/* Line 3: Credits, Debits */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-1 mt-1'>
+                    {/* Line 3: Credits, Debits, Payment Mode */}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-1 mt-1'>
                       <Input
                         ref={dualCreditRef}
                         label='Credit'
@@ -1867,54 +1924,28 @@ const NewEntry: React.FC = () => {
                         onChange={val =>
                           setDualEntry(prev => ({ ...prev, debit: val }))
                         }
-                        onKeyDown={(e) => handleKeyDown(e, dualStaffRef)}
+                        onKeyDown={(e) => handleKeyDown(e, null)}
                         placeholder='Enter debit amount'
                         type='number'
                         min='0'
                         step='any'
                         size='sm'
                       />
-                    </div>
-
-                    {/* Staff Field - Now placed below Debit for dual entry */}
-                    <div className='space-y-0.5'>
                       <SearchableSelect
-                        ref={dualStaffRef}
-                        label='Staff'
-                        value={dualEntry.staff}
-                        onChange={value =>
-                          setDualEntry(prev => ({ ...prev, staff: value }))
+                        label='Payment Mode'
+                        value={dualEntry.paymentMode}
+                        onChange={val =>
+                          setDualEntry(prev => ({ ...prev, paymentMode: val }))
                         }
-                        options={users}
-                        placeholder='Select staff...'
-                        required
+                        options={[
+                          { value: 'Cash', label: 'Cash' },
+                          { value: 'Bank Transfer', label: 'Bank Transfer' }
+                        ]}
+                        placeholder='Select payment mode'
                         size='sm'
                       />
-                      <div className='flex gap-2'>
-                        <Button
-                          type='button'
-                          size='sm'
-                          variant='secondary'
-                          onClick={() => setShowNewStaff(true)}
-                          className='flex-1'
-                        >
-                          <FileText className='w-4 h-4 mr-1' />
-                          Add Staff
-                        </Button>
-                        {dualEntry.staff && (
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='danger'
-                            onClick={() => handleDelete('staff')}
-                            className='flex-1'
-                          >
-                            <Trash2 className='w-4 h-4 mr-1' />
-                            Delete
-                          </Button>
-                        )}
-                      </div>
                     </div>
+
                     {/* Combined Quantity Checkbox and Inputs for Dual Entry */}
                     <div className='space-y-4 mt-2'>
                       <div className='flex items-center gap-2'>
@@ -2000,6 +2031,7 @@ const NewEntry: React.FC = () => {
                         debitOnline: '',
                         debitOffline: '',
                         staff: entry.staff, // Preserve the current staff selection
+                        paymentMode: 'Cash',
                         quantityChecked: false,
                       });
                       // Accounts are now managed by React Query
@@ -2067,6 +2099,9 @@ const NewEntry: React.FC = () => {
                           <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
                             Status
                           </th>
+                          <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
+                            Entry Date and Time
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2120,6 +2155,14 @@ const NewEntry: React.FC = () => {
                                 </span>
                               )}
                             </td>
+                            <td className='w-20 px-1 py-1 text-center text-xs'>
+                              <div className='text-xs'>
+                                {format(new Date(entry.c_date), 'dd/MM/yyyy')}
+                              </div>
+                              <div className='text-xs text-gray-500'>
+                                {entry.entry_time ? format(new Date(entry.entry_time), 'HH:mm:ss a') : 'N/A'}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2145,12 +2188,14 @@ const NewEntry: React.FC = () => {
                 onChange={value => setNewCompanyName(value)}
                 placeholder='Enter company name...'
                 required
+                uppercase={true}
               />
               <Input
                 label='Address'
                 value={newCompanyAddress}
                 onChange={value => setNewCompanyAddress(value)}
                 placeholder='Enter company address...'
+                uppercase={true}
               />
               <div className='flex gap-2'>
                 <Button onClick={handleCreateCompany} className='flex-1'>
@@ -2181,6 +2226,7 @@ const NewEntry: React.FC = () => {
                 onChange={value => setNewAccountName(value)}
                 placeholder='Enter account name...'
                 required
+                uppercase={true}
               />
               <div className='flex gap-2'>
                 <Button onClick={handleCreateAccount} className='flex-1'>
@@ -2213,6 +2259,7 @@ const NewEntry: React.FC = () => {
                 onChange={value => setNewSubAccountName(value)}
                 placeholder='Enter sub account name...'
                 required
+                uppercase={true}
               />
               <div className='flex gap-2'>
                 <Button onClick={handleCreateSubAccount} className='flex-1'>
@@ -2243,6 +2290,7 @@ const NewEntry: React.FC = () => {
                 onChange={value => setNewStaffName(value)}
                 placeholder='Enter staff name...'
                 required
+                uppercase={true}
               />
               <Input
                 label='Email (Optional)'
@@ -2578,74 +2626,6 @@ const NewEntry: React.FC = () => {
         </div>
       )}
 
-      {/* Clear Cash Book Confirmation Modal */}
-      {showClearModal && (
-        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
-          <div className='bg-white rounded-lg max-w-md w-full p-6'>
-            <div className='flex items-center gap-3 mb-4'>
-              <div className='w-10 h-10 bg-red-100 rounded-full flex items-center justify-center'>
-                <Trash2 className='w-5 h-5 text-red-600' />
-              </div>
-              <h3 className='text-lg font-semibold text-gray-900'>Clear All Cash Book Data</h3>
-            </div>
-            
-            <div className='mb-6'>
-              <p className='text-gray-600 mb-3'>
-                This will permanently delete <strong>ALL {totalEntryCount.toLocaleString()} cash book entries</strong> from your database.
-              </p>
-              
-              <div className='bg-green-50 border border-green-200 rounded-lg p-3 mb-3'>
-                <h4 className='font-medium text-green-800 mb-2'>✅ Data that will be PRESERVED:</h4>
-                <ul className='text-sm text-green-700 space-y-1'>
-                  <li>• Company names and data</li>
-                  <li>• Main accounts</li>
-                  <li>• Sub accounts</li>
-                  <li>• Staff/User accounts</li>
-                  <li>• Bank guarantees, vehicles, drivers</li>
-                </ul>
-              </div>
-              
-              <div className='bg-red-50 border border-red-200 rounded-lg p-3'>
-                <h4 className='font-medium text-red-800 mb-2'>🗑️ Data that will be DELETED:</h4>
-                <ul className='text-sm text-red-700 space-y-1'>
-                  <li>• All cash book entries ({totalEntryCount.toLocaleString()})</li>
-                  <li>• Deleted entries audit trail</li>
-                  <li>• Edit history logs</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div className='flex gap-3'>
-              <Button
-                onClick={handleClearCashBook}
-                variant='danger'
-                disabled={clearingData}
-                className='flex-1'
-              >
-                {clearingData ? (
-                  <>
-                    <RefreshCw className='w-4 h-4 mr-2 animate-spin' />
-                    Clearing...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className='w-4 h-4 mr-2' />
-                    Clear All Data
-                  </>
-                )}
-              </Button>
-              <Button
-                variant='secondary'
-                onClick={() => setShowClearModal(false)}
-                disabled={clearingData}
-                className='flex-1'
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

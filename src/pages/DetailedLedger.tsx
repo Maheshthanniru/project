@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -7,7 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
-import { TrendingUp, TrendingDown, Search, BarChart3, Plus, Database, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Search, BarChart3, Plus, Database, RefreshCw, Calendar } from 'lucide-react';
 
 interface DetailedLedgerFilters {
   fromDate: string;
@@ -16,9 +16,10 @@ interface DetailedLedgerFilters {
   mainAccount: string;
   subAccount: string;
   staffwise: string;
-  creditAmount: number;
-  debitAmount: number;
+  creditAmount: string; // keep as string for easy typing; parse on apply
+  debitAmount: string;  // keep as string for easy typing; parse on apply
   betweenDates: boolean;
+  paymentMode?: string;
 }
 
 interface LedgerEntry {
@@ -39,6 +40,7 @@ interface LedgerEntry {
   approved: boolean;
   balance: number;
   runningBalance: number;
+  payment_mode: string;
 }
 
 const DetailedLedger: React.FC = () => {
@@ -83,6 +85,21 @@ const DetailedLedger: React.FC = () => {
   const [staffList, setStaffList] = useState<
     { value: string; label: string }[]
   >([]);
+
+  // Local visible inputs for dd/MM/yyyy editing to prevent mm/dd flip
+  const [fromDateInput, setFromDateInput] = useState('');
+  const [toDateInput, setToDateInput] = useState('');
+  const fromPickerRef = useRef<HTMLInputElement>(null);
+  const toPickerRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      setFromDateInput(filters.fromDate ? format(new Date(filters.fromDate), 'dd/MM/yyyy') : '');
+      setToDateInput(filters.toDate ? format(new Date(filters.toDate), 'dd/MM/yyyy') : '');
+    } catch {
+      // ignore format errors
+    }
+  }, [filters.fromDate, filters.toDate]);
 
   // Summary data
   const [summary, setSummary] = useState({
@@ -150,7 +167,7 @@ const DetailedLedger: React.FC = () => {
   const loadDropdownData = async () => {
     try {
       // Load companies
-      const companies = await supabaseDB.getCompanies();
+      const companies = await supabaseDB.getCompaniesWithData();
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name,
@@ -324,6 +341,7 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
+          payment_mode: entry.payment_mode || 'Cash',
         };
       });
 
@@ -379,6 +397,7 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
+          payment_mode: entry.payment_mode || 'Cash',
         };
       });
       
@@ -436,6 +455,7 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
+          payment_mode: entry.payment_mode || 'Cash',
         };
       });
       
@@ -496,14 +516,25 @@ const DetailedLedger: React.FC = () => {
       filtered = filtered.filter(entry => entry.staff === filters.staffwise);
     }
 
-    // Credit amount filter
-    if (filters.creditAmount > 0) {
-      filtered = filtered.filter(entry => entry.credit >= filters.creditAmount);
+    // Credit amount filter (exact match)
+    if (filters.creditAmount && filters.creditAmount.trim() !== '') {
+      const n = Number(filters.creditAmount);
+      if (!Number.isNaN(n)) {
+        filtered = filtered.filter(entry => Number(entry.credit) === n);
+      }
     }
 
-    // Debit amount filter
-    if (filters.debitAmount > 0) {
-      filtered = filtered.filter(entry => entry.debit >= filters.debitAmount);
+    // Debit amount filter (exact match)
+    if (filters.debitAmount && filters.debitAmount.trim() !== '') {
+      const n = Number(filters.debitAmount);
+      if (!Number.isNaN(n)) {
+        filtered = filtered.filter(entry => Number(entry.debit) === n);
+      }
+    }
+
+    // Payment mode filter
+    if (filters.paymentMode) {
+      filtered = filtered.filter(entry => (entry.payment_mode || 'Cash') === filters.paymentMode);
     }
 
     // Search filter
@@ -629,9 +660,10 @@ const DetailedLedger: React.FC = () => {
       mainAccount: '',
       subAccount: '',
       staffwise: '',
-      creditAmount: 0,
-      debitAmount: 0,
+      creditAmount: '',
+      debitAmount: '',
       betweenDates: true,
+      paymentMode: '',
     });
     setSearchTerm('');
     // Reset accounts and sub-accounts to initial state
@@ -663,11 +695,11 @@ const DetailedLedger: React.FC = () => {
       Credit: entry.credit,
       Debit: entry.debit,
       Balance: entry.balance,
-      'Running Balance': entry.runningBalance,
       Staff: entry.staff,
+      'Payment Mode': entry.payment_mode || 'Cash',
       User: entry.user,
       'Entry Time': entry.entryTime,
-      Approved: entry.approved ? 'Yes' : 'No',
+      // Status removed per requirement
     }));
 
     // Create CSV content
@@ -748,23 +780,97 @@ const DetailedLedger: React.FC = () => {
                   <label className='block text-sm font-medium text-gray-700 mb-1'>
                     From
                   </label>
-                  <Input
-                    type='date'
-                    value={filters.fromDate}
-                    onChange={value => handleFilterChange('fromDate', value)}
-                    disabled={!filters.betweenDates}
-                  />
+                  <div className='relative'>
+                    <input
+                      type='text'
+                      value={fromDateInput}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setFromDateInput(v);
+                        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (m) {
+                          const [, dd, mm, yyyy] = m;
+                          handleFilterChange('fromDate', `${yyyy}-${mm}-${dd}`);
+                        }
+                      }}
+                      disabled={!filters.betweenDates}
+                      placeholder='dd/MM/yyyy'
+                      className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => {
+                        const el = fromPickerRef.current as any;
+                        if (el && typeof el.showPicker === 'function') {
+                          el.showPicker();
+                        } else {
+                          fromPickerRef.current?.click();
+                        }
+                      }}
+                      className='absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded'
+                    >
+                      <Calendar className='w-4 h-4 text-gray-500' />
+                    </button>
+                    <input
+                      ref={fromPickerRef}
+                      type='date'
+                      value={filters.fromDate}
+                      onChange={e => {
+                        const iso = e.target.value;
+                        handleFilterChange('fromDate', iso);
+                        try { setFromDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                      }}
+                      className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-1'>
                     To
                   </label>
-                  <Input
-                    type='date'
-                    value={filters.toDate}
-                    onChange={value => handleFilterChange('toDate', value)}
-                    disabled={!filters.betweenDates}
-                  />
+                  <div className='relative'>
+                    <input
+                      type='text'
+                      value={toDateInput}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setToDateInput(v);
+                        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (m) {
+                          const [, dd, mm, yyyy] = m;
+                          handleFilterChange('toDate', `${yyyy}-${mm}-${dd}`);
+                        }
+                      }}
+                      disabled={!filters.betweenDates}
+                      placeholder='dd/MM/yyyy'
+                      className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => {
+                        const el = toPickerRef.current as any;
+                        if (el && typeof el.showPicker === 'function') {
+                          el.showPicker();
+                        } else {
+                          toPickerRef.current?.click();
+                        }
+                      }}
+                      className='absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded'
+                    >
+                      <Calendar className='w-4 h-4 text-gray-500' />
+                    </button>
+                    <input
+                      ref={toPickerRef}
+                      type='date'
+                      value={filters.toDate}
+                      onChange={e => {
+                        const iso = e.target.value;
+                        handleFilterChange('toDate', iso);
+                        try { setToDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                      }}
+                      className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -816,22 +922,18 @@ const DetailedLedger: React.FC = () => {
 
             {/* Filtering guidance removed as requested */}
 
-            {/* Amount Filters */}
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            {/* Amount Filters + Payment Mode */}
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-2'>
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-1'>
                   Credit Amount (Search)
                 </label>
                 <input
-                  type='number'
+                  type='text'
+                  inputMode='decimal'
                   value={filters.creditAmount || ''}
-                  onChange={e => {
-                    const value = e.target.value;
-                    handleFilterChange('creditAmount', value ? parseFloat(value) : 0);
-                  }}
+                  onChange={e => handleFilterChange('creditAmount', e.target.value)}
                   placeholder='Enter credit amount to search...'
-                  min='0'
-                  step='0.01'
                   className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
                 />
               </div>
@@ -841,17 +943,28 @@ const DetailedLedger: React.FC = () => {
                   Debit Amount (Search)
                 </label>
                 <input
-                  type='number'
+                  type='text'
+                  inputMode='decimal'
                   value={filters.debitAmount || ''}
-                  onChange={e => {
-                    const value = e.target.value;
-                    handleFilterChange('debitAmount', value ? parseFloat(value) : 0);
-                  }}
+                  onChange={e => handleFilterChange('debitAmount', e.target.value)}
                   placeholder='Enter debit amount to search...'
-                  min='0'
-                  step='0.01'
                   className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
                 />
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  Payment Mode
+                </label>
+                <select
+                  value={filters.paymentMode || ''}
+                  onChange={e => handleFilterChange('paymentMode', e.target.value)}
+                  className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                >
+                  <option value=''>All</option>
+                  <option value='Cash'>Cash</option>
+                  <option value='Bank Transfer'>Bank Transfer</option>
+                </select>
               </div>
             </div>
 
@@ -981,10 +1094,10 @@ const DetailedLedger: React.FC = () => {
             <table className='w-full text-xs table-fixed'>
               <thead className='sticky top-0 bg-gray-50 z-10'>
                 <tr className='border-b border-gray-200'>
-                  <th className='w-8 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='w-6 px-1 py-1 text-left font-medium text-gray-700'>
                     S.No
                   </th>
-                  <th className='w-14 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
                     Date
                   </th>
                   <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
@@ -1011,11 +1124,12 @@ const DetailedLedger: React.FC = () => {
                   <th className='w-16 px-1 py-1 text-center font-medium text-gray-700'>
                     Purchase Qty
                   </th>
-                  <th className='w-20 px-1 py-1 text-right font-medium text-gray-700'>
-                    Running Balance
+                  
+                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                    Staff
                   </th>
                   <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
-                    Staff
+                    Payment Mode
                   </th>
                   <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                     User
@@ -1023,9 +1137,7 @@ const DetailedLedger: React.FC = () => {
                   <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                     Entry Time
                   </th>
-                  <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
-                    Status
-                  </th>
+                  
                 </tr>
               </thead>
               <tbody>
@@ -1036,9 +1148,9 @@ const DetailedLedger: React.FC = () => {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                     }`}
                   >
-                    <td className='w-8 px-1 py-1 font-medium text-xs'>{index + 1}</td>
-                    <td className='w-14 px-1 py-1 text-xs'>
-                      {format(new Date(entry.date), 'dd-MMM-yy')}
+                    <td className='w-6 px-1 py-1 font-medium text-xs'>{index + 1}</td>
+                    <td className='w-12 px-1 py-1 text-xs'>
+                      {format(new Date(entry.date), 'dd/MM/yyyy')}
                     </td>
                     <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.companyName}>
                       {entry.companyName}
@@ -1071,18 +1183,12 @@ const DetailedLedger: React.FC = () => {
                     <td className='w-16 px-1 py-1 text-center text-xs'>
                       {entry.purchaseQuantity > 0 ? entry.purchaseQuantity.toLocaleString() : '-'}
                     </td>
-                    <td
-                      className={`w-20 px-1 py-1 text-right font-bold text-xs ${
-                        entry.runningBalance >= 0
-                          ? 'text-green-600'
-                          : 'text-red-600'
-                      }`}
-                    >
-                      ₹{Math.abs(entry.runningBalance).toLocaleString()}
-                      {entry.runningBalance >= 0 ? ' CR' : ' DR'}
-                    </td>
-                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>
+                    
+                    <td className='w-20 px-1 py-1 text-xs truncate' title={entry.staff}>
                       {entry.staff}
+                    </td>
+                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode}>
+                      {entry.payment_mode || '-'}
                     </td>
                     <td className='w-16 px-1 py-1 text-xs truncate' title={entry.user}>
                       {entry.user}
@@ -1090,17 +1196,7 @@ const DetailedLedger: React.FC = () => {
                     <td className='w-16 px-1 py-1 text-xs'>
                       {format(new Date(entry.entryTime), 'HH:mm:ss')}
                     </td>
-                    <td className='w-20 px-1 py-1 text-center'>
-                      {entry.approved ? (
-                        <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
-                          Approved
-                        </span>
-                      ) : (
-                        <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800'>
-                          Pending
-                        </span>
-                      )}
-                    </td>
+                    
                   </tr>
                 ))}
               </tbody>

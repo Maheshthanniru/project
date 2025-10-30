@@ -25,7 +25,7 @@ const BalanceSheet: React.FC = () => {
   const [filters, setFilters] = useState<BalanceSheetFilters>({
     companyName: '',
     betweenDates: true,
-    fromDate: '2016-10-31',
+    fromDate: '2025-10-03',
     toDate: format(new Date(), 'yyyy-MM-dd'),
     plYesNo: '',
     bothYesNo: '',
@@ -334,7 +334,7 @@ const BalanceSheet: React.FC = () => {
     setFilters({
       companyName: '',
       betweenDates: true,
-      fromDate: '2016-10-31',
+      fromDate: '2025-10-03',
       toDate: format(new Date(), 'yyyy-MM-dd'),
       plYesNo: '',
       bothYesNo: '',
@@ -380,8 +380,166 @@ const BalanceSheet: React.FC = () => {
   };
 
   const printReport = () => {
-    window.print();
-    toast.success('Print dialog opened');
+    // Use the same logic as printCustomReport but for all accounts
+    const allAccounts = [...balanceSheetData, ...customRows];
+    
+    // Calculate totals
+    const totals = {
+      totalCredit: allAccounts.reduce((sum, acc) => sum + acc.credit, 0),
+      totalDebit: allAccounts.reduce((sum, acc) => sum + acc.debit, 0),
+      balance: allAccounts.reduce((sum, acc) => sum + acc.balance, 0),
+    };
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Balance Sheet Report</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0; 
+              padding: 15px; 
+              background-color: white;
+              font-size: 12px;
+              line-height: 1.2;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 15px; 
+              border-bottom: 2px solid #000;
+              padding-bottom: 10px;
+            }
+            .header h1 { margin: 0; font-size: 18px; font-weight: bold; }
+            .header h2 { margin: 3px 0; font-size: 12px; }
+            .header h3 { margin: 2px 0; font-size: 14px; }
+            .header p { margin: 2px 0; font-size: 11px; }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 10px; 
+              font-size: 11px;
+            }
+            th, td { 
+              border: 1px solid #000; 
+              padding: 4px 6px; 
+              text-align: left; 
+            }
+            th { 
+              background-color: #f0f0f0;
+              font-weight: bold; 
+              color: #000;
+              font-size: 11px;
+            }
+            td { font-size: 11px; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .text-green { color: #000; }
+            .text-red { color: #000; }
+            .totals { 
+              background-color: #f0f0f0;
+              font-weight: bold; 
+              color: #000;
+            }
+            .footer { 
+              margin-top: 15px; 
+              text-align: center; 
+              color: #000; 
+              font-size: 10px; 
+              border-top: 1px solid #000;
+              padding-top: 5px;
+            }
+            @media print {
+              body { margin: 0; padding: 10px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Trial Balance Sheet</h1>
+            <h2>Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}</h2>
+            ${filters.companyName ? `<h3>Company: ${filters.companyName}</h3>` : ''}
+            <p>Period: ${format(parseISO(filters.fromDate), 'dd/MM/yyyy')} to ${format(parseISO(filters.toDate), 'dd/MM/yyyy')}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Account Name</th>
+                <th class="text-right">Credit</th>
+                <th class="text-right">Debit</th>
+                <th class="text-right">Balance</th>
+                <th class="text-center">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allAccounts.map(acc => `
+                <tr>
+                  <td>${acc.accountName}</td>
+                  <td class="text-right text-green">${acc.credit > 0 ? `₹${acc.credit.toLocaleString()}` : '-'}</td>
+                  <td class="text-right text-red">${acc.debit > 0 ? `₹${acc.debit.toLocaleString()}` : '-'}</td>
+                  <td class="text-right">${acc.balance > 0 ? `₹${acc.balance.toLocaleString()}` : '-'}</td>
+                  <td class="text-center">${acc.result}</td>
+                </tr>
+              `).join('')}
+              <tr class="totals">
+                <td><strong>TOTALS</strong></td>
+                <td class="text-right text-green"><strong>₹${totals.totalCredit.toLocaleString()}</strong></td>
+                <td class="text-right text-red"><strong>₹${totals.totalDebit.toLocaleString()}</strong></td>
+                <td class="text-right"><strong>₹${totals.balance.toLocaleString()}</strong></td>
+                <td class="text-center"><strong>${totals.balance >= 0 ? 'CREDIT' : 'DEBIT'}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>Generated by Thirumala Group Business Management System</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Open print preview window
+    const previewWindow = window.open('', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    if (previewWindow) {
+      previewWindow.document.write(printContent);
+      previewWindow.document.close();
+      previewWindow.focus();
+      
+      // Add print button to the preview window
+      const printButton = `
+        <div style="position: fixed; top: 10px; right: 10px; z-index: 1000;">
+          <button onclick="window.print()" style="
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          ">🖨️ Print Report</button>
+          <button onclick="window.close()" style="
+            background-color: #6b7280;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-left: 10px;
+          ">❌ Close</button>
+        </div>
+      `;
+      
+      // Insert the print button into the document
+      previewWindow.document.body.insertAdjacentHTML('afterbegin', printButton);
+    }
+    
+    toast.success('Balance Sheet preview opened! Use the Print button in the preview window to print.');
   };
 
 
@@ -489,10 +647,10 @@ const BalanceSheet: React.FC = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Balance Sheet & Profit & Loss Report</h1>
+            <h1>Trial Balance Sheet & Profit & Loss Report</h1>
             <h2>Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}</h2>
             ${filters.companyName ? `<h3>Company: ${filters.companyName}</h3>` : ''}
-            <p>Period: ${filters.fromDate} to ${filters.toDate}</p>
+            <p>Period: ${format(parseISO(filters.fromDate), 'dd/MM/yyyy')} to ${format(parseISO(filters.toDate), 'dd/MM/yyyy')}</p>
           </div>
 
           <div class="section">
@@ -651,22 +809,22 @@ const BalanceSheet: React.FC = () => {
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               From Date
             </label>
-            <input
+            <Input
               type='date'
               value={filters.fromDate}
-              onChange={e => handleFilterChange('fromDate', e.target.value)}
-              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+              onChange={value => handleFilterChange('fromDate', value)}
+              className='w-full'
             />
           </div>
           <div className='flex-1'>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               To Date
             </label>
-            <input
+            <Input
               type='date'
               value={filters.toDate}
-              onChange={e => handleFilterChange('toDate', e.target.value)}
-              className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+              onChange={value => handleFilterChange('toDate', value)}
+              className='w-full'
             />
           </div>
           <div className='flex flex-row gap-2 mt-2 md:mt-0'>

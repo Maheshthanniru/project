@@ -212,3 +212,5 @@ onClick={() => {
 The daily report now provides a much cleaner and simpler date selection experience. When users click the calendar icon, they get the familiar native browser date picker directly, without any custom dropdown appearing below the input field. This provides a more intuitive and consistent user experience while maintaining all the functionality and format requirements.
 
 
+
+

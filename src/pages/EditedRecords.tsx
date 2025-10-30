@@ -72,7 +72,6 @@ const getChangedFields = (oldObj: CashBookPartial, newObj: CashBookPartial) => {
 
 const EditedRecords = () => {
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
-  const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
@@ -118,29 +117,19 @@ const EditedRecords = () => {
       console.log('🔄 Loading Edited Records data...');
       
       // Simple, clean data loading
-      const [log, users, deleted] = await Promise.all([
+      const [log, users] = await Promise.all([
         supabaseDB.getEditAuditLog(),
         supabaseDB.getUsers(),
-        supabaseDB.getDeletedCashBook(),
       ]);
       
       setAuditLog((log || []) as AuditLogEntry[]);
       setUsers((users || []) as User[]);
       
       // No cleaning needed - deleted records come clean from deleted_cash_book table
-      setDeletedRecords((deleted || []) as any[]);
-      
       console.log(`✅ Loaded Edited Records data:`, {
         auditLog: (log || []).length,
         users: (users || []).length,
-        deletedRecords: (deleted || []).length
       });
-      
-      // Debug deleted records data
-      if (deleted && deleted.length > 0) {
-        console.log('📋 Sample deleted record from getDeletedCashBook:', deleted[0]);
-        console.log('📋 All deleted records keys:', deleted.map(rec => Object.keys(rec)));
-      }
       
       // Debug: Log the actual data structure
       if (log && log.length > 0) {
@@ -148,33 +137,23 @@ const EditedRecords = () => {
         console.log('📝 Audit log record keys:', Object.keys(log[0]));
       }
       
-      // Show consolidated message instead of multiple toasts
-      const totalRecords = (log || []).length + (deleted || []).length;
-      if (totalRecords > 0) {
-        const editCount = (log || []).length;
-        const deletedCount = (deleted || []).length;
-        
-        if (editCount > 0 && deletedCount > 0) {
-          toast.success(`Loaded ${editCount} edit records and ${deletedCount} deleted records`);
-        } else if (editCount > 0) {
+      // Show consolidated message
+      const editCount = (log || []).length;
+      if (editCount > 0) {
           const isShowingRecords = (log || []).some(rec => rec.action === 'SHOWING_RECORDS' || rec.action === 'SHOWING_RECENT_ENTRIES');
           if (isShowingRecords) {
             toast.info(`Showing ${editCount} recent entries from cash_book (no edit history available yet)`);
           } else {
             toast.success(`Loaded ${editCount} edit records`);
           }
-        } else if (deletedCount > 0) {
-          toast.success(`Loaded ${deletedCount} deleted records`);
-        }
       } else {
-        toast.info('No edit or deleted records found. This is normal if no records have been modified yet.');
+        toast.info('No edit records found. This is normal if no records have been modified yet.');
       }
       
     } catch (error) {
       console.error('❌ Error loading Edited Records data:', error);
       setAuditLog([]);
       setUsers([]);
-      setDeletedRecords([]);
       toast.error('Failed to load Edited Records data. Please try again.');
     } finally {
       setLoading(false);
@@ -246,37 +225,6 @@ const EditedRecords = () => {
     return filtered;
   }, [auditLog, selectedDate, userFilter]);
 
-  // Deleted records log (from deleted_cash_book) - show ALL deleted records
-  const deletedLog = useMemo(() => {
-    console.log('🔍 Processing deleted records:', deletedRecords.length);
-    
-    const filtered = deletedRecords.filter(log => {
-      // Consider as deleted if new_values is null and old_values is present
-      const isDeleted = log.new_values == null && log.old_values != null;
-      if (!isDeleted) {
-        console.log('🔍 Filtered out record (not deleted):', {
-          id: log.id,
-          new_values: log.new_values,
-          old_values: log.old_values ? 'present' : 'null'
-        });
-      }
-      return isDeleted;
-    });
-    
-    console.log('🔍 Filtered deleted records:', filtered.length);
-    
-    // Return ALL deleted records, sorted by deleted_at or created_at (most recent first)
-    const sorted = filtered
-      .sort((a, b) => {
-        const dateA = new Date(a.deleted_at || a.created_at || 0);
-        const dateB = new Date(b.deleted_at || b.created_at || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      // Removed .slice(0, 10) to show ALL deleted records from entire database
-    
-    console.log('🔍 Final deleted records count:', sorted.length);
-    return sorted;
-  }, [deletedRecords]);
 
   // Pagination
   const totalPages = Math.ceil(filteredLog.length / PAGE_SIZE);
@@ -386,11 +334,14 @@ const EditedRecords = () => {
 
   // Check if we're showing recent entries instead of actual edits
   const isShowingRecentEntries = filteredLog.some(rec => rec.action === 'SHOWING_RECENT_ENTRIES');
+  const deletedLog = useMemo(() => {
+    return auditLog.filter(log => log.new_values == null && log.old_values != null);
+  }, [auditLog]);
   
   return (
     <Card
-      title={isShowingRecentEntries ? 'Recent Records (No Edit History Available)' : 'Edited Records (Audit Log)'}
-      subtitle={isShowingRecentEntries ? `Showing ${filteredLog.length} recent entries` : `Showing ${filteredLog.length} edits`}
+      title={isShowingRecentEntries ? 'Recent Records (No Edit History Available)' : 'Edited & Deleted Records'}
+      subtitle={isShowingRecentEntries ? `Showing ${filteredLog.length} recent entries` : `Edits: ${filteredLog.length} | Deleted: ${deletedLog.length}`}
     >
       <div className='flex flex-wrap gap-3 mb-4 items-end'>
         <Select
@@ -571,107 +522,53 @@ const EditedRecords = () => {
             </div>
           )}
           </div>
+          {/* Deleted Records */}
+          <div className='mt-6'>
+            <h3 className='text-sm font-semibold mb-2'>Deleted Records</h3>
+            {deletedLog.length === 0 ? (
+              <div className='text-gray-500 text-xs'>No deleted records found.</div>
+            ) : (
+              <div className='overflow-x-auto'>
+                <table className='w-full text-xs table-fixed border border-gray-200'>
+                  <thead className='sticky top-0 bg-gray-50 z-10'>
+                    <tr className='border-b border-gray-200'>
+                      <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>S.No</th>
+                      {FIELDS.map(f => (
+                        <th key={'del-h-'+f.key} className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                          {f.label}
+                        </th>
+                      ))}
+                      <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>Deleted By</th>
+                      <th className='w-24 px-1 py-1 text-left font-medium text-gray-700'>Deleted At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deletedLog.map((log, idx) => {
+                      const oldObj = log.old_values ? JSON.parse(log.old_values) : {};
+                      return (
+                        <tr key={'del-r-'+log.id} className='border-b border-gray-100 hover:bg-red-50'>
+                          <td className='w-12 px-1 py-1 text-center text-xs'>{idx + 1}</td>
+                          {FIELDS.map(f => (
+                            <td key={'del-c-'+f.key} className='w-20 px-1 py-1 text-xs truncate' title={getFieldDisplay(f.key, oldObj[f.key])}>
+                              {getFieldDisplay(f.key, oldObj[f.key])}
+                            </td>
+                          ))}
+                          <td className='w-20 px-1 py-1 text-xs truncate'>{userMap[log.edited_by] || log.edited_by}</td>
+                          <td className='w-24 px-1 py-1 text-xs'>
+                            {log.edited_at && !isNaN(new Date(log.edited_at).getTime()) ? format(new Date(log.edited_at), 'dd/MM/yyyy HH:mm') : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
         </>
       )}
 
-      {/* Deleted Records Table */}
-      <div className='mt-10 border-t-2 border-red-200 pt-6'>
-        <div className='flex items-center justify-between mb-4'>
-          <div className='flex items-center gap-3'>
-            <h3 className='text-xl font-bold text-red-700 flex items-center gap-2'>
-              🗑️ Deleted Records
-            </h3>
-            <div className='bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold'>
-              All deleted records ({deletedLog.length} total)
-            </div>
-          </div>
-          <div className='flex gap-2'>
-            <Button
-              variant='secondary'
-              size='sm'
-              onClick={async () => {
-                console.log('🔍 Manual debug triggered from Edited Records...');
-                await supabaseDB.debugDeletedRecords();
-                toast.success('Debug info logged to console');
-              }}
-              className='flex items-center gap-2'
-            >
-              <AlertTriangle className='w-4 h-4' />
-              Debug
-            </Button>
-            <Button
-              variant='secondary'
-              size='sm'
-              onClick={loadData}
-              disabled={loading}
-              className='flex items-center gap-2'
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-        
-        {deletedLog.length === 0 ? (
-          <div className='text-center py-12 bg-red-50 rounded-lg border-2 border-dashed border-red-200'>
-            <div className='text-4xl mb-4'>🗑️</div>
-            <div className='text-lg font-semibold text-red-700 mb-2'>No deleted records found</div>
-            <div className='text-sm text-red-600 mb-4'>
-              This is normal if no records have been deleted yet.
-            </div>
-            <div className='text-xs text-gray-500'>
-              Deleted entries from Edit Entry will appear here when you delete records.
-            </div>
-          </div>
-        ) : (
-          <div className='overflow-x-auto border border-red-200 rounded-lg'>
-            <table className='w-full text-xs table-fixed border border-gray-200'>
-              <thead className='sticky top-0 bg-red-50 z-10'>
-                <tr className='border-b border-red-200'>
-                  <th className='w-12 px-1 py-1 text-left font-medium text-red-800'>
-                    S.No
-                  </th>
-                  {FIELDS.map(f => (
-                    <th key={f.key} className='w-20 px-1 py-1 text-left font-medium text-red-800'>
-                      {f.label}
-                    </th>
-                  ))}
-                  <th className='w-20 px-1 py-1 text-left font-medium text-red-800'>
-                    Deleted By
-                  </th>
-                  <th className='w-20 px-1 py-1 text-left font-medium text-red-800'>
-                    Deleted At
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {deletedLog.map((rec, idx) => (
-                  <tr
-                    key={rec.id}
-                    className='border-b border-red-100 hover:bg-red-50 transition-colors'
-                  >
-                    <td className='w-12 px-1 py-1 text-center font-medium text-xs'>{idx + 1}</td>
-                    {FIELDS.map(f => (
-                      <td key={f.key} className='w-20 px-1 py-1 text-xs truncate' title={getFieldDisplay(f.key, rec[f.key])}>
-                        {getFieldDisplay(f.key, rec[f.key])}
-                      </td>
-                    ))}
-                    <td className='w-20 px-1 py-1 font-medium text-red-700 text-xs truncate' title={rec.deleted_by}>
-                      {rec.deleted_by}
-                    </td>
-                    <td className='w-20 px-1 py-1 text-gray-600 text-xs'>
-                      {rec.deleted_at &&
-                      !isNaN(new Date(rec.deleted_at).getTime())
-                        ? format(new Date(rec.deleted_at), 'dd/MM/yyyy HH:mm')
-                        : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </Card>
   );
 };

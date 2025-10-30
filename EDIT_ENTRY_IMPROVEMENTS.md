@@ -244,3 +244,5 @@ className={`w-20 px-1 py-1 font-medium text-xs truncate ${
 The Edit Entry table now provides a much cleaner and more intuitive interface with better visual status indication and improved column organization, making it easier for users to identify pending entries and navigate the data effectively.
 
 
+
+

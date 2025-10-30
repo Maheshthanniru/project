@@ -134,3 +134,5 @@ After the fix:
 
 The fix ensures that deleted records are counted correctly regardless of the database setup, providing a robust solution that works in all scenarios.
 
+
+

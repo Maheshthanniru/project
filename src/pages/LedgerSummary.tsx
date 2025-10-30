@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -7,6 +7,7 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
+import { Calendar } from 'lucide-react';
 
 interface LedgerSummaryFilters {
   betweenDates: boolean;
@@ -84,6 +85,19 @@ const LedgerSummary: React.FC = () => {
     { value: string; label: string }[]
   >([]);
 
+  // Visible dd/MM/yyyy inputs + hidden pickers
+  const [fromDateInput, setFromDateInput] = useState('');
+  const [toDateInput, setToDateInput] = useState('');
+  const fromPickerRef = useRef<HTMLInputElement>(null);
+  const toPickerRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      setFromDateInput(filters.fromDate ? format(new Date(filters.fromDate), 'dd/MM/yyyy') : '');
+      setToDateInput(filters.toDate ? format(new Date(filters.toDate), 'dd/MM/yyyy') : '');
+    } catch {}
+  }, [filters.fromDate, filters.toDate]);
+
   // Summary totals
   const [grandTotals, setGrandTotals] = useState({
     totalCredit: 0,
@@ -118,7 +132,7 @@ const LedgerSummary: React.FC = () => {
   const loadDropdownData = async () => {
     try {
       // Load companies
-      const companies = await supabaseDB.getCompanies();
+      const companies = await supabaseDB.getCompaniesWithData();
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name,
@@ -545,6 +559,22 @@ const LedgerSummary: React.FC = () => {
           ? 'Main Account Summary'
           : 'Sub Account Summary';
 
+    // Calculate totals for the current data
+    const totals = currentData.reduce((acc, item) => {
+      const credit = activeTab === 'company' ? (item as CompanySummary).totalCredit : 
+                    (item as AccountSummary | SubAccountSummary).credit;
+      const debit = activeTab === 'company' ? (item as CompanySummary).totalDebit : 
+                   (item as AccountSummary | SubAccountSummary).debit;
+      const balance = item.balance;
+      
+      acc.totalCredit += credit;
+      acc.totalDebit += debit;
+      acc.totalBalance += balance;
+      acc.recordCount += 1;
+      
+      return acc;
+    }, { totalCredit: 0, totalDebit: 0, totalBalance: 0, recordCount: 0 });
+
     const printContent = `
       <!DOCTYPE html>
       <html>
@@ -553,8 +583,21 @@ const LedgerSummary: React.FC = () => {
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; }
             .header { text-align: center; margin-bottom: 30px; }
-            .header h1 { margin: 0; color: #1f2937; }
-            .header p { margin: 5px 0; color: #6b7280; }
+            .header h1 { margin: 0; color: #1f2937; font-size: 28px; font-weight: bold; }
+            .header h2 { margin: 10px 0; color: #374151; font-size: 20px; font-weight: 600; }
+            .header .company-name { margin: 5px 0; color: #1f2937; font-size: 18px; font-weight: bold; }
+            .header .date-time { margin: 10px 0; color: #6b7280; font-size: 16px; font-weight: 500; }
+            .header .period { margin: 5px 0; color: #374151; font-size: 14px; }
+            .header .from-date { font-weight: bold; font-size: 16px; color: #1f2937; }
+            .totals-section { margin: 20px 0; padding: 15px; background-color: #f8fafc; border: 2px solid #e5e7eb; border-radius: 8px; }
+            .totals-title { font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 10px; text-align: center; }
+            .totals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+            .total-item { text-align: center; padding: 10px; background-color: white; border-radius: 6px; border: 1px solid #d1d5db; }
+            .total-label { font-size: 14px; color: #6b7280; margin-bottom: 5px; }
+            .total-value { font-size: 18px; font-weight: bold; color: #1f2937; }
+            .total-value.credit { color: #059669; }
+            .total-value.debit { color: #dc2626; }
+            .total-value.balance { color: #1f2937; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
             th { background-color: #f9fafb; font-weight: bold; }
@@ -571,10 +614,32 @@ const LedgerSummary: React.FC = () => {
         <body>
           <div class="header">
             <h1>Thirumala Group</h1>
-            <p>Ledger Summary Report</p>
-            <p>${title}</p>
-            <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-            ${filters.betweenDates ? `<p>Period: ${filters.fromDate} to ${filters.toDate}</p>` : ''}
+            <h2>Ledger Summary Report</h2>
+            <div class="company-name">${filters.companyName || 'All Companies'}</div>
+            <div class="date-time">Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</div>
+            ${filters.betweenDates ? `<div class="period">Period: <span class="from-date">${filters.fromDate}</span> to ${filters.toDate}</div>` : ''}
+          </div>
+
+          <div class="totals-section">
+            <div class="totals-title">Summary Totals</div>
+            <div class="totals-grid">
+              <div class="total-item">
+                <div class="total-label">Total Credit</div>
+                <div class="total-value credit">₹${totals.totalCredit.toLocaleString()}</div>
+              </div>
+              <div class="total-item">
+                <div class="total-label">Total Debit</div>
+                <div class="total-value debit">₹${totals.totalDebit.toLocaleString()}</div>
+              </div>
+              <div class="total-item">
+                <div class="total-label">Net Balance</div>
+                <div class="total-value balance">₹${Math.abs(totals.totalBalance).toLocaleString()} ${totals.totalBalance >= 0 ? 'CR' : 'DR'}</div>
+              </div>
+              <div class="total-item">
+                <div class="total-label">Total Records</div>
+                <div class="total-value">${totals.recordCount}</div>
+              </div>
+            </div>
           </div>
 
           <table>
@@ -941,23 +1006,91 @@ const LedgerSummary: React.FC = () => {
                 <label className='block text-sm font-medium text-gray-700 mb-1'>
                   From
                 </label>
-                <Input
-                  type='date'
-                  value={filters.fromDate}
-                  onChange={value => handleFilterChange('fromDate', value)}
-                  disabled={!filters.betweenDates}
-                />
+                <div className='relative'>
+                  <input
+                    type='text'
+                    value={fromDateInput}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setFromDateInput(v);
+                      const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                      if (m) {
+                        const [, dd, mm, yyyy] = m;
+                        handleFilterChange('fromDate', `${yyyy}-${mm}-${dd}`);
+                      }
+                    }}
+                    disabled={!filters.betweenDates}
+                    placeholder='dd/MM/yyyy'
+                    className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                  />
+                  <button
+                    type='button'
+                    onClick={() => {
+                      const el = fromPickerRef.current as any;
+                      if (el && typeof el.showPicker === 'function') el.showPicker();
+                      else fromPickerRef.current?.click();
+                    }}
+                    className='absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded'
+                  >
+                    <Calendar className='w-4 h-4 text-gray-500' />
+                  </button>
+                  <input
+                    ref={fromPickerRef}
+                    type='date'
+                    value={filters.fromDate}
+                    onChange={e => {
+                      const iso = e.target.value;
+                      handleFilterChange('fromDate', iso);
+                      try { setFromDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                    }}
+                    className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                  />
+                </div>
               </div>
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-1'>
                   To
                 </label>
-                <Input
-                  type='date'
-                  value={filters.toDate}
-                  onChange={value => handleFilterChange('toDate', value)}
-                  disabled={!filters.betweenDates}
-                />
+                <div className='relative'>
+                  <input
+                    type='text'
+                    value={toDateInput}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setToDateInput(v);
+                      const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                      if (m) {
+                        const [, dd, mm, yyyy] = m;
+                        handleFilterChange('toDate', `${yyyy}-${mm}-${dd}`);
+                      }
+                    }}
+                    disabled={!filters.betweenDates}
+                    placeholder='dd/MM/yyyy'
+                    className='w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                  />
+                  <button
+                    type='button'
+                    onClick={() => {
+                      const el = toPickerRef.current as any;
+                      if (el && typeof el.showPicker === 'function') el.showPicker();
+                      else toPickerRef.current?.click();
+                    }}
+                    className='absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded'
+                  >
+                    <Calendar className='w-4 h-4 text-gray-500' />
+                  </button>
+                  <input
+                    ref={toPickerRef}
+                    type='date'
+                    value={filters.toDate}
+                    onChange={e => {
+                      const iso = e.target.value;
+                      handleFilterChange('toDate', iso);
+                      try { setToDateInput(format(new Date(iso), 'dd/MM/yyyy')); } catch {}
+                    }}
+                    className='absolute left-0 top-0 w-0 h-0 opacity-0'
+                  />
+                </div>
               </div>
             </div>
           </div>

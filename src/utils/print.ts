@@ -466,9 +466,9 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     
     .print-header {
       text-align: center;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
     }
     
     .company-name {
@@ -488,13 +488,13 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
       font-size: 20px;
       font-weight: bold;
       color: #333;
-      margin: 10px 0 0 0;
+      margin: 6px 0 0 0;
     }
     
     .print-subtitle {
       font-size: 14px;
-      color: #666;
-      margin: 5px 0 0 0;
+      color: #333;
+      margin: 2px 0 0 0;
     }
     
     .print-header-text {
@@ -538,11 +538,12 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     }
     
     .print-summary {
-      margin: 20px 0;
-      padding: 15px;
-      background-color: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
+      margin: 6px 0 8px 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      width: 100%;
+      max-width: 520px; /* keep labels and values close, avoid huge center gap */
     }
     
     .print-summary h3 {
@@ -552,15 +553,38 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     }
     
     .print-summary-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 5px 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      margin: 2px 0;
       font-size: 11px;
+      width: 100%;
+      column-gap: 16px;
+    }
+
+    /* Boxed tables for summaries */
+    .boxed-table {
+      width: 100%;
+      max-width: 620px;
+      border-collapse: collapse;
+      margin: 6px 0 10px 0;
+      font-size: 11px;
+    }
+    .boxed-table th {
+      background-color: #f3f4f6;
+      text-align: left;
+      padding: 6px 8px;
+      border: 1px solid #d1d5db;
+      font-weight: 600;
+    }
+    .boxed-table td {
+      padding: 6px 8px;
+      border: 1px solid #d1d5db;
     }
     
     .print-summary-label {
-      font-weight: bold;
-      color: #555;
+      font-weight: 600;
+      color: #222;
     }
     
     .print-summary-value {
@@ -620,14 +644,13 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
   const columns = [
     { key: 'sno', label: 'S.No', width: '60px' },
     { key: 'date', label: 'Date', width: '100px' },
-    { key: 'companyName', label: 'Company', width: '150px' },
+    { key: 'companyName', label: 'Company', width: '180px' },
     { key: 'accountName', label: 'Account', width: '150px' },
     { key: 'subAccount', label: 'Sub Account', width: '150px' },
     { key: 'particulars', label: 'Particulars', width: '200px' },
     { key: 'credit', label: 'Credit', width: '100px' },
     { key: 'debit', label: 'Debit', width: '100px' },
     { key: 'staff', label: 'Staff', width: '100px' },
-    { key: 'approved', label: 'Status', width: '80px' },
   ];
 
   const tableRows = data
@@ -681,26 +704,91 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
 
     summaryHTML = `
       <div class="print-summary">
-        <h3>Daily Report Summary</h3>
-        <div class="print-summary-row">
-          <span class="print-summary-label">Total Credit:</span>
-          <span class="print-summary-value text-green">₹${creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div class="print-summary-row">
-          <span class="print-summary-label">Total Debit:</span>
-          <span class="print-summary-value text-red">₹${debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div class="print-summary-row">
-          <span class="print-summary-label">Net Balance:</span>
-          <span class="print-summary-value ${balance >= 0 ? 'text-green' : 'text-red'}">₹${Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${balance >= 0 ? 'CR' : 'DR'}</span>
-        </div>
-        <div class="print-summary-row">
-          <span class="print-summary-label">Total Records:</span>
-          <span class="print-summary-value">${data.length}</span>
-        </div>
+        <table class="boxed-table">
+          <thead>
+            <tr><th colspan="2">Daily Report Summary</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Total Credit</td>
+              <td class="text-green">₹${creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>Total Debit</td>
+              <td class="text-red">₹${debitTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>Net Balance</td>
+              <td class="${balance >= 0 ? 'text-green' : 'text-red'}">₹${Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${balance >= 0 ? 'CR' : 'DR'}</td>
+            </tr>
+            <tr>
+              <td>Total Records</td>
+              <td>${data.length}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     `;
   }
+
+  // Company-wise closing balance for the filtered data
+  let companySummaryHTML = '';
+  if (data.length > 0) {
+    const companyTotals: Record<string, { credit: number; debit: number }> = {};
+    data.forEach(row => {
+      const name = String(row.companyName || row.company_name || '').trim();
+      if (!name) return;
+      if (!companyTotals[name]) companyTotals[name] = { credit: 0, debit: 0 };
+      companyTotals[name].credit += parseFloat(row.credit) || 0;
+      companyTotals[name].debit += parseFloat(row.debit) || 0;
+    });
+
+    const rows = Object.entries(companyTotals)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([company, totals]) => {
+        const closing = totals.credit - totals.debit;
+        const closingText = `₹${Math.abs(closing).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${closing >= 0 ? 'CR' : 'DR'}`;
+        return `
+          <div class="print-summary-row">
+            <span class="print-summary-label">${company}</span>
+            <span class="print-summary-value ${closing >= 0 ? 'text-green' : 'text-red'}">${closingText}</span>
+          </div>
+        `;
+      })
+      .join('');
+
+    if (rows) {
+      companySummaryHTML = `
+        <div class="print-summary">
+          <table class="boxed-table">
+            <thead>
+              <tr><th colspan="2">Company-wise Closing Balance</th></tr>
+              <tr>
+                <th>Company</th>
+                <th>Closing Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(companyTotals)
+                .sort(([a],[b])=>a.localeCompare(b))
+                .map(([company, totals])=>{
+                  const closing = totals.credit - totals.debit;
+                  const closingText = `₹${Math.abs(closing).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${closing >= 0 ? 'CR' : 'DR'}`;
+                  return `<tr><td><strong>${company}</strong></td><td class="${closing>=0?'text-green':'text-red'}">${closingText}</td></tr>`;
+                }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  }
+
+  // Render subtitle with bold company name when present
+  const subtitleHTML = subtitle
+    ? (subtitle.startsWith('Company:')
+        ? `Company: <span class="text-bold">${subtitle.replace('Company:', '').trim()}</span>`
+        : `<span class="text-bold">${subtitle}</span>`)
+    : '';
 
   // Complete HTML with basic Thirumala Group branding
   const html = `
@@ -718,12 +806,13 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
           <h1 class="company-name">Thirumala Group</h1>
           <p class="company-subtitle">Business Management System</p>
           <h2 class="print-title">${title}</h2>
-          ${subtitle ? `<p class="print-subtitle">${subtitle}</p>` : ''}
+          ${subtitleHTML ? `<p class="print-subtitle">${subtitleHTML}</p>` : ''}
           <p class="print-header-text">${headerText}</p>
         </div>
       ` : ''}
       
       ${summaryHTML}
+      ${companySummaryHTML}
       
       <table class="print-table">
         <thead>

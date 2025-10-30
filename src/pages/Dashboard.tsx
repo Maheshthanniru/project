@@ -6,7 +6,7 @@ import Select from '../components/UI/Select';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useDashboardStats, useRecentEntries, useCompanyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
+import { useDashboardStats, useCompanyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
 import toast from 'react-hot-toast';
 import {
   TrendingUp,
@@ -17,7 +17,6 @@ import {
   Building,
   Users,
   RefreshCw,
-  Trash2,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -29,14 +28,13 @@ const Dashboard: React.FC = () => {
 
   // React Query hooks for data fetching
   const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
-  const { data: recentEntries, isLoading: recentLoading, isFetching: recentFetching } = useRecentEntries();
   const { data: companyBalances, isLoading: companyLoading, isFetching: companyFetching } = useCompanyBalances();
-  const { companies, accounts, subAccounts, users, pendingApprovals, isLoading: dropdownLoading } = useDropdownData();
+  const { companies, accounts, subAccounts, users, pendingApprovals, uniqueSubAccountsCount, activeOperatorCount, isLoading: dropdownLoading } = useDropdownData();
   const { invalidateAll, invalidateStats, invalidateRecentEntries } = useInvalidateDashboard();
 
   // Combined loading states
-  const loading = statsLoading || recentLoading || companyLoading || dropdownLoading;
-  const autoUpdating = statsFetching || recentFetching || companyFetching;
+  const loading = statsLoading || companyLoading || dropdownLoading;
+  const autoUpdating = statsFetching || companyFetching;
 
   // Listen for storage events to refresh when new entries are created
   useEffect(() => {
@@ -278,23 +276,6 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
 
-        <Card className='bg-gradient-to-r from-red-500 to-red-600 text-white p-3'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <p className='text-red-100 text-xs font-medium'>Deleted Records</p>
-              <p className='text-lg font-bold'>
-                {statsLoading ? (
-                  <div className='animate-pulse'>Loading...</div>
-                ) : stats?.deletedRecords !== undefined ? (
-                  stats.deletedRecords.toLocaleString()
-                ) : (
-                  <span className='text-yellow-200'>Error loading</span>
-                )}
-              </p>
-            </div>
-            <Trash2 className='w-5 h-5 text-red-200' />
-          </div>
-        </Card>
       </div>
 
       {/* Online vs Offline Transaction Stats */}
@@ -332,7 +313,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-purple-800 text-xs'>Sub Accounts</p>
               <p className='text-lg font-bold text-purple-900'>
-                {subAccounts?.data?.length || 0}
+                {uniqueSubAccountsCount?.data || 0}
               </p>
             </div>
           </div>
@@ -344,7 +325,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-amber-800 text-xs'>Active Users</p>
               <p className='text-lg font-bold text-amber-900'>
-                {users?.data?.filter(u => u.is_active)?.length || 0}
+                {activeOperatorCount?.data || 0}
               </p>
             </div>
           </div>
@@ -451,109 +432,6 @@ const Dashboard: React.FC = () => {
         )}
       </Card>
 
-      {/* Recent Transactions */}
-      <Card
-        title='Recent Transactions'
-        subtitle='Latest entries from your cash book'
-      >
-        {loading ? (
-          <div className='text-center py-8'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto'></div>
-            <p className='mt-2 text-gray-600'>Loading transactions...</p>
-          </div>
-        ) : !recentEntries || recentEntries.length === 0 ? (
-          <div className='text-center py-8 text-gray-500'>
-            No transactions found.
-          </div>
-        ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-sm'>
-              <thead className='bg-gray-50 border-b border-gray-200'>
-                <tr>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    S.No
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Date
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Company
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Account
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Sub Account
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Particulars
-                  </th>
-                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
-                    Credit
-                  </th>
-                  <th className='px-3 py-2 text-right font-medium text-gray-700'>
-                    Debit
-                  </th>
-                  <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Staff
-                  </th>
-                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentEntries?.map((entry, index) => (
-                  <tr
-                    key={entry.id}
-                    className={`border-b hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
-                    }`}
-                  >
-                    <td className='px-3 py-2 font-medium'>{index + 1}</td>
-                    <td className='px-3 py-2'>
-                      {format(new Date(entry.c_date), 'dd-MMM-yy')}
-                    </td>
-                    <td className='px-3 py-2 font-medium text-blue-600'>
-                      {entry.company_name}
-                    </td>
-                    <td className='px-3 py-2'>{entry.acc_name}</td>
-                    <td className='px-3 py-2'>{entry.sub_acc_name || '-'}</td>
-                    <td
-                      className='px-3 py-2 max-w-xs truncate'
-                      title={entry.particulars}
-                    >
-                      {entry.particulars}
-                    </td>
-                    <td className='px-3 py-2 text-right font-medium text-green-600'>
-                      {entry.credit > 0
-                        ? `₹${entry.credit.toLocaleString()}`
-                        : '-'}
-                    </td>
-                    <td className='px-3 py-2 text-right font-medium text-red-600'>
-                      {entry.debit > 0
-                        ? `₹${entry.debit.toLocaleString()}`
-                        : '-'}
-                    </td>
-                    <td className='px-3 py-2'>{entry.staff}</td>
-                    <td className='px-3 py-2 text-center'>
-                      {entry.approved ? (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                          Approved
-                        </span>
-                      ) : (
-                        <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                          Pending
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
     </div>
   );
 };

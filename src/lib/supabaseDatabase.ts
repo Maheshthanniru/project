@@ -172,6 +172,100 @@ class SupabaseDatabase {
     }
   }
 
+  // Get companies that have data in cash_book table
+  async getCompaniesWithData(): Promise<Company[]> {
+    try {
+      console.log('🔄 Fetching companies with data from cash_book...');
+      
+      // Get unique company names from cash_book table
+      const { data: cashBookData, error: cashBookError } = await supabase
+        .from('cash_book')
+        .select('company_name')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '')
+        .not('company_name', 'eq', 'null');
+
+      if (cashBookError) {
+        console.error('❌ Error fetching companies from cash_book:', cashBookError);
+        return [];
+      }
+
+      // Get unique company names
+      const uniqueCompanyNames = [...new Set(cashBookData.map(entry => entry.company_name).filter(Boolean))];
+      console.log('📊 Found companies with data:', uniqueCompanyNames.length, uniqueCompanyNames);
+
+      if (uniqueCompanyNames.length === 0) {
+        console.log('⚠️ No companies found with data in cash_book');
+        return [];
+      }
+
+      // Get company details from companies table for companies that have data
+      const { data: companiesData, error: companiesError } = await supabase
+        .from('companies')
+        .select('*')
+        .in('company_name', uniqueCompanyNames)
+        .order('company_name');
+
+      if (companiesError) {
+        console.error('❌ Error fetching company details:', companiesError);
+        return [];
+      }
+
+      console.log('✅ Companies with data fetched:', companiesData?.length || 0);
+      return companiesData || [];
+    } catch (error) {
+      console.error('❌ Error in getCompaniesWithData:', error);
+      return [];
+    }
+  }
+
+  // Delete specific empty companies
+  async deleteEmptyCompanies(companyNames: string[]): Promise<{ success: boolean; deleted: string[]; error?: string }> {
+    try {
+      console.log('🗑️ Deleting empty companies:', companyNames);
+      
+      // First verify these companies have no data in cash_book
+      for (const companyName of companyNames) {
+        const { data: cashBookData, error: cashBookError } = await supabase
+          .from('cash_book')
+          .select('id')
+          .eq('company_name', companyName)
+          .limit(1);
+
+        if (cashBookError) {
+          console.error(`❌ Error checking cash_book for ${companyName}:`, cashBookError);
+          continue;
+        }
+
+        if (cashBookData && cashBookData.length > 0) {
+          console.log(`⚠️ Warning: ${companyName} has data in cash_book. Skipping deletion.`);
+          continue;
+        }
+      }
+
+      // Delete companies from companies table
+      const { data: deletedCompanies, error: deleteError } = await supabase
+        .from('companies')
+        .delete()
+        .in('company_name', companyNames)
+        .select();
+
+      if (deleteError) {
+        console.error('❌ Error deleting companies:', deleteError);
+        return { success: false, deleted: [], error: deleteError.message };
+      }
+
+      const deletedNames = deletedCompanies?.map(c => c.company_name) || [];
+      console.log('✅ Successfully deleted companies:', deletedNames.length);
+      console.log('📋 Deleted company names:', deletedNames);
+
+      return { success: true, deleted: deletedNames };
+    } catch (error) {
+      console.error('❌ Error in deleteEmptyCompanies:', error);
+      return { success: false, deleted: [], error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   async addCompany(companyName: string, address: string): Promise<Company> {
     const { data, error } = await supabase
       .from('companies')
@@ -277,6 +371,34 @@ class SupabaseDatabase {
     }
 
     return data || [];
+  }
+
+  // Get unique sub accounts count (no duplicates)
+  async getUniqueSubAccountsCount(): Promise<number> {
+    try {
+      console.log('🔄 Fetching unique sub accounts count...');
+      
+      // Get all sub accounts from the table
+      const { data, error } = await supabase
+        .from('company_main_sub_acc')
+        .select('sub_acc')
+        .not('sub_acc', 'is', null)
+        .not('sub_acc', 'eq', '');
+
+      if (error) {
+        console.error('❌ Error fetching sub accounts for count:', error);
+        return 0;
+      }
+
+      // Get unique sub account names
+      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc).filter(Boolean))];
+      console.log('📊 Unique sub accounts count:', uniqueSubAccounts.length);
+      
+      return uniqueSubAccounts.length;
+    } catch (error) {
+      console.error('❌ Error in getUniqueSubAccountsCount:', error);
+      return 0;
+    }
   }
 
   async getSubAccountsByAccount(
@@ -1471,9 +1593,10 @@ class SupabaseDatabase {
 
   // User operations
   async getUsers(): Promise<User[]> {
+    // Return only STAFF users for app dropdowns
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('*, user_types:user_types(user_type)')
       .eq('is_active', true)
       .order('username');
 
@@ -1482,7 +1605,74 @@ class SupabaseDatabase {
       return [];
     }
 
-    return data || [];
+    const onlyStaff = (data || []).filter((u: any) => u.user_types?.user_type === 'Staff');
+    return onlyStaff as any;
+  }
+
+  // Get active staff members count
+  async getActiveStaffCount(): Promise<number> {
+    try {
+      console.log('🔄 Fetching active staff count...');
+      
+      // Count only STAFF users
+      const { count, error } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .in('user_type_id', (
+          await supabase
+            .from('user_types')
+            .select('id')
+            .eq('user_type', 'Staff')
+        ).data?.map((r: any) => r.id) || []);
+
+      if (error) {
+        console.error('❌ Error fetching active staff count:', error);
+        return 0;
+      }
+
+      console.log('📊 Active staff count:', count || 0);
+      return count || 0;
+    } catch (error) {
+      console.error('❌ Error in getActiveStaffCount:', error);
+      return 0;
+    }
+  }
+
+  // Get active operators count (for dashboard Active Users card)
+  async getActiveOperatorCount(): Promise<number> {
+    try {
+      console.log('🔄 Fetching active operator count...');
+
+      // Get Operator user_type id(s)
+      const { data: typeRows, error: typeErr } = await supabase
+        .from('user_types')
+        .select('id')
+        .eq('user_type', 'Operator');
+      if (typeErr) {
+        console.error('❌ Error fetching operator user_type:', typeErr);
+        return 0;
+      }
+      const ids = (typeRows || []).map((r: any) => r.id);
+      if (ids.length === 0) return 0;
+
+      const { count, error } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .in('user_type_id', ids);
+
+      if (error) {
+        console.error('❌ Error fetching active operator count:', error);
+        return 0;
+      }
+
+      console.log('📊 Active operator count:', count || 0);
+      return count || 0;
+    } catch (error) {
+      console.error('❌ Error in getActiveOperatorCount:', error);
+      return 0;
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | null> {

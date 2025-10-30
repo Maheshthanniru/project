@@ -196,3 +196,5 @@ const [showDatePicker, setShowDatePicker] = useState(false);                    
 The daily report now provides both manual text input and calendar picker functionality, giving users the flexibility to choose their preferred method of date entry while maintaining the dd/MM/yyyy display format and full database compatibility.
 
 
+
+

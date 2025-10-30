@@ -153,3 +153,5 @@ font-bold
 The Detailed Ledger print functionality now provides a cleaner, more focused print experience with better emphasis on company names and simplified summary information.
 
 
+
+

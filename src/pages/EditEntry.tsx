@@ -70,6 +70,7 @@ const EditEntry: React.FC = () => {
   const [filterDebit, setFilterDebit] = useState('');
   const [filterStaff, setFilterStaff] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [filterDateInput, setFilterDateInput] = useState('');
   
   // Memoized filtered entries for better performance
   const filteredEntries = useMemo(() => {
@@ -213,6 +214,19 @@ const EditEntry: React.FC = () => {
     loadEntries();
   }, [searchTerm, filterDate, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff]);
 
+  // Sync visible date input with ISO filterDate
+  useEffect(() => {
+    if (filterDate) {
+      try {
+        setFilterDateInput(format(new Date(filterDate), 'dd/MM/yyyy'));
+      } catch {
+        setFilterDateInput('');
+      }
+    } else {
+      setFilterDateInput('');
+    }
+  }, [filterDate]);
+
   // useEffect to load filter options when date filter changes
   useEffect(() => {
     const activeDate = selectedDateFilter || filterDate;
@@ -290,14 +304,14 @@ const EditEntry: React.FC = () => {
       const companiesCount = await supabaseDB.getCompaniesCount();
       console.log('📊 Total companies in companies table:', companiesCount);
       
-      const companies = await supabaseDB.getCompanies();
-      console.log('🏢 Raw companies from companies table:', companies.length);
+      const companies = await supabaseDB.getCompaniesWithData();
+      console.log('🏢 Raw companies with data from companies table:', companies.length);
       const companiesData = companies.map(company => ({
         value: company.company_name,
         label: company.company_name,
       }));
-      console.log('🏢 Companies loaded from companies table:', companiesData.length);
-      console.log('🏢 Company names from companies table:', companiesData.map(c => c.label));
+      console.log('🏢 Companies with data loaded from companies table:', companiesData.length);
+      console.log('🏢 Company names with data from companies table:', companiesData.map(c => c.label));
       
       // Verify we got all companies
       if (companiesData.length !== companiesCount) {
@@ -1653,84 +1667,177 @@ const EditEntry: React.FC = () => {
 
   // Print voucher for an entry
   function printVoucher(entry: any) {
-    const printWindow = window.open('', '', 'width=800,height=600');
-    if (printWindow) {
-      printWindow.document.write(`
+    try {
+      console.log('Printing voucher for entry:', entry);
+      
+      if (!entry) {
+        toast.error('No entry selected for voucher');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      
+      if (!printWindow) {
+        toast.error('Unable to open print window. Please check your popup blocker settings.');
+        return;
+      }
+
+      const voucherContent = `
         <html>
         <head>
           <title>Voucher - Thirumala Group</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .voucher-header { text-align: center; margin-bottom: 32px; }
-            .voucher-title { font-size: 2rem; font-weight: bold; color: #2d3748; }
-            .voucher-section { margin-bottom: 16px; }
-            .voucher-label { font-weight: bold; color: #374151; min-width: 120px; display: inline-block; }
-            .voucher-value { color: #1a202c; }
-            .voucher-table { width: 100%; border-collapse: collapse; margin-top: 24px; }
-            .voucher-table th, .voucher-table td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
-            .voucher-table th { background: #f1f5f9; }
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 40px; 
+              line-height: 1.6;
+            }
+            .voucher-header { 
+              text-align: center; 
+              margin-bottom: 32px; 
+              border-bottom: 2px solid #e2e8f0;
+              padding-bottom: 20px;
+            }
+            .voucher-title { 
+              font-size: 2rem; 
+              font-weight: bold; 
+              color: #2d3748; 
+              margin-bottom: 8px;
+            }
+            .voucher-subtitle {
+              font-size: 1.2rem; 
+              color: #4b5563;
+            }
+            .voucher-section { 
+              margin-bottom: 16px; 
+              display: flex;
+              align-items: flex-start;
+            }
+            .voucher-label { 
+              font-weight: bold; 
+              color: #374151; 
+              min-width: 140px; 
+              display: inline-block;
+            }
+            .voucher-value { 
+              color: #1a202c; 
+              flex: 1;
+            }
+            .voucher-footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 0.9rem;
+              color: #6b7280;
+            }
+            @media print {
+              body { margin: 20px; }
+              .voucher-section { page-break-inside: avoid; }
+            }
           </style>
         </head>
         <body>
           <div class="voucher-header">
             <div class="voucher-title">Thirumala Group</div>
-            <div style="font-size:1.2rem; color:#4b5563; margin-top:8px;">Voucher</div>
+            <div class="voucher-subtitle">Voucher</div>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Voucher No:</span>
-            <span class="voucher-value">${entry.sno}</span>
+            <span class="voucher-value">${entry.sno || 'N/A'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Date:</span>
-            <span class="voucher-value">${entry.c_date ? new Date(entry.c_date).toLocaleDateString() : ''}</span>
+            <span class="voucher-value">${entry.c_date ? new Date(entry.c_date).toLocaleDateString('en-IN') : 'N/A'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Company:</span>
-            <span class="voucher-value">${entry.company_name}</span>
+            <span class="voucher-value">${entry.company_name || 'N/A'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Main Account:</span>
-            <span class="voucher-value">${entry.acc_name}</span>
+            <span class="voucher-value">${entry.acc_name || 'N/A'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Sub Account:</span>
             <span class="voucher-value">${entry.sub_acc_name || '-'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Particulars:</span>
-            <span class="voucher-value">${entry.particulars}</span>
+            <span class="voucher-value">${entry.particulars || 'N/A'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Credit:</span>
-            <span class="voucher-value">₹${entry.credit?.toLocaleString?.() ?? entry.credit}</span>
+            <span class="voucher-value">₹${entry.credit ? Number(entry.credit).toLocaleString('en-IN') : '0'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Debit:</span>
-            <span class="voucher-value">₹${entry.debit?.toLocaleString?.() ?? entry.debit}</span>
+            <span class="voucher-value">₹${entry.debit ? Number(entry.debit).toLocaleString('en-IN') : '0'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Sale Quantity:</span>
-            <span class="voucher-value">${entry.sale_qty ?? '-'}</span>
+            <span class="voucher-value">${entry.sale_qty || '-'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Purchase Quantity:</span>
-            <span class="voucher-value">${entry.purchase_qty ?? '-'}</span>
+            <span class="voucher-value">${entry.purchase_qty || '-'}</span>
           </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Staff:</span>
-            <span class="voucher-value">${entry.staff}</span>
+            <span class="voucher-value">${entry.staff || 'N/A'}</span>
           </div>
+          
+          <div class="voucher-section">
+            <span class="voucher-label">Payment Mode:</span>
+            <span class="voucher-value">${entry.payment_mode || 'Cash'}</span>
+          </div>
+          
           <div class="voucher-section">
             <span class="voucher-label">Status:</span>
             <span class="voucher-value">${entry.approved ? 'Approved' : 'Pending'}</span>
           </div>
+          
+          <div class="voucher-section">
+            <span class="voucher-label">Entry Time:</span>
+            <span class="voucher-value">${entry.entry_time ? new Date(entry.entry_time).toLocaleString('en-IN') : 'N/A'}</span>
+          </div>
+          
+          <div class="voucher-footer">
+            <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
+          </div>
         </body>
         </html>
-      `);
+      `;
+
+      printWindow.document.write(voucherContent);
       printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
+      
+      // Wait for content to load before printing
+      printWindow.onload = function() {
+        printWindow.focus();
+        printWindow.print();
+      };
+      
+      // Fallback if onload doesn't fire
+      setTimeout(() => {
+        if (printWindow && !printWindow.closed) {
+          printWindow.focus();
+          printWindow.print();
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error printing voucher:', error);
+      toast.error('Failed to print voucher. Please try again.');
     }
   }
 
@@ -1779,14 +1886,44 @@ const EditEntry: React.FC = () => {
       {/* Search and Filter */}
       <Card className='bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-6 mb-6'>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 w-full'>
-          {/* Date - First */}
-          <div className='col-span-1'>
-            <Input
-              label='Date'
-              type='date'
-              value={filterDate}
-              onChange={setFilterDate}
-            />
+          {/* Date - First (dd/MM/yyyy with calendar + typing) */}
+          <div className='col-span-1 relative'>
+            <label className='block text-xs font-medium text-gray-700 mb-1'>Date</label>
+            <div className='relative'>
+              <input
+                type='text'
+                value={filterDateInput}
+                onChange={e => {
+                  const v = e.target.value;
+                  setFilterDateInput(v);
+                  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                  if (m) {
+                    const [, dd, mm, yyyy] = m;
+                    setFilterDate(`${yyyy}-${mm}-${dd}`);
+                  }
+                }}
+                className='w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
+                placeholder='dd/MM/yyyy'
+              />
+              <button
+                type='button'
+                onClick={() => setShowCalendar(!showCalendar)}
+                className='absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded'
+              >
+                <Calendar className='w-4 h-4 text-gray-500' />
+              </button>
+            </div>
+            {showCalendar && (
+              <CustomCalendar
+                onDateSelect={(date) => {
+                  setFilterDate(date);
+                  setFilterDateInput(format(new Date(date), 'dd/MM/yyyy'));
+                  setShowCalendar(false);
+                }}
+                selectedDate={filterDate}
+                onClose={() => setShowCalendar(false)}
+              />
+            )}
           </div>
           {/* Company Name - Second */}
           <div className='col-span-1'>
@@ -1918,7 +2055,7 @@ const EditEntry: React.FC = () => {
               <strong>{filteredEntries.length}</strong> entries found
               {selectedDateFilter && (
                 <div className='text-xs text-blue-600 mt-1'>
-                  Filtered by: {format(new Date(selectedDateFilter), 'dd-MMM-yyyy')}
+                  Filtered by: {format(new Date(selectedDateFilter), 'dd/MM/yyyy')}
                 </div>
               )}
             </div>
@@ -1988,9 +2125,7 @@ const EditEntry: React.FC = () => {
                     <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Company
                     </th>
-                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700 bg-orange-50'>
-                      Entry Time
-                    </th>
+                    
                     <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
                       Account
                     </th>
@@ -2008,6 +2143,9 @@ const EditEntry: React.FC = () => {
                     </th>
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Staff
+                    </th>
+                    <th className='w-24 px-1 py-1 text-left font-medium text-gray-700'>
+                      Entry Date and Time
                     </th>
                     <th className='w-24 px-1 py-1 text-center font-medium text-gray-700'>
                       Actions
@@ -2027,14 +2165,12 @@ const EditEntry: React.FC = () => {
                     >
                       <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
                       <td className='w-16 px-1 py-1 text-xs'>
-                        {format(new Date(entry.c_date), 'dd-MMM-yy')}
+                        {format(new Date(entry.c_date), 'dd/MM/yyyy')}
                       </td>
                       <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
                         {entry.company_name}
                       </td>
-                      <td className='w-16 px-1 py-1 text-xs'>
-                        {format(new Date(entry.entry_time), 'hh:mm:ss a')}
-                      </td>
+                      
                       <td className='w-20 px-1 py-1 text-xs truncate' title={entry.acc_name}>{entry.acc_name}</td>
                       <td className='w-20 px-1 py-1 text-xs truncate' title={entry.sub_acc_name}>{entry.sub_acc_name || '-'}</td>
                       <td
@@ -2054,6 +2190,14 @@ const EditEntry: React.FC = () => {
                           : '-'}
                       </td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
+                      <td className='w-24 px-1 py-1 text-left'>
+                        <div className='text-xs'>
+                          {format(new Date(entry.c_date), 'dd/MM/yyyy')}
+                        </div>
+                        <div className='text-[10px] text-gray-500'>
+                          {entry.entry_time ? format(new Date(entry.entry_time), 'hh:mm:ss a') : 'N/A'}
+                        </div>
+                      </td>
                       <td className='w-24 px-1 py-1 text-center ml-2'>
                         <div className='flex gap-0.5 justify-center' onClick={(e) => e.stopPropagation()}>
                           <Button
@@ -2327,7 +2471,7 @@ const EditEntry: React.FC = () => {
       {entriesForSelectedDate.length > 1 && (
         <div className='mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg'>
           <h4 className='text-sm font-semibold text-blue-800 mb-2'>
-            Multiple Entries for {selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd-MMM-yyyy') : 'Selected Date'}
+            Multiple Entries for {selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd/MM/yyyy') : 'Selected Date'}
           </h4>
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2'>
             {entriesForSelectedDate.map((entry, index) => (
@@ -2392,10 +2536,10 @@ const EditEntry: React.FC = () => {
                         <div className="relative">
                           <input
                             type="text"
-                            value={selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd-MMM-yyyy') : ''}
+                            value={selectedEntry?.c_date ? format(new Date(selectedEntry.c_date), 'dd/MM/yyyy') : ''}
                             readOnly
                             className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                            placeholder="Select date..."
+                            placeholder="dd/MM/yyyy"
                           />
                           <button
                             type="button"
@@ -2428,10 +2572,10 @@ const EditEntry: React.FC = () => {
                                 if (entriesForDate.length > 0) {
                                   // Show the first entry for that date
                                   setSelectedEntry(entriesForDate[0]);
-                                  toast.success(`Found ${entriesForDate.length} entries for ${format(new Date(date), 'dd-MMM-yyyy')}. Showing filtered results.`);
+                                  toast.success(`Found ${entriesForDate.length} entries for ${format(new Date(date), 'dd/MM/yyyy')}. Showing filtered results.`);
                                 } else {
                                   // No entries for this date, show a message
-                                  toast(`No entries found for ${format(new Date(date), 'dd-MMM-yyyy')}`);
+                                  toast(`No entries found for ${format(new Date(date), 'dd/MM/yyyy')}`);
                                 }
                               }
                               setShowCalendar(false);
@@ -2555,17 +2699,12 @@ const EditEntry: React.FC = () => {
                 <h4 className='font-medium text-gray-900 mb-3'>
                   Entry Information
                 </h4>
-                <div className='grid grid-cols-1 md:grid-cols-3 gap-4 text-sm'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
                   <div>
                     <span className='font-medium text-gray-700'>
-                      Entry Time:
+                      Edit Count:
                     </span>
-                    <div>
-                      {selectedEntry?.entry_time ? format(
-                        new Date(selectedEntry.entry_time),
-                        'MMM dd, yyyy HH:mm:ss'
-                      ) : 'N/A'}
-                    </div>
+                    <div>{selectedEntry?.e_count || 0}</div>
                   </div>
                   <div>
                     <span className='font-medium text-gray-700'>
@@ -2573,11 +2712,20 @@ const EditEntry: React.FC = () => {
                     </span>
                     <div>{selectedEntry?.users || 'N/A'}</div>
                   </div>
-                  <div>
-                    <span className='font-medium text-gray-700'>
-                      Edit Count:
-                    </span>
-                    <div>{selectedEntry?.e_count || 0}</div>
+                </div>
+                
+                {/* Entry Time - Display like Daily Report Approved row */}
+                <div className='mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg'>
+                  <div className='text-sm font-medium text-blue-800 mb-2'>Entry Time</div>
+                  <div className='flex items-center space-x-2'>
+                    <span className='text-sm text-gray-600'>A/C</span>
+                    <span className='text-sm font-medium text-green-600'>{selectedEntry?.users || 'Unknown User'}</span>
+                  </div>
+                  <div className='text-xs text-gray-500 mt-1'>
+                    {selectedEntry?.entry_time ? format(
+                      new Date(selectedEntry.entry_time),
+                      'dd/MM/yyyy HH:mm'
+                    ) : 'N/A'}
                   </div>
                 </div>
                 {selectedEntry?.edited && (

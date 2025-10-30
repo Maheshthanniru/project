@@ -185,7 +185,7 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
           <input
             ref={ref || inputRef}
             type='text'
-            value={isOpen ? searchTerm : displayValue}
+            value={isOpen ? searchTerm : (className.includes('staff-field') ? displayValue.toUpperCase() : displayValue)}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onClick={handleInputClick}
@@ -194,8 +194,12 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
             required={required}
             className={`w-full pr-20 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed ${
               size === 'sm' ? 'px-2 py-1 text-xs' : size === 'lg' ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'
-            }`}
-            style={{ fontFamily: 'Times New Roman', fontSize: '12px' }}
+            } ${className.includes('staff-field') ? 'font-bold uppercase' : ''}`}
+            style={{ 
+              fontFamily: 'Times New Roman', 
+              fontSize: '12px',
+              ...(className.includes('staff-field') ? { fontWeight: 'bold', textTransform: 'uppercase' } : {})
+            }}
           />
           
           <div className='absolute inset-y-0 right-0 flex items-center'>
@@ -233,7 +237,7 @@ const SearchableSelect = forwardRef<HTMLInputElement, SearchableSelectProps>(
                   onClick={() => handleSelect(option.value)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
-                  {option.label}
+                  {className.includes('staff-field') ? option.label.toUpperCase() : option.label}
                 </div>
               ))
             ) : (

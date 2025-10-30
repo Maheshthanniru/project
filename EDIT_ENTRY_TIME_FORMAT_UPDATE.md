@@ -155,3 +155,5 @@ bg-orange-50  /* Very light orange background */
 The Entry Time column now provides a more user-friendly 12-hour time format with clear visual indication of pending entries through orange styling, making it easier for users to read times and identify pending entries at a glance.
 
 
+
+

@@ -131,3 +131,5 @@ const printReport = async () => {
 The daily report print functionality now provides a professional, branded experience that clearly identifies the report as coming from Thirumala Group while maintaining excellent usability and visual appeal.
 
 
+
+

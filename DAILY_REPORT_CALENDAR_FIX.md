@@ -134,3 +134,5 @@ pointer-events: none; /* Prevents blocking clicks */
 The calendar icon now works properly! When users click the calendar icon, they get the browser's native date picker, which provides a familiar and reliable date selection experience while maintaining the dd/MM/yyyy display format and all existing functionality.
 
 
+
+

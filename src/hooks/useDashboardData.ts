@@ -58,7 +58,7 @@ export const useCompanyBalances = () => {
 export const useDropdownData = () => {
   const companiesQuery = useQuery({
     queryKey: queryKeys.dropdowns.companies,
-    queryFn: () => supabaseDB.getCompanies(),
+    queryFn: () => supabaseDB.getCompaniesWithData(),
     staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
     gcTime: 30 * 60 * 1000, // 30 minutes cache
   });
@@ -91,14 +91,30 @@ export const useDropdownData = () => {
     gcTime: 3 * 60 * 1000,
   });
 
+  const uniqueSubAccountsCountQuery = useQuery({
+    queryKey: ['subAccounts', 'uniqueCount'],
+    queryFn: () => supabaseDB.getUniqueSubAccountsCount(),
+    staleTime: 10 * 60 * 1000, // 10 minutes for sub accounts count
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const activeOperatorCountQuery = useQuery({
+    queryKey: ['operators', 'activeCount'],
+    queryFn: () => supabaseDB.getActiveOperatorCount(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+
   return {
     companies: companiesQuery,
     accounts: accountsQuery,
     subAccounts: subAccountsQuery,
     users: usersQuery,
     pendingApprovals: pendingApprovalsQuery,
-    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || subAccountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading,
-    isError: companiesQuery.isError || accountsQuery.isError || subAccountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError,
+    uniqueSubAccountsCount: uniqueSubAccountsCountQuery,
+    activeOperatorCount: activeOperatorCountQuery,
+    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || subAccountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading || uniqueSubAccountsCountQuery.isLoading || activeOperatorCountQuery.isLoading,
+    isError: companiesQuery.isError || accountsQuery.isError || subAccountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError || uniqueSubAccountsCountQuery.isError || activeOperatorCountQuery.isError,
   };
 };
 

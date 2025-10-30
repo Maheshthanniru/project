@@ -106,3 +106,5 @@ After this fix:
 
 The fix ensures that the dashboard count matches what's shown in ApproveRecords, providing a consistent and reliable deleted records count across the application.
 
+
+

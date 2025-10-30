@@ -458,43 +458,6 @@ const ApproveRecords: React.FC = () => {
     }
   };
 
-  const handleDirectReject = async (entryId: string) => {
-    try {
-      setLoading(true);
-      
-      // Set approved to 'rejected' to distinguish from pending
-      const { error } = await supabase
-        .from('cash_book')
-        .update({
-          approved: 'rejected',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', entryId);
-
-      if (error) {
-        console.error('Error rejecting record:', error);
-        toast.error('Failed to reject record');
-        return;
-      }
-
-      toast.success('Record rejected successfully!');
-      
-      // Immediately remove the rejected record from the local state
-      setEntries(prev => prev.filter(entry => entry.id !== entryId));
-      
-      // Also reload to get updated data
-      await loadEntries();
-      
-      // Trigger dashboard refresh
-      localStorage.setItem('dashboard-refresh', Date.now().toString());
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-    } catch (error) {
-      console.error('Error rejecting record:', error);
-      toast.error('Error rejecting record');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Deleted records approve/reject handlers
   const handleDeletedApprove = async (id: string) => {
@@ -962,8 +925,10 @@ const ApproveRecords: React.FC = () => {
               <thead>
                 <tr>
                   <th>S.No</th>
+                  <th>Date</th>
                   <th>Company</th>
                   <th>Account</th>
+                  <th>Sub Account</th>
                   <th>Particulars</th>
                   <th>Credit</th>
                   <th>Debit</th>
@@ -975,11 +940,13 @@ const ApproveRecords: React.FC = () => {
                     (entry, index) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${index + 1}</td>
+                    <td>${format(new Date(entry.c_date), 'dd/MM/yyyy')}</td>
                     <td>${entry.company_name || ''}</td>
                     <td>${entry.acc_name || ''}</td>
+                    <td>${entry.sub_acc_name || '-'}</td>
                     <td>${entry.particulars || ''}</td>
-                    <td>${entry.credit || 0}</td>
-                    <td>${entry.debit || 0}</td>
+                    <td>${entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                    <td>${entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
                   </tr>
                 `
                   )
@@ -1065,11 +1032,10 @@ const ApproveRecords: React.FC = () => {
                   <th>Date</th>
                   <th>Company</th>
                   <th>Account</th>
+                  <th>Sub Account</th>
                   <th>Particulars</th>
                   <th>Credit</th>
                   <th>Debit</th>
-                  <th>Staff</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -1078,14 +1044,13 @@ const ApproveRecords: React.FC = () => {
                     (entry, _) => `
                   <tr class="${entry.approved ? 'approved' : 'pending'}">
                     <td>${entry.sno}</td>
-                    <td>${entry.c_date}</td>
+                    <td>${format(new Date(entry.c_date), 'dd/MM/yyyy')}</td>
                     <td>${entry.company_name || ''}</td>
                     <td>${entry.acc_name || ''}</td>
+                    <td>${entry.sub_acc_name || '-'}</td>
                     <td>${entry.particulars || ''}</td>
-                    <td>${entry.credit || 0}</td>
-                    <td>${entry.debit || 0}</td>
-                    <td>${entry.staff || ''}</td>
-                    <td>${entry.approved ? 'Approved' : 'Pending'}</td>
+                    <td>${entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : '-'}</td>
+                    <td>${entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : '-'}</td>
                   </tr>
                 `
                   )
@@ -1433,10 +1398,7 @@ const ApproveRecords: React.FC = () => {
                     User
                   </th>
                   <th className='px-3 py-2 text-left font-medium text-gray-700'>
-                    Entry Time
-                  </th>
-                  <th className='px-3 py-2 text-center font-medium text-gray-700'>
-                    Status
+                    Entry Date & Time
                   </th>
                   <th className='px-3 py-2 text-left font-medium text-gray-700'>
                     Actions
@@ -1504,73 +1466,19 @@ const ApproveRecords: React.FC = () => {
                     <td className='px-3 py-2'>{entry.staff}</td>
                     <td className='px-3 py-2'>{entry.users}</td>
                     <td className='px-3 py-2'>
-                      {format(new Date(entry.entry_time), 'HH:mm:ss')}
-                    </td>
-                    <td className='px-3 py-2 text-center'>
-                      {(() => {
-                        console.log('Entry approved value:', entry.approved, 'Type:', typeof entry.approved);
-                        if (entry.approved === true || entry.approved === 'true') {
-                          return (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                              Approved
-                            </span>
-                          );
-                        } else if (entry.approved === 'rejected') {
-                          return (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                              Rejected
-                            </span>
-                          );
-                        } else {
-                          return (
-                            <span className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800'>
-                              Pending
-                            </span>
-                          );
-                        }
-                      })()}
+                      {`${format(new Date(entry.c_date), 'dd/MM/yyyy')} ${format(new Date(entry.entry_time), 'HH:mm:ss')}`}
                     </td>
                     <td className='px-3 py-2'>
-                      <div className='flex flex-row gap-2'>
-                        <Button
-                          variant='secondary'
-                          onClick={() => {
-                            handleDirectApprove(entry.id);
-                          }}
-                          disabled={entry.approved === true}
-                          className='text-xs px-2 py-1'
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          variant='secondary'
-                          onClick={async () => {
-                            try {
-                              const full = await supabaseDB.getCashBookEntry(entry.id);
-                              const data = full || entry;
-                              setViewEntry(data);
-                              setViewDraft({ ...data });
-                              setViewEditing(false);
-                              setViewOpen(true);
-                            } catch (e) {
-                              toast.error('Failed to load entry details');
-                            }
-                          }}
-                          className='text-xs px-2 py-1'
-                        >
-                          View
-                        </Button>
-                        <Button
-                          variant='secondary'
-                          onClick={() => {
-                            handleDirectReject(entry.id);
-                          }}
-                          disabled={entry.approved === false}
-                          className='text-xs px-2 py-1'
-                        >
-                          Reject
-                        </Button>
-                      </div>
+                      <Button
+                        variant='secondary'
+                        onClick={() => {
+                          handleDirectApprove(entry.id);
+                        }}
+                        disabled={entry.approved === true}
+                        className='text-xs px-2 py-1'
+                      >
+                        Approve
+                      </Button>
                     </td>
                   </tr>
                 ))}
