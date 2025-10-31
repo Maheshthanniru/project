@@ -58,7 +58,7 @@ export const useCompanyBalances = () => {
 export const useDropdownData = () => {
   const companiesQuery = useQuery({
     queryKey: queryKeys.dropdowns.companies,
-    queryFn: () => supabaseDB.getCompaniesWithData(),
+    queryFn: () => supabaseDB.getCompanies(), // Use getCompanies() to show ALL companies, including newly created ones
     staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
     gcTime: 30 * 60 * 1000, // 30 minutes cache
   });

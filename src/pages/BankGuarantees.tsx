@@ -3,7 +3,6 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
-import { departments } from '../lib/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -16,6 +15,8 @@ import {
   Search,
   CheckCircle,
   Edit,
+  Save,
+  Trash2,
 } from 'lucide-react';
 
 const BankGuarantees: React.FC = () => {
@@ -29,6 +30,7 @@ const BankGuarantees: React.FC = () => {
   const [selectedBG, setSelectedBG] = useState<BankGuarantee | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showCancelledBGs, setShowCancelledBGs] = useState(false);
+  const [customDepartments, setCustomDepartments] = useState<string[]>([]);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -60,12 +62,61 @@ const BankGuarantees: React.FC = () => {
 
   useEffect(() => {
     loadBankGuarantees();
+    loadCustomDepartments();
   }, []);
 
   useEffect(() => {
     applyFilters();
     updateStats();
   }, [bankGuarantees, searchTerm, filters, showCancelledBGs]);
+
+  const loadCustomDepartments = () => {
+    try {
+      const stored = localStorage.getItem('bg_custom_departments');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCustomDepartments(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (error) {
+      console.error('Error loading custom departments:', error);
+    }
+  };
+
+  const saveCustomDepartments = (departments: string[]) => {
+    try {
+      localStorage.setItem('bg_custom_departments', JSON.stringify(departments));
+      setCustomDepartments(departments);
+    } catch (error) {
+      console.error('Error saving custom departments:', error);
+      toast.error('Failed to save department');
+    }
+  };
+
+  const handleKeepDepartment = () => {
+    const currentDept = editingBG ? editingBG.department : newBG.department;
+    if (!currentDept || !currentDept.trim()) {
+      toast.error('Please enter a department name');
+      return;
+    }
+
+    const trimmed = currentDept.trim();
+    if (customDepartments.includes(trimmed)) {
+      toast.error('This department already exists');
+      return;
+    }
+
+    const updated = [...customDepartments, trimmed];
+    saveCustomDepartments(updated);
+    toast.success('Department saved successfully');
+  };
+
+  const handleDeleteDepartment = (department: string) => {
+    if (window.confirm(`Are you sure you want to delete "${department}"?`)) {
+      const updated = customDepartments.filter(d => d !== department);
+      saveCustomDepartments(updated);
+      toast.success('Department deleted successfully');
+    }
+  };
 
   const loadBankGuarantees = async () => {
     setLoading(true);
@@ -290,7 +341,7 @@ const BankGuarantees: React.FC = () => {
 
   const departmentOptions = [
     { value: '', label: 'All Departments' },
-    ...departments,
+    ...customDepartments.map(dept => ({ value: dept, label: dept })),
   ];
 
   const statusOptions = [
@@ -491,22 +542,71 @@ const BankGuarantees: React.FC = () => {
             />
 
             <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-              <Select
-                label='Department'
-                value={editingBG ? editingBG.department : newBG.department}
-                onChange={value => handleInputChange('department', value)}
-                options={departments}
-                placeholder='Select department...'
-                required
-              />
+              <div className='flex flex-col'>
+                <label className='text-sm font-medium text-gray-700 mb-1'>
+                  Department <span className='text-red-500'>*</span>
+                </label>
+                <div className='flex gap-2'>
+                  <Input
+                    value={editingBG ? editingBG.department : newBG.department}
+                    onChange={value => {
+                      handleInputChange('department', value);
+                    }}
+                    placeholder='Enter department name...'
+                    required
+                    className='flex-1'
+                  />
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={handleKeepDepartment}
+                    title='Keep this department for future use'
+                    className='px-3 shrink-0'
+                  >
+                    <Save className='w-4 h-4' />
+                  </Button>
+                  {(editingBG ? editingBG.department : newBG.department) &&
+                    customDepartments.includes(
+                      editingBG ? editingBG.department : newBG.department
+                    ) && (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        onClick={() =>
+                          handleDeleteDepartment(
+                            editingBG ? editingBG.department : newBG.department
+                          )
+                        }
+                        title='Delete this department'
+                        className='px-3 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50'
+                      >
+                        <Trash2 className='w-4 h-4' />
+                      </Button>
+                    )}
+                </div>
+                {customDepartments.length > 0 && (
+                  <div className='mt-2 text-xs text-gray-500'>
+                    Saved departments: {customDepartments.join(', ')}
+                  </div>
+                )}
+              </div>
 
               <Input
                 label='Credit'
                 type='number'
-                value={editingBG ? editingBG.credit : newBG.credit}
-                onChange={value =>
-                  handleInputChange('credit', parseFloat(value) || 0)
+                value={
+                  editingBG
+                    ? (editingBG.credit === 0 ? '' : editingBG.credit)
+                    : (newBG.credit === 0 ? '' : newBG.credit)
                 }
+                onChange={value => {
+                  if (value === '') {
+                    handleInputChange('credit', 0);
+                  } else {
+                    const num = parseFloat(value as string);
+                    handleInputChange('credit', isNaN(num) ? 0 : num);
+                  }
+                }}
                 placeholder='0.00'
                 min='0'
                 step='0.01'
@@ -515,10 +615,19 @@ const BankGuarantees: React.FC = () => {
               <Input
                 label='Debit'
                 type='number'
-                value={editingBG ? editingBG.debit : newBG.debit}
-                onChange={value =>
-                  handleInputChange('debit', parseFloat(value) || 0)
+                value={
+                  editingBG
+                    ? (editingBG.debit === 0 ? '' : editingBG.debit)
+                    : (newBG.debit === 0 ? '' : newBG.debit)
                 }
+                onChange={value => {
+                  if (value === '') {
+                    handleInputChange('debit', 0);
+                  } else {
+                    const num = parseFloat(value as string);
+                    handleInputChange('debit', isNaN(num) ? 0 : num);
+                  }
+                }}
                 placeholder='0.00'
                 min='0'
                 step='0.01'

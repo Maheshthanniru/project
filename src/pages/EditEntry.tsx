@@ -1697,6 +1697,12 @@ const EditEntry: React.FC = () => {
         return;
       }
 
+      const isCredit = Number(entry.credit || 0) > 0;
+      const amountValue = isCredit ? Number(entry.credit || 0) : Number(entry.debit || 0);
+      const amountLabel = isCredit ? 'CREDIT' : 'DEBIT';
+      const saleQty = Number(entry.sale_qty || 0);
+      const purchaseQty = Number(entry.purchase_qty || 0);
+
       const voucherContent = `
         <html>
         <head>
@@ -1723,6 +1729,18 @@ const EditEntry: React.FC = () => {
               font-size: 1.2rem; 
               color: #4b5563;
             }
+            .amount-box {
+              margin: 18px 0 24px 0;
+              border: 2px solid ${isCredit ? '#10b981' : '#ef4444'};
+              background: ${isCredit ? '#ecfdf5' : '#fef2f2'};
+              padding: 12px 16px;
+              border-radius: 8px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .amount-label { font-weight: 700; color: ${isCredit ? '#065f46' : '#7f1d1d'}; }
+            .amount-value { font-size: 1.4rem; font-weight: 800; color: ${isCredit ? '#065f46' : '#7f1d1d'}; }
             .voucher-section { 
               margin-bottom: 16px; 
               display: flex;
@@ -1760,7 +1778,6 @@ const EditEntry: React.FC = () => {
             <span class="voucher-label">Voucher No:</span>
             <span class="voucher-value">${entry.sno || 'N/A'}</span>
           </div>
-          
           <div class="voucher-section">
             <span class="voucher-label">Date:</span>
             <span class="voucher-value">${entry.c_date ? new Date(entry.c_date).toLocaleDateString('en-IN') : 'N/A'}</span>
@@ -1786,44 +1803,17 @@ const EditEntry: React.FC = () => {
             <span class="voucher-value">${entry.particulars || 'N/A'}</span>
           </div>
           
-          <div class="voucher-section">
-            <span class="voucher-label">Credit:</span>
-            <span class="voucher-value">₹${entry.credit ? Number(entry.credit).toLocaleString('en-IN') : '0'}</span>
+          <div class="amount-box">
+            <div class="amount-label">${amountLabel}</div>
+            <div class="amount-value">₹${amountValue.toLocaleString('en-IN')}</div>
           </div>
           
-          <div class="voucher-section">
-            <span class="voucher-label">Debit:</span>
-            <span class="voucher-value">₹${entry.debit ? Number(entry.debit).toLocaleString('en-IN') : '0'}</span>
-          </div>
-          
-          <div class="voucher-section">
-            <span class="voucher-label">Sale Quantity:</span>
-            <span class="voucher-value">${entry.sale_qty || '-'}</span>
-          </div>
-          
-          <div class="voucher-section">
-            <span class="voucher-label">Purchase Quantity:</span>
-            <span class="voucher-value">${entry.purchase_qty || '-'}</span>
-          </div>
-          
-          <div class="voucher-section">
-            <span class="voucher-label">Staff:</span>
-            <span class="voucher-value">${entry.staff || 'N/A'}</span>
-          </div>
+          ${saleQty > 0 ? `<div class="voucher-section"><span class="voucher-label">Sale Quantity:</span><span class="voucher-value">${saleQty}</span></div>` : ''}
+          ${purchaseQty > 0 ? `<div class="voucher-section"><span class="voucher-label">Purchase Quantity:</span><span class="voucher-value">${purchaseQty}</span></div>` : ''}
           
           <div class="voucher-section">
             <span class="voucher-label">Payment Mode:</span>
             <span class="voucher-value">${entry.payment_mode || 'Cash'}</span>
-          </div>
-          
-          <div class="voucher-section">
-            <span class="voucher-label">Status:</span>
-            <span class="voucher-value">${entry.approved ? 'Approved' : 'Pending'}</span>
-          </div>
-          
-          <div class="voucher-section">
-            <span class="voucher-label">Entry Time:</span>
-            <span class="voucher-value">${entry.entry_time ? new Date(entry.entry_time).toLocaleString('en-IN') : 'N/A'}</span>
           </div>
           
           <div class="voucher-footer">

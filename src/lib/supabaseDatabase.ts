@@ -49,6 +49,7 @@ export interface CashBookEntry {
   updated_at: string;
   credit_mode?: string;
   debit_mode?: string;
+  payment_mode?: string;
 }
 
 export interface User {
@@ -283,7 +284,60 @@ class SupabaseDatabase {
     return data;
   }
 
-  async deleteCompany(companyName: string): Promise<boolean> {
+  // Check if company has any entries in cash_book
+  async hasCompanyEntries(companyName: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('id')
+        .eq('company_name', companyName)
+        .limit(1);
+
+      if (error) {
+        console.error(`Error checking entries for company ${companyName}:`, error);
+        return false; // Assume no entries on error to be safe
+      }
+
+      return (data && data.length > 0) || false;
+    } catch (error) {
+      console.error(`Error in hasCompanyEntries for ${companyName}:`, error);
+      return false;
+    }
+  }
+
+  async deleteCompany(companyName: string): Promise<{ success: boolean; error?: string }> {
+    // First check if company has any entries in cash_book
+    const hasEntries = await this.hasCompanyEntries(companyName);
+    
+    if (hasEntries) {
+      return {
+        success: false,
+        error: 'Cannot delete company: It has entries in cash book. Please delete all entries first.'
+      };
+    }
+
+    // If no entries, cascade delete dependent rows (sub accounts → accounts) then company
+    // 1) Delete sub accounts for this company
+    const { error: subDelErr } = await supabase
+      .from('company_main_sub_acc')
+      .delete()
+      .eq('company_name', companyName);
+    if (subDelErr) {
+      console.error('Error deleting sub accounts for company:', subDelErr);
+      return { success: false, error: `Failed to delete sub accounts: ${subDelErr.message}` };
+    }
+
+    // 2) Delete main accounts for this company
+    const { error: accDelErr } = await supabase
+      .from('company_main_accounts')
+      .delete()
+      .eq('company_name', companyName);
+    if (accDelErr) {
+      console.error('Error deleting accounts for company:', accDelErr);
+      return { success: false, error: `Failed to delete accounts: ${accDelErr.message}` };
+    }
+
+    // 3) Delete company
     const { error } = await supabase
       .from('companies')
       .delete()
@@ -291,10 +345,20 @@ class SupabaseDatabase {
 
     if (error) {
       console.error('Error deleting company:', error);
-      return false;
+      // Handle 409 conflict error (likely foreign key constraint)
+      if (error.code === '409' || error.code === '23503' || error.message.includes('409') || error.message.includes('foreign key')) {
+        return {
+          success: false,
+          error: 'Cannot delete company: It is referenced by accounts or entries. Please delete all related accounts and entries first.'
+        };
+      }
+      return {
+        success: false,
+        error: `Failed to delete company: ${error.message}`
+      };
     }
 
-    return true;
+    return { success: true };
   }
 
   // Account operations
@@ -344,7 +408,48 @@ class SupabaseDatabase {
     return data;
   }
 
-  async deleteAccount(accountName: string): Promise<boolean> {
+  // Check if account has any entries in cash_book
+  async hasAccountEntries(accountName: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('id')
+        .eq('acc_name', accountName)
+        .limit(1);
+
+      if (error) {
+        console.error(`Error checking entries for account ${accountName}:`, error);
+        return false;
+      }
+
+      return (data && data.length > 0) || false;
+    } catch (error) {
+      console.error(`Error in hasAccountEntries for ${accountName}:`, error);
+      return false;
+    }
+  }
+
+  async deleteAccount(accountName: string): Promise<{ success: boolean; error?: string }> {
+    // First check if account has any entries in cash_book
+    const hasEntries = await this.hasAccountEntries(accountName);
+    
+    if (hasEntries) {
+      return {
+        success: false,
+        error: 'Cannot delete account: It has entries in cash book. Please delete all entries first.'
+      };
+    }
+
+    // If no entries, cascade delete dependent sub accounts then account
+    const { error: subDelErr } = await supabase
+      .from('company_main_sub_acc')
+      .delete()
+      .eq('acc_name', accountName);
+    if (subDelErr) {
+      console.error('Error deleting sub accounts for account:', subDelErr);
+      return { success: false, error: `Failed to delete sub accounts: ${subDelErr.message}` };
+    }
+
     const { error } = await supabase
       .from('company_main_accounts')
       .delete()
@@ -352,10 +457,20 @@ class SupabaseDatabase {
 
     if (error) {
       console.error('Error deleting account:', error);
-      return false;
+      // Handle 409 conflict error
+      if (error.code === '409' || error.message.includes('409')) {
+        return {
+          success: false,
+          error: 'Cannot delete account: It is being used by sub accounts or has entries. Please delete sub accounts and entries first.'
+        };
+      }
+      return {
+        success: false,
+        error: `Failed to delete account: ${error.message}`
+      };
     }
 
-    return true;
+    return { success: true };
   }
 
   // Sub Account operations
@@ -442,7 +557,39 @@ class SupabaseDatabase {
     return data;
   }
 
-  async deleteSubAccount(subAccountName: string): Promise<boolean> {
+  // Check if sub account has any entries in cash_book
+  async hasSubAccountEntries(subAccountName: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('cash_book')
+        .select('id')
+        .eq('sub_acc_name', subAccountName)
+        .limit(1);
+
+      if (error) {
+        console.error(`Error checking entries for sub account ${subAccountName}:`, error);
+        return false;
+      }
+
+      return (data && data.length > 0) || false;
+    } catch (error) {
+      console.error(`Error in hasSubAccountEntries for ${subAccountName}:`, error);
+      return false;
+    }
+  }
+
+  async deleteSubAccount(subAccountName: string): Promise<{ success: boolean; error?: string }> {
+    // First check if sub account has any entries in cash_book
+    const hasEntries = await this.hasSubAccountEntries(subAccountName);
+    
+    if (hasEntries) {
+      return {
+        success: false,
+        error: 'Cannot delete sub account: It has entries in cash book. Please delete all entries first.'
+      };
+    }
+
+    // If no entries, proceed with deletion
     const { error } = await supabase
       .from('company_main_sub_acc')
       .delete()
@@ -450,10 +597,20 @@ class SupabaseDatabase {
 
     if (error) {
       console.error('Error deleting sub account:', error);
-      return false;
+      // Handle 409 conflict error
+      if (error.code === '409' || error.message.includes('409')) {
+        return {
+          success: false,
+          error: 'Cannot delete sub account: It has entries in cash book or is referenced elsewhere. Please delete all entries first.'
+        };
+      }
+      return {
+        success: false,
+        error: `Failed to delete sub account: ${error.message}`
+      };
     }
 
-    return true;
+    return { success: true };
   }
 
   // Cash Book operations
@@ -487,7 +644,8 @@ class SupabaseDatabase {
         sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        approved: entry.approved === true || entry.approved === 'true'
+        approved: entry.approved === true || entry.approved === 'true',
+        payment_mode: (entry.payment_mode || entry.credit_mode || entry.debit_mode || '').trim()
       }));
       
       return cleanedData;
@@ -547,7 +705,8 @@ class SupabaseDatabase {
         sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
         company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        approved: entry.approved === true || entry.approved === 'true'
+        approved: entry.approved === true || entry.approved === 'true',
+        payment_mode: (entry.payment_mode || entry.credit_mode || entry.debit_mode || '').trim()
       }));
       
       return cleanedData;
@@ -874,19 +1033,47 @@ class SupabaseDatabase {
       Object.entries(entry).filter(([_, value]) => value !== undefined)
     );
 
-    const { data, error } = await supabase
+    // Try to insert with payment_mode, if it fails due to missing column, retry without it
+    let data, error;
+    
+    // First attempt: try with payment_mode if it exists
+    const insertData = {
+      ...filteredEntry,
+      sno: nextSno,
+      entry_time: new Date().toISOString(),
+      approved: false, // Set to pending by default (boolean)
+      edited: false,
+      e_count: 0,
+      lock_record: false,
+    };
+    
+    const result = await supabase
       .from('cash_book')
-      .insert({
-        ...filteredEntry,
-        sno: nextSno,
-        entry_time: new Date().toISOString(),
-        approved: false, // Set to pending by default (boolean)
-        edited: false,
-        e_count: 0,
-        lock_record: false,
-      })
+      .insert(insertData)
       .select()
       .single();
+    
+    data = result.data;
+    error = result.error;
+    
+    // If error is about payment_mode column not existing, retry without it
+    if (error && (error.message?.includes('payment_mode') || error.code === '42703')) {
+      console.warn('⚠️ payment_mode column not found, saving entry without payment_mode');
+      // Remove payment_mode and retry
+      const { payment_mode, ...entryWithoutPaymentMode } = insertData;
+      const retryResult = await supabase
+        .from('cash_book')
+        .insert(entryWithoutPaymentMode)
+        .select()
+        .single();
+      
+      data = retryResult.data;
+      error = retryResult.error;
+      
+      if (!error) {
+        console.warn('✅ Entry saved without payment_mode (column doesn\'t exist). Please run migration to add payment_mode column.');
+      }
+    }
 
     if (error) {
       throw new Error(`Failed to create cash book entry: ${error.message}`);
@@ -1607,7 +1794,7 @@ class SupabaseDatabase {
 
   // User operations
   async getUsers(): Promise<User[]> {
-    // Return only STAFF users for app dropdowns
+    // Return all active users (Admins and Staff)
     const { data, error } = await supabase
       .from('users')
       .select('*, user_types:user_types(user_type)')
@@ -1619,8 +1806,7 @@ class SupabaseDatabase {
       return [];
     }
 
-    const onlyStaff = (data || []).filter((u: any) => u.user_types?.user_type === 'Staff');
-    return onlyStaff as any;
+    return (data || []) as any;
   }
 
   // Distinct staff names from cash_book for free-text staff selection
@@ -3242,9 +3428,27 @@ class SupabaseDatabase {
 
   async getDeletedCashBook(): Promise<any[]> {
     try {
-      console.log('🗑️ Fetching deleted cash book entries from localStorage...');
+      console.log('🗑️ Fetching deleted cash book entries...');
       
-      // Fetch deleted records from localStorage
+      // First, try to fetch from deleted_cash_book table
+      try {
+        const { data: tableData, error: tableError } = await supabase
+          .from('deleted_cash_book')
+          .select('*')
+          .order('deleted_at', { ascending: false });
+
+        if (!tableError && tableData && tableData.length > 0) {
+          console.log('✅ Successfully fetched deleted records from deleted_cash_book table:', tableData.length);
+          return tableData;
+        } else if (tableError) {
+          console.log('⚠️ deleted_cash_book table not accessible, trying localStorage...');
+        }
+      } catch (tableErr) {
+        console.log('⚠️ Error accessing deleted_cash_book table, trying localStorage...');
+      }
+
+      // Fallback: Fetch deleted records from localStorage
+      console.log('🔄 Fetching deleted records from localStorage...');
       const deletedRecordsStr = localStorage.getItem('deleted_records');
       
       if (!deletedRecordsStr) {

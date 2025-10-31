@@ -64,8 +64,8 @@ const NewEntry: React.FC = () => {
     creditOffline: '',
     debitOnline: '',
     debitOffline: '',
-    staff: user?.username || '',
-    paymentMode: 'Cash',
+    staff: '',
+    paymentMode: '',
     quantityChecked: false,
   });
 
@@ -91,8 +91,8 @@ const NewEntry: React.FC = () => {
     creditOffline: '',
     debitOnline: '',
     debitOffline: '',
-    staff: user?.username || '',
-    paymentMode: 'Cash',
+    staff: '',
+    paymentMode: '',
     quantityChecked: false,
   });
 
@@ -429,6 +429,7 @@ const NewEntry: React.FC = () => {
         address: '',
         staff: entry.staff,
         users: user?.username || '',
+        ...(entry.paymentMode && { payment_mode: entry.paymentMode }), // Include payment_mode if selected
         sale_qty: entry.quantityChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.quantityChecked
           ? parseFloat(entry.purchaseQ) || 0
@@ -455,6 +456,7 @@ const NewEntry: React.FC = () => {
           address: '',
           staff: entry.staff,
           users: user?.username || '',
+          ...(dualEntry.paymentMode && { payment_mode: dualEntry.paymentMode }), // Include payment_mode if selected
           sale_qty: dualEntry.quantityChecked
             ? parseFloat(dualEntry.saleQ) || 0
             : 0,
@@ -498,7 +500,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: entry.staff, // Preserve the current staff selection
-        paymentMode: 'Cash',
+        paymentMode: '',
         quantityChecked: false,
       });
       // Accounts are now managed by React Query
@@ -518,7 +520,7 @@ const NewEntry: React.FC = () => {
         debitOnline: '',
         debitOffline: '',
         staff: entry.staff, // Preserve the current staff selection
-        paymentMode: 'Cash',
+        paymentMode: '',
         quantityChecked: false,
       });
       setDualEntryEnabled(false);
@@ -562,8 +564,9 @@ const NewEntry: React.FC = () => {
       );
       console.log('Company created successfully:', company);
       
-      // Invalidate companies query to refresh the dropdown
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      // Invalidate and immediately refetch companies query to refresh the dropdown
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
       
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
@@ -678,8 +681,12 @@ const NewEntry: React.FC = () => {
       switch (deleteType) {
         case 'company':
           if (entry.companyName) {
-            success = await supabaseDB.deleteCompany(entry.companyName);
+            const result = await supabaseDB.deleteCompany(entry.companyName);
+            success = result.success;
             if (success) {
+              // Invalidate and refetch companies query
+              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
               // Companies are now managed by React Query - will be refetched automatically
               setEntry(prev => ({
                 ...prev,
@@ -688,28 +695,42 @@ const NewEntry: React.FC = () => {
                 subAccount: '',
               }));
               message = 'Company deleted successfully!';
+            } else {
+              message = result.error || 'Failed to delete company';
             }
           }
           break;
         case 'account':
           if (entry.companyName && entry.accountName) {
-            success = await supabaseDB.deleteAccount(entry.accountName);
+            const result = await supabaseDB.deleteAccount(entry.accountName);
+            success = result.success;
             if (success) {
+              // Invalidate and refetch accounts query
+              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
+              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
               // Accounts are now managed by React Query - will be refetched automatically
               setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
               message = 'Account deleted successfully!';
+            } else {
+              message = result.error || 'Failed to delete account';
             }
           }
           break;
         case 'subAccount':
           if (entry.companyName && entry.accountName && entry.subAccount) {
-            success = await supabaseDB.deleteSubAccount(entry.subAccount);
+            const result = await supabaseDB.deleteSubAccount(entry.subAccount);
+            success = result.success;
             if (success) {
+              // Invalidate and refetch sub accounts query
+              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
               setSubAccounts(prev =>
                 prev.filter(s => s.value !== entry.subAccount)
               );
               setEntry(prev => ({ ...prev, subAccount: '' }));
               message = 'Sub account deleted successfully!';
+            } else {
+              message = result.error || 'Failed to delete sub account';
             }
           }
           break;
@@ -731,7 +752,7 @@ const NewEntry: React.FC = () => {
       if (success) {
         toast.success(message);
       } else {
-        toast.error(`Failed to delete ${deleteType}. It may be in use.`);
+        toast.error(message || `Failed to delete ${deleteType}. It may be in use.`);
       }
     } catch (error) {
       toast.error(`Error deleting ${deleteType}`);
@@ -1667,10 +1688,11 @@ const NewEntry: React.FC = () => {
                       setEntry(prev => ({ ...prev, paymentMode: val }))
                     }
                     options={[
+                      { value: '', label: 'Select payment mode...' },
                       { value: 'Cash', label: 'Cash' },
                       { value: 'Bank Transfer', label: 'Bank Transfer' }
                     ]}
-                    placeholder='Select payment mode'
+                    placeholder='Select payment mode...'
                     size='sm'
                   />
                 </div>
@@ -1895,10 +1917,11 @@ const NewEntry: React.FC = () => {
                           setDualEntry(prev => ({ ...prev, paymentMode: val }))
                         }
                         options={[
+                          { value: '', label: 'Select payment mode...' },
                           { value: 'Cash', label: 'Cash' },
                           { value: 'Bank Transfer', label: 'Bank Transfer' }
                         ]}
-                        placeholder='Select payment mode'
+                        placeholder='Select payment mode...'
                         size='sm'
                       />
                     </div>
@@ -1988,7 +2011,7 @@ const NewEntry: React.FC = () => {
                         debitOnline: '',
                         debitOffline: '',
                         staff: entry.staff, // Preserve the current staff selection
-                        paymentMode: 'Cash',
+                        paymentMode: '',
                         quantityChecked: false,
                       });
                       // Accounts are now managed by React Query

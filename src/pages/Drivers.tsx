@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, differenceInDays } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { Edit } from 'lucide-react';
 
 const Drivers: React.FC = () => {
   const { user } = useAuth();

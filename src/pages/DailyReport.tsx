@@ -232,20 +232,37 @@ const DailyReport: React.FC = () => {
 
       console.log(`📈 Final filtered entries: ${filteredEntries.length}`);
 
-      // Calculate opening balance efficiently using server-side query
-      const { data: previousEntries, error: prevError } = await supabase
-        .from('cash_book')
-        .select('credit, debit')
-        .lt('c_date', selectedDate);
+      // Calculate opening balance as yesterday's closing balance (all entries up to and including yesterday)
+      const prevDate = format(subDays(new Date(selectedDate), 1), 'yyyy-MM-dd');
+      let openingBalance = 0;
+      try {
+        const { data: previousEntries, error: prevError } = await supabase
+          .from('cash_book')
+          .select('credit, debit, company_name, c_date')
+          .lte('c_date', prevDate);
 
-      if (prevError) {
-        console.error('Error fetching previous entries:', prevError);
+        if (prevError) throw prevError;
+
+        const prevFiltered = (previousEntries || []).filter(e =>
+          selectedCompany ? e.company_name === selectedCompany : true
+        );
+
+        openingBalance = prevFiltered.reduce(
+          (sum, entry) => sum + (Number(entry.credit) - Number(entry.debit)),
+          0
+        );
+      } catch (e) {
+        console.warn('Fallback to client-side aggregation for opening balance:', e);
+        // Fallback: load all entries and compute locally (ensures correctness)
+        const allEntries = await supabaseDB.getAllCashBookEntries();
+        const prevFiltered = allEntries.filter(
+          e => e.c_date <= prevDate && (selectedCompany ? e.company_name === selectedCompany : true)
+        );
+        openingBalance = prevFiltered.reduce(
+          (sum, entry) => sum + (Number(entry.credit) - Number(entry.debit)),
+          0
+        );
       }
-
-      const openingBalance = (previousEntries || []).reduce(
-        (sum, entry) => sum + (entry.credit - entry.debit),
-        0
-      );
 
       // Calculate totals
       const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
@@ -317,16 +334,15 @@ const DailyReport: React.FC = () => {
       const { printDailyReport } = await import('../utils/print');
 
       // Transform data to include all required fields
+      // Note: As requested, we intentionally exclude Date and Staff from print
       const printData = reportData.entries.map(entry => ({
         sno: entry.sno,
-        date: entry.c_date,
         companyName: entry.company_name,
         accountName: entry.acc_name,
         subAccount: entry.sub_acc_name || '',
         particulars: entry.particulars,
         credit: entry.credit,
         debit: entry.debit,
-        staff: entry.staff,
         approved: entry.approved ? 'Approved' : 'Pending',
       }));
 
@@ -536,6 +552,9 @@ const DailyReport: React.FC = () => {
                     Total Credits: ₹{reportData.totalCredit.toLocaleString()}
                   </span>
                   <span>
+                    Opening Balance: ₹{reportData.openingBalance.toLocaleString()}
+                  </span>
+                  <span>
                     Total Debits: ₹{reportData.totalDebit.toLocaleString()}
                   </span>
                 </div>
@@ -547,6 +566,14 @@ const DailyReport: React.FC = () => {
                   </span>
                   <span className='text-2xl font-bold text-green-900'>
                     ₹{reportData.totalCredit.toLocaleString()}
+                  </span>
+                </div>
+                <div className='flex-1 bg-emerald-100 rounded-lg p-4 flex flex-col items-start justify-center'>
+                  <span className='text-emerald-900 font-semibold text-sm'>
+                    Opening Balance:
+                  </span>
+                  <span className='text-2xl font-bold text-emerald-900'>
+                    ₹{reportData.openingBalance.toLocaleString()}
                   </span>
                 </div>
                 <div className='flex-1 bg-red-100 rounded-lg p-4 flex flex-col items-start justify-center'>

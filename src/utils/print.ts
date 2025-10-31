@@ -653,9 +653,16 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     { key: 'staff', label: 'Staff', width: '100px' },
   ];
 
+  // Remove Date and Staff columns when not provided in data (or explicitly excluded)
+  const filteredColumns = columns.filter(col => {
+    if (col.key === 'date' || col.key === 'staff') return false;
+    if (!data || data.length === 0) return true;
+    return Object.prototype.hasOwnProperty.call(data[0], col.key);
+  });
+
   const tableRows = data
     .map(row => {
-      const cells = columns
+      const cells = filteredColumns
         .map(col => {
           const value = row[col.key];
           let displayValue = value;
@@ -691,7 +698,7 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     })
     .join('');
 
-  const tableHeaders = columns
+  const tableHeaders = filteredColumns
     .map(col => `<th style="width: ${col.width || 'auto'}">${col.label}</th>`)
     .join('');
 

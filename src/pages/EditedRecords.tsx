@@ -116,18 +116,34 @@ const EditedRecords = () => {
     try {
       console.log('🔄 Loading Edited Records data...');
       
-      // Simple, clean data loading
-      const [log, users] = await Promise.all([
+      // Load edit audit log and deleted records, then combine them
+      const [log, deletedRecords, users] = await Promise.all([
         supabaseDB.getEditAuditLog(),
+        supabaseDB.getDeletedCashBook(),
         supabaseDB.getUsers(),
       ]);
       
-      setAuditLog((log || []) as AuditLogEntry[]);
+      // Transform deleted records to match audit log format
+      const transformedDeleted = (deletedRecords || []).map((deleted: any) => ({
+        id: `deleted-${deleted.id || Date.now()}`,
+        cash_book_id: deleted.id || '',
+        old_values: JSON.stringify(deleted),
+        new_values: JSON.stringify({ deleted: true }),
+        edited_by: deleted.deleted_by || 'unknown',
+        edited_at: deleted.deleted_at || new Date().toISOString(),
+        action: 'DELETE'
+      }));
+      
+      // Combine edit log and deleted records
+      const combinedLog = [...(log || []), ...transformedDeleted];
+      
+      setAuditLog((combinedLog || []) as AuditLogEntry[]);
       setUsers((users || []) as User[]);
       
-      // No cleaning needed - deleted records come clean from deleted_cash_book table
       console.log(`✅ Loaded Edited Records data:`, {
-        auditLog: (log || []).length,
+        editLog: (log || []).length,
+        deletedRecords: (deletedRecords || []).length,
+        totalRecords: combinedLog.length,
         users: (users || []).length,
       });
       
@@ -139,12 +155,18 @@ const EditedRecords = () => {
       
       // Show consolidated message
       const editCount = (log || []).length;
-      if (editCount > 0) {
+      const deletedCount = (deletedRecords || []).length;
+      const totalCount = combinedLog.length;
+      if (totalCount > 0) {
           const isShowingRecords = (log || []).some(rec => rec.action === 'SHOWING_RECORDS' || rec.action === 'SHOWING_RECENT_ENTRIES');
           if (isShowingRecords) {
-            toast.info(`Showing ${editCount} recent entries from cash_book (no edit history available yet)`);
+            toast.info(`Showing ${totalCount} recent entries from cash_book (no edit history available yet)`);
           } else {
-            toast.success(`Loaded ${editCount} edit records`);
+            if (deletedCount > 0) {
+              toast.success(`Loaded ${editCount} edit records and ${deletedCount} deleted records`);
+            } else {
+              toast.success(`Loaded ${editCount} edit records`);
+            }
           }
       } else {
         toast.info('No edit records found. This is normal if no records have been modified yet.');
@@ -197,13 +219,17 @@ const EditedRecords = () => {
       const newObj: CashBookPartial = log.new_values
         ? JSON.parse(log.new_values)
         : {};
+      // Compute if any field actually changed
+      const changedMap = getChangedFields(oldObj, newObj);
+      const hasAnyChange = Object.values(changedMap).some(Boolean);
       // Date-wise filter: match edited_at date (YYYY-MM-DD)
       const editedDate = log.edited_at ? String(log.edited_at).slice(0, 10) : '';
       const matchesDate = selectedDate === '' || editedDate === selectedDate;
       const matchesUser = userFilter === '' || log.edited_by === userFilter;
-      // Exclude deletes from main table
-      const isDelete = log.new_values == null && log.old_values != null;
-      const result = matchesDate && matchesUser && !isDelete;
+      // Exclude deletes and synthetic recent entries
+      const isDelete = log.action === 'DELETE' || (log.new_values == null && log.old_values != null);
+      const isSyntheticRecent = log.action === 'SHOWING_RECENT_ENTRIES';
+      const result = matchesDate && matchesUser && !isDelete && !isSyntheticRecent && hasAnyChange;
       
       if (!result) {
         console.log('🔍 Filtered out record:', {
@@ -335,7 +361,9 @@ const EditedRecords = () => {
   // Check if we're showing recent entries instead of actual edits
   const isShowingRecentEntries = filteredLog.some(rec => rec.action === 'SHOWING_RECENT_ENTRIES');
   const deletedLog = useMemo(() => {
-    return auditLog.filter(log => log.new_values == null && log.old_values != null);
+    return auditLog.filter(log =>
+      log.action === 'DELETE' || (log.new_values == null && log.old_values != null)
+    );
   }, [auditLog]);
   
   return (

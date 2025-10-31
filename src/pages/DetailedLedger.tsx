@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
@@ -72,6 +72,17 @@ const DetailedLedger: React.FC = () => {
   const [isLoadingAll, setIsLoadingAll] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: '' });
 
+  // Re-load on dashboard-wide refresh events (emitted after New Entry save)
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => {
+        loadLedgerData();
+      }, 250);
+    };
+    window.addEventListener('dashboard-refresh', handler);
+    return () => window.removeEventListener('dashboard-refresh', handler);
+  }, []);
+
   // Dropdown data
   const [companies, setCompanies] = useState<
     { value: string; label: string }[]
@@ -85,6 +96,15 @@ const DetailedLedger: React.FC = () => {
   const [staffList, setStaffList] = useState<
     { value: string; label: string }[]
   >([]);
+
+  // Derived totals for top cards
+  const totals = useMemo(() => {
+    const totalCredit = filteredEntries.reduce((s, e) => s + (e.credit || 0), 0);
+    const totalDebit = filteredEntries.reduce((s, e) => s + (e.debit || 0), 0);
+    const totalSaleQty = filteredEntries.reduce((s, e) => s + (e.saleQuantity || 0), 0);
+    const totalPurchaseQty = filteredEntries.reduce((s, e) => s + (e.purchaseQuantity || 0), 0);
+    return { totalCredit, totalDebit, balance: totalCredit - totalDebit, totalSaleQty, totalPurchaseQty };
+  }, [filteredEntries]);
 
   // Local visible inputs for dd/MM/yyyy editing to prevent mm/dd flip
   const [fromDateInput, setFromDateInput] = useState('');
@@ -336,12 +356,14 @@ const DetailedLedger: React.FC = () => {
           saleQuantity: entry.sale_qty || 0,
           purchaseQuantity: entry.purchase_qty || 0,
           staff: entry.staff,
-          user: entry.staff, // Using staff as user since user field doesn't exist in Supabase schema
+          user: entry.users || entry.staff, // Use users field (logged-in user), fallback to staff if missing
           entryTime: entry.entry_time,
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: entry.payment_mode || 'Cash',
+          payment_mode: (
+            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
+          ).trim(),
         };
       });
 
@@ -392,12 +414,14 @@ const DetailedLedger: React.FC = () => {
           saleQuantity: entry.sale_qty || 0,
           purchaseQuantity: entry.purchase_qty || 0,
           staff: entry.staff,
-          user: entry.staff,
+          user: entry.users || entry.staff,
           entryTime: entry.entry_time,
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: entry.payment_mode || 'Cash',
+          payment_mode: (
+            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
+          ).trim(),
         };
       });
       
@@ -455,7 +479,9 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: entry.payment_mode || 'Cash',
+          payment_mode: (
+            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
+          ).trim(),
         };
       });
       
@@ -534,7 +560,10 @@ const DetailedLedger: React.FC = () => {
 
     // Payment mode filter
     if (filters.paymentMode) {
-      filtered = filtered.filter(entry => (entry.payment_mode || 'Cash') === filters.paymentMode);
+      filtered = filtered.filter(entry => {
+        const entryPaymentMode = entry.payment_mode || '';
+        return entryPaymentMode === filters.paymentMode;
+      });
     }
 
     // Search filter
@@ -628,7 +657,7 @@ const DetailedLedger: React.FC = () => {
           credit: entry.credit,
           debit: entry.debit,
           staff: entry.staff,
-          user: entry.staff,
+          user: entry.users || entry.staff,
           entryTime: entry.entry_time,
           approved: entry.approved,
           balance: balance,
@@ -696,7 +725,7 @@ const DetailedLedger: React.FC = () => {
       Debit: entry.debit,
       Balance: entry.balance,
       Staff: entry.staff,
-      'Payment Mode': entry.payment_mode || 'Cash',
+      'Payment Mode': entry.payment_mode || '',
       User: entry.user,
       'Entry Time': entry.entryTime,
       // Status removed per requirement
@@ -1030,13 +1059,13 @@ const DetailedLedger: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+      <div className='grid grid-cols-1 md:grid-cols-5 gap-4'>
         <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white'>
           <div className='flex items-center justify-between'>
             <div>
               <p className='text-green-100 text-sm font-medium'>Total Credit</p>
               <p className='text-2xl font-bold'>
-                ₹{summary.totalCredit.toLocaleString()}
+                ₹{totals.totalCredit.toLocaleString()}
               </p>
             </div>
             <TrendingUp className='w-8 h-8 text-green-200' />
@@ -1048,7 +1077,7 @@ const DetailedLedger: React.FC = () => {
             <div>
               <p className='text-red-100 text-sm font-medium'>Total Debit</p>
               <p className='text-2xl font-bold'>
-                ₹{summary.totalDebit.toLocaleString()}
+                ₹{totals.totalDebit.toLocaleString()}
               </p>
             </div>
             <TrendingDown className='w-8 h-8 text-red-200' />
@@ -1057,7 +1086,7 @@ const DetailedLedger: React.FC = () => {
 
         <Card
           className={`bg-gradient-to-r ${
-            summary.balance >= 0
+            totals.balance >= 0
               ? 'from-blue-500 to-blue-600'
               : 'from-orange-500 to-orange-600'
           } text-white`}
@@ -1066,11 +1095,34 @@ const DetailedLedger: React.FC = () => {
             <div>
               <p className='text-blue-100 text-sm font-medium'>Balance</p>
               <p className='text-2xl font-bold'>
-                ₹{Math.abs(summary.balance).toLocaleString()}
-                {summary.balance >= 0 ? ' CR' : ' DR'}
+                ₹{Math.abs(totals.balance).toLocaleString()}
+                {totals.balance >= 0 ? ' CR' : ' DR'}
               </p>
             </div>
             <BarChart3 className='w-8 h-8 text-blue-200' />
+          </div>
+        </Card>
+
+        <Card className='bg-gradient-to-r from-indigo-500 to-indigo-600 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-indigo-100 text-sm font-medium'>Total Sale Qty</p>
+              <p className='text-2xl font-bold'>
+                {totals.totalSaleQty.toLocaleString()}
+              </p>
+            </div>
+            <BarChart3 className='w-8 h-8 text-indigo-200' />
+          </div>
+        </Card>
+        <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-purple-100 text-sm font-medium'>Total Purchase Qty</p>
+              <p className='text-2xl font-bold'>
+                {totals.totalPurchaseQty.toLocaleString()}
+              </p>
+            </div>
+            <BarChart3 className='w-8 h-8 text-purple-200' />
           </div>
         </Card>
       </div>
@@ -1187,14 +1239,14 @@ const DetailedLedger: React.FC = () => {
                     <td className='w-20 px-1 py-1 text-xs truncate' title={entry.staff}>
                       {entry.staff}
                     </td>
-                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode}>
+                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || 'Not specified'}>
                       {entry.payment_mode || '-'}
                     </td>
                     <td className='w-16 px-1 py-1 text-xs truncate' title={entry.user}>
                       {entry.user}
                     </td>
-                    <td className='w-16 px-1 py-1 text-xs'>
-                      {format(new Date(entry.entryTime), 'HH:mm:ss')}
+                    <td className='w-24 px-1 py-1 text-xs'>
+                      {format(new Date(entry.entryTime), 'dd/MM/yyyy HH:mm:ss')}
                     </td>
                     
                   </tr>
@@ -1209,7 +1261,7 @@ const DetailedLedger: React.FC = () => {
                   Total Credit:
                 </div>
                 <div className='text-lg font-bold text-green-900'>
-                  ₹{summary.totalCredit.toLocaleString()}
+                  ₹{totals.totalCredit.toLocaleString()}
                 </div>
               </div>
               <div className='bg-red-100 p-3 rounded-lg'>
@@ -1217,28 +1269,28 @@ const DetailedLedger: React.FC = () => {
                   Total Debit:
                 </div>
                 <div className='text-lg font-bold text-red-900'>
-                  ₹{summary.totalDebit.toLocaleString()}
+                  ₹{totals.totalDebit.toLocaleString()}
                 </div>
               </div>
               <div
                 className={`p-3 rounded-lg ${
-                  summary.balance >= 0 ? 'bg-blue-100' : 'bg-orange-100'
+                  totals.balance >= 0 ? 'bg-blue-100' : 'bg-orange-100'
                 }`}
               >
                 <div
                   className={`text-sm font-medium ${
-                    summary.balance >= 0 ? 'text-blue-800' : 'text-orange-800'
+                    totals.balance >= 0 ? 'text-blue-800' : 'text-orange-800'
                   }`}
                 >
                   Balance:
                 </div>
                 <div
                   className={`text-lg font-bold ${
-                    summary.balance >= 0 ? 'text-blue-900' : 'text-orange-900'
+                    totals.balance >= 0 ? 'text-blue-900' : 'text-orange-900'
                   }`}
                 >
-                  ₹{Math.abs(summary.balance).toLocaleString()}
-                  {summary.balance >= 0 ? ' CR' : ' DR'}
+                  ₹{Math.abs(totals.balance).toLocaleString()}
+                  {totals.balance >= 0 ? ' CR' : ' DR'}
                 </div>
               </div>
             </div>
@@ -1351,13 +1403,13 @@ const DetailedLedger: React.FC = () => {
                   <div className='text-center p-3 border border-gray-300'>
                     <div className='font-medium'>Total Credit</div>
                     <div className='text-lg font-bold'>
-                      ₹{summary.totalCredit.toLocaleString()}
+                      ₹{totals.totalCredit.toLocaleString()}
                     </div>
                   </div>
                   <div className='text-center p-3 border border-gray-300'>
                     <div className='font-medium'>Total Debit</div>
                     <div className='text-lg font-bold'>
-                      ₹{summary.totalDebit.toLocaleString()}
+                      ₹{totals.totalDebit.toLocaleString()}
                     </div>
                   </div>
                 </div>
