@@ -2147,6 +2147,9 @@ const EditEntry: React.FC = () => {
                       Debit
                     </th>
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                      Payment Mode
+                    </th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Staff
                     </th>
                     <th className='w-24 px-1 py-1 text-left font-medium text-gray-700'>
@@ -2193,6 +2196,9 @@ const EditEntry: React.FC = () => {
                         {entry.debit > 0
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
+                      </td>
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || '-'}>
+                        {entry.payment_mode ? String(entry.payment_mode).trim() : '-'}
                       </td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
                       <td className='w-24 px-1 py-1 text-left'>

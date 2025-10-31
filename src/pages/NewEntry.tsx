@@ -630,8 +630,11 @@ const NewEntry: React.FC = () => {
       const data = subs.map(name => ({ value: name, label: name }));
       setSubAccounts(data);
       
-      // Invalidate companies query to refresh the dropdown (in case sub-account creation affects company data)
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      // Invalidate sub accounts dropdown and unique count for dashboard
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      await queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
+      await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      await queryClient.refetchQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
       
       // Set the newly created sub-account as selected
       setEntry(prev => ({ ...prev, subAccount: subAccount.sub_acc }));
@@ -721,9 +724,11 @@ const NewEntry: React.FC = () => {
             const result = await supabaseDB.deleteSubAccount(entry.subAccount);
             success = result.success;
             if (success) {
-              // Invalidate and refetch sub accounts query
+              // Invalidate and refetch sub accounts query and unique count for dashboard
               await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+              await queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
               await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+              await queryClient.refetchQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
               setSubAccounts(prev =>
                 prev.filter(s => s.value !== entry.subAccount)
               );
@@ -2074,6 +2079,9 @@ const NewEntry: React.FC = () => {
                             Debit
                           </th>
                           <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                            Payment Mode
+                          </th>
+                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                             Staff
                           </th>
                           <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
@@ -2120,6 +2128,9 @@ const NewEntry: React.FC = () => {
                               {entry.debit > 0
                                 ? `₹${entry.debit.toLocaleString()}`
                                 : '-'}
+                            </td>
+                            <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || '-'}>
+                              {entry.payment_mode ? String(entry.payment_mode).trim() : '-'}
                             </td>
                             <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>
                               {entry.staff}

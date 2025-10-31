@@ -638,15 +638,27 @@ class SupabaseDatabase {
       console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
       
       // Clean fields and normalize approved flag to strict boolean
-      const cleanedData = (data || []).map(entry => ({
-        ...entry,
-        acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        approved: entry.approved === true || entry.approved === 'true',
-        payment_mode: (entry.payment_mode || entry.credit_mode || entry.debit_mode || '').trim()
-      }));
+      const cleanedData = (data || []).map(entry => {
+        // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
+        let paymentMode = '';
+        if (entry.payment_mode && String(entry.payment_mode).trim()) {
+          paymentMode = String(entry.payment_mode).trim();
+        } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
+          paymentMode = String(entry.credit_mode).trim();
+        } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
+          paymentMode = String(entry.debit_mode).trim();
+        }
+        
+        return {
+          ...entry,
+          acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          approved: entry.approved === true || entry.approved === 'true',
+          payment_mode: paymentMode
+        };
+      });
       
       return cleanedData;
     } catch (error) {
@@ -699,15 +711,27 @@ class SupabaseDatabase {
       console.log(`✅ Fetched ${resultCount} entries for today`);
       
       // Clean fields and normalize approved flag to strict boolean
-      const cleanedData = (data || []).map(entry => ({
-        ...entry,
-        acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-        approved: entry.approved === true || entry.approved === 'true',
-        payment_mode: (entry.payment_mode || entry.credit_mode || entry.debit_mode || '').trim()
-      }));
+      const cleanedData = (data || []).map(entry => {
+        // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
+        let paymentMode = '';
+        if (entry.payment_mode && String(entry.payment_mode).trim()) {
+          paymentMode = String(entry.payment_mode).trim();
+        } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
+          paymentMode = String(entry.credit_mode).trim();
+        } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
+          paymentMode = String(entry.debit_mode).trim();
+        }
+        
+        return {
+          ...entry,
+          acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+          approved: entry.approved === true || entry.approved === 'true',
+          payment_mode: paymentMode
+        };
+      });
       
       return cleanedData;
     } catch (error) {
@@ -1127,14 +1151,27 @@ class SupabaseDatabase {
     }
     
     // Clean fields and normalize approved to strict boolean
-    const cleanedData = (data || []).map(entry => ({
-      ...entry,
-      acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-      sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-      particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-      company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
-      approved: entry.approved === true || entry.approved === 'true'
-    }));
+    const cleanedData = (data || []).map(entry => {
+      // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
+      let paymentMode = '';
+      if (entry.payment_mode && String(entry.payment_mode).trim()) {
+        paymentMode = String(entry.payment_mode).trim();
+      } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
+        paymentMode = String(entry.credit_mode).trim();
+      } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
+        paymentMode = String(entry.debit_mode).trim();
+      }
+      
+      return {
+        ...entry,
+        acc_name: entry.acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        sub_acc_name: entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
+        approved: entry.approved === true || entry.approved === 'true',
+        payment_mode: paymentMode
+      };
+    });
     
     return cleanedData as CashBookEntry[];
   }
