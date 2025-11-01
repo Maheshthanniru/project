@@ -3619,6 +3619,77 @@ class SupabaseDatabase {
   }
 
   // Ultra simple fallback function that always works
+  // Get all distinct edited dates from the edit audit log
+  async getDistinctEditedDates(): Promise<string[]> {
+    try {
+      console.log('🔄 Fetching distinct edited dates from edit audit log...');
+      
+      // Try to fetch from edit_cash_book table first
+      const { data: editCashBookData, error: editCashBookError } = await supabase
+        .from('edit_cash_book')
+        .select('edited_at')
+        .not('edited_at', 'is', null);
+      
+      if (!editCashBookError && editCashBookData && editCashBookData.length > 0) {
+        const dates = new Set<string>();
+        editCashBookData.forEach(record => {
+          if (record.edited_at) {
+            const dateStr = String(record.edited_at).slice(0, 10); // Extract YYYY-MM-DD
+            if (dateStr) dates.add(dateStr);
+          }
+        });
+        const sortedDates = Array.from(dates).sort((a, b) => (a < b ? 1 : -1));
+        console.log(`✅ Found ${sortedDates.length} distinct edited dates from edit_cash_book`);
+        return sortedDates;
+      }
+      
+      // Try to fetch from edit_audit_log table
+      const { data: auditLogData, error: auditLogError } = await supabase
+        .from('edit_audit_log')
+        .select('edited_at')
+        .not('edited_at', 'is', null);
+      
+      if (!auditLogError && auditLogData && auditLogData.length > 0) {
+        const dates = new Set<string>();
+        auditLogData.forEach(record => {
+          if (record.edited_at) {
+            const dateStr = String(record.edited_at).slice(0, 10); // Extract YYYY-MM-DD
+            if (dateStr) dates.add(dateStr);
+          }
+        });
+        const sortedDates = Array.from(dates).sort((a, b) => (a < b ? 1 : -1));
+        console.log(`✅ Found ${sortedDates.length} distinct edited dates from edit_audit_log`);
+        return sortedDates;
+      }
+      
+      // Fallback: try to get dates from cash_book records that have been edited
+      const { data: cashBookData, error: cashBookError } = await supabase
+        .from('cash_book')
+        .select('updated_at')
+        .eq('edited', true)
+        .not('updated_at', 'is', null);
+      
+      if (!cashBookError && cashBookData && cashBookData.length > 0) {
+        const dates = new Set<string>();
+        cashBookData.forEach(record => {
+          if (record.updated_at) {
+            const dateStr = String(record.updated_at).slice(0, 10); // Extract YYYY-MM-DD
+            if (dateStr) dates.add(dateStr);
+          }
+        });
+        const sortedDates = Array.from(dates).sort((a, b) => (a < b ? 1 : -1));
+        console.log(`✅ Found ${sortedDates.length} distinct edited dates from cash_book (edited=true)`);
+        return sortedDates;
+      }
+      
+      console.log('⚠️ No edited dates found in any table');
+      return [];
+    } catch (error) {
+      console.error('❌ Error fetching distinct edited dates:', error);
+      return [];
+    }
+  }
+
   async getEditAuditLogSimple(): Promise<any[]> {
     try {
       console.log('🔄 [SIMPLE] Fetching edit audit log with ultra simple approach...');

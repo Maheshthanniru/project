@@ -768,16 +768,41 @@ const EditEntry: React.FC = () => {
 
       if (directError || !directData) {
         console.error('❌ Direct Supabase query failed:', directError);
-        toast.error('Database access failed: ' + (directError?.message || 'unknown error'));
-
-        // Check if it's an RLS issue
-        if (directError && (
-          directError.message.includes('permission') ||
-          directError.message.includes('policy')
-        )) {
-          toast.error(
-            'RLS policies are blocking access. Please disable RLS in Supabase dashboard.'
-          );
+        
+        // Detect specific error types and provide helpful messages
+        let errorMessage = 'Database access failed: ';
+        if (directError?.message) {
+          const errorMsg = directError.message.toLowerCase();
+          
+          // Network connectivity errors
+          if (errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) {
+            errorMessage = 'Network Error: Cannot connect to database. ';
+            errorMessage += 'Please check:\n';
+            errorMessage += '1. Your internet connection\n';
+            errorMessage += '2. Firewall/proxy settings\n';
+            errorMessage += '3. Try refreshing the page (Ctrl+Shift+R)';
+            toast.error(errorMessage, { duration: 6000 });
+            
+            // Also log helpful debugging info
+            console.error('🌐 Network Error Details:', {
+              error: directError.message,
+              supabaseUrl: import.meta.env.VITE_SUPABASE_URL || 'https://pmqeegdmcrktccszgbwu.supabase.co',
+              suggestion: 'Try: 1) Check internet 2) Clear browser cache 3) Check firewall',
+            });
+          }
+          // RLS/permission errors
+          else if (errorMsg.includes('permission') || errorMsg.includes('policy')) {
+            errorMessage = 'Permission Error: RLS policies are blocking access. ';
+            errorMessage += 'Please disable RLS in Supabase dashboard.';
+            toast.error(errorMessage);
+          }
+          // Other errors
+          else {
+            errorMessage += directError.message;
+            toast.error(errorMessage);
+          }
+        } else {
+          toast.error(errorMessage + 'unknown error');
         }
 
         // Fallback: use database service paginated fetch

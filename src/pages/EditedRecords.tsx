@@ -78,6 +78,7 @@ const EditedRecords = () => {
   const [userFilter, setUserFilter] = useState('');
   const [page, setPage] = useState(1);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [editedDates, setEditedDates] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -116,12 +117,16 @@ const EditedRecords = () => {
     try {
       console.log('🔄 Loading Edited Records data...');
       
-      // Load edit audit log and deleted records, then combine them
-      const [log, deletedRecords, users] = await Promise.all([
+      // Load edit audit log, deleted records, users, and distinct edited dates
+      const [log, deletedRecords, users, distinctDates] = await Promise.all([
         supabaseDB.getEditAuditLog(),
         supabaseDB.getDeletedCashBook(),
         supabaseDB.getUsers(),
+        supabaseDB.getDistinctEditedDates(),
       ]);
+      
+      // Set the distinct edited dates for the dropdown
+      setEditedDates(distinctDates);
       
       // Transform deleted records to match audit log format
       const transformedDeleted = (deletedRecords || []).map((deleted: any) => ({
@@ -192,17 +197,18 @@ const EditedRecords = () => {
     return map;
   }, [users]);
 
-  // Build dropdown of distinct edited dates (YYYY-MM-DD)
+  // Build dropdown of distinct edited dates (YYYY-MM-DD) - using dates fetched from database
   const editedDateOptions = useMemo(() => {
-    const dates = Array.from(
-      new Set(
-        auditLog
-          .map(l => (l.edited_at ? String(l.edited_at).slice(0, 10) : ''))
-          .filter(Boolean)
-      )
-    ).sort((a, b) => (a < b ? 1 : -1));
-    return [{ value: '', label: 'All Dates' }, ...dates.map(d => ({ value: d, label: d }))];
-  }, [auditLog]);
+    // Use the dates fetched directly from database, sorted in descending order (newest first)
+    const sortedDates = [...editedDates].sort((a, b) => (a < b ? 1 : -1));
+    return [
+      { value: '', label: 'All Dates' },
+      ...sortedDates.map(d => ({ 
+        value: d, 
+        label: format(new Date(d), 'dd/MM/yyyy') 
+      }))
+    ];
+  }, [editedDates]);
 
   // Filtered and searched log
   const filteredLog = useMemo(() => {
