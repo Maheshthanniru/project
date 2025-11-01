@@ -414,6 +414,19 @@ const NewEntry: React.FC = () => {
       // Prepare main entry data
       const mainCreditNum = parseFloat(entry.credit) || 0;
       const mainDebitNum = parseFloat(entry.debit) || 0;
+      
+      // Prepare payment_mode value - trim if exists, otherwise null
+      const paymentModeValue = entry.paymentMode && entry.paymentMode.trim() 
+        ? entry.paymentMode.trim() 
+        : null;
+      
+      console.log('💾 Saving entry with payment_mode:', {
+        input: entry.paymentMode,
+        processed: paymentModeValue,
+        company: entry.companyName,
+        account: entry.accountName
+      });
+      
       const mainEntryData = {
         acc_name: entry.accountName,
         sub_acc_name: entry.subAccount,
@@ -429,7 +442,7 @@ const NewEntry: React.FC = () => {
         address: '',
         staff: entry.staff,
         users: user?.username || '',
-        ...(entry.paymentMode && { payment_mode: entry.paymentMode }), // Include payment_mode if selected
+        payment_mode: paymentModeValue, // Save payment_mode value or null if empty
         sale_qty: entry.quantityChecked ? parseFloat(entry.saleQ) || 0 : 0,
         purchase_qty: entry.quantityChecked
           ? parseFloat(entry.purchaseQ) || 0
@@ -441,6 +454,19 @@ const NewEntry: React.FC = () => {
       if (dualEntryEnabled) {
         const dualCreditNum = parseFloat(dualEntry.credit) || 0;
         const dualDebitNum = parseFloat(dualEntry.debit) || 0;
+        
+        // Prepare payment_mode value for dual entry
+        const dualPaymentModeValue = dualEntry.paymentMode && dualEntry.paymentMode.trim() 
+          ? dualEntry.paymentMode.trim() 
+          : null;
+        
+        console.log('💾 Saving dual entry with payment_mode:', {
+          input: dualEntry.paymentMode,
+          processed: dualPaymentModeValue,
+          company: dualEntry.companyName,
+          account: dualEntry.accountName
+        });
+        
         const dualEntryData = {
           acc_name: dualEntry.accountName,
           sub_acc_name: dualEntry.subAccount,
@@ -456,7 +482,7 @@ const NewEntry: React.FC = () => {
           address: '',
           staff: entry.staff,
           users: user?.username || '',
-          ...(dualEntry.paymentMode && { payment_mode: dualEntry.paymentMode }), // Include payment_mode if selected
+          payment_mode: dualPaymentModeValue, // Save payment_mode value or null if empty
           sale_qty: dualEntry.quantityChecked
             ? parseFloat(dualEntry.saleQ) || 0
             : 0,
@@ -1695,7 +1721,8 @@ const NewEntry: React.FC = () => {
                     options={[
                       { value: '', label: 'Select payment mode...' },
                       { value: 'Cash', label: 'Cash' },
-                      { value: 'Bank Transfer', label: 'Bank Transfer' }
+                      { value: 'Bank Transfer', label: 'Bank Transfer' },
+                      { value: 'Online', label: 'Online' }
                     ]}
                     placeholder='Select payment mode...'
                     size='sm'

@@ -232,42 +232,51 @@ const DailyReport: React.FC = () => {
 
       console.log(`📈 Final filtered entries: ${filteredEntries.length}`);
 
-      // Calculate opening balance as yesterday's closing balance (all entries up to and including yesterday)
+      // Calculate opening balance as yesterday's closing balance (sum of ALL companies' closing balances up to yesterday)
+      // This is the net balance shown in the Dashboard - always calculated from ALL companies regardless of filters
       const prevDate = format(subDays(new Date(selectedDate), 1), 'yyyy-MM-dd');
       let openingBalance = 0;
       try {
-        const { data: previousEntries, error: prevError } = await supabase
-          .from('cash_book')
-          .select('credit, debit, company_name, c_date')
-          .lte('c_date', prevDate);
-
-        if (prevError) throw prevError;
-
-        const prevFiltered = (previousEntries || []).filter(e =>
-          selectedCompany ? e.company_name === selectedCompany : true
-        );
-
-        openingBalance = prevFiltered.reduce(
-          (sum, entry) => sum + (Number(entry.credit) - Number(entry.debit)),
+        // Get ALL companies' closing balances up to and including the previous date
+        // This gives us the net balance (same as Dashboard) which is the opening balance
+        const companyBalances = await supabaseDB.getCompanyClosingBalancesByDate(prevDate);
+        
+        // Always sum ALL companies' closing balances for opening balance (Dashboard net balance)
+        // This ensures opening balance matches the Dashboard net balance shown
+        openingBalance = companyBalances.reduce(
+          (sum, company) => sum + company.closingBalance,
           0
         );
+        
+        console.log(`💰 Opening balance (Dashboard net balance - sum of all companies up to ${prevDate}): ₹${openingBalance.toLocaleString()}`);
       } catch (e) {
-        console.warn('Fallback to client-side aggregation for opening balance:', e);
-        // Fallback: load all entries and compute locally (ensures correctness)
-        const allEntries = await supabaseDB.getAllCashBookEntries();
-        const prevFiltered = allEntries.filter(
-          e => e.c_date <= prevDate && (selectedCompany ? e.company_name === selectedCompany : true)
-        );
-        openingBalance = prevFiltered.reduce(
-          (sum, entry) => sum + (Number(entry.credit) - Number(entry.debit)),
-          0
-        );
+        console.warn('Error calculating opening balance from company balances, using fallback:', e);
+        // Fallback: calculate from individual entries (sum of all companies)
+        try {
+          const { data: previousEntries, error: prevError } = await supabase
+            .from('cash_book')
+            .select('credit, debit, company_name, c_date')
+            .lte('c_date', prevDate);
+
+          if (prevError) throw prevError;
+
+          // Always sum ALL entries (all companies) for opening balance
+          openingBalance = (previousEntries || []).reduce(
+            (sum, entry) => sum + (Number(entry.credit) - Number(entry.debit)),
+            0
+          );
+        } catch (fallbackError) {
+          console.warn('Fallback also failed:', fallbackError);
+          openingBalance = 0;
+        }
       }
 
-      // Calculate totals
+      // Calculate today's totals (for the selected date, filtered by company if selected)
       const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
       const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
 
+      // Closing balance = Opening Balance + (Today's Total Credit - Today's Total Debit)
+      // This closing balance becomes the next day's opening balance
       const closingBalance = openingBalance + (totalCredit - totalDebit);
       const grandTotal = totalCredit + totalDebit;
 
@@ -352,6 +361,8 @@ const DailyReport: React.FC = () => {
           ? `Company: ${selectedCompany}`
           : 'All Companies',
         headerText: 'Thirumala Group - Daily Transaction Report',
+        openingBalance: reportData.openingBalance,
+        closingBalance: reportData.closingBalance,
       });
     } catch (error) {
       console.error('Print error:', error);
@@ -557,6 +568,9 @@ const DailyReport: React.FC = () => {
                   <span>
                     Total Debits: ₹{reportData.totalDebit.toLocaleString()}
                   </span>
+                  <span>
+                    Closing Balance: ₹{reportData.closingBalance.toLocaleString()}
+                  </span>
                 </div>
               </div>
               <div className='flex flex-col md:flex-row gap-4 mb-6'>
@@ -584,18 +598,21 @@ const DailyReport: React.FC = () => {
                     ₹{reportData.totalDebit.toLocaleString()}
                   </span>
                 </div>
-                <div className='flex-1 bg-blue-100 rounded-lg p-4 flex flex-col items-start justify-center'>
-                  <span className='text-blue-800 font-semibold text-sm'>
-                    Balance:
+                <div className='flex-1 bg-purple-100 rounded-lg p-4 flex flex-col items-start justify-center'>
+                  <span className='text-purple-800 font-semibold text-sm'>
+                    Closing Balance:
                   </span>
-                  <span className='text-2xl font-bold text-blue-800'>
-                    ₹
-                    {Math.abs(
-                      reportData.totalCredit - reportData.totalDebit
-                    ).toLocaleString()}{' '}
-                    {reportData.totalCredit - reportData.totalDebit >= 0
-                      ? 'CR'
-                      : 'DR'}
+                  <span className={`text-2xl font-bold ${
+                    reportData.closingBalance > 0
+                      ? 'text-green-800'
+                      : reportData.closingBalance < 0
+                      ? 'text-red-800'
+                      : 'text-purple-800'
+                  }`}>
+                    ₹{reportData.closingBalance.toLocaleString()}
+                  </span>
+                  <span className='text-xs text-purple-600 mt-1'>
+                    (Opening + Credit - Debit)
                   </span>
                 </div>
               </div>

@@ -622,9 +622,10 @@ class SupabaseDatabase {
       const start = offset;
       const end = offset + limit - 1;
       
+      // Select all fields including payment_mode
       const { data, error } = await supabase
         .from('cash_book')
-        .select('*')
+        .select('*') // Select all columns including payment_mode if it exists
         .order('c_date', { ascending: false }) // Most recent dates first
         .order('created_at', { ascending: false }) // LIFO - newest first
         .range(start, end);
@@ -637,16 +638,50 @@ class SupabaseDatabase {
       const resultCount = data?.length || 0;
       console.log(`✅ Fetched ${resultCount} entries (range: ${start}-${end})`);
       
+      // Debug: Check if payment_mode exists in the data
+      if (data && data.length > 0) {
+        const sampleEntry = data[0];
+        console.log('🔍 Sample entry payment_mode check:', {
+          has_payment_mode: 'payment_mode' in sampleEntry,
+          payment_mode_value: sampleEntry.payment_mode,
+          payment_mode_type: typeof sampleEntry.payment_mode,
+          all_keys: Object.keys(sampleEntry).filter(k => k.includes('mode') || k.includes('payment'))
+        });
+      }
+      
       // Clean fields and normalize approved flag to strict boolean
-      const cleanedData = (data || []).map(entry => {
+      const cleanedData = (data || []).map((entry, idx) => {
         // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
         let paymentMode = '';
-        if (entry.payment_mode && String(entry.payment_mode).trim()) {
-          paymentMode = String(entry.payment_mode).trim();
-        } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
-          paymentMode = String(entry.credit_mode).trim();
-        } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
-          paymentMode = String(entry.debit_mode).trim();
+        
+        // Priority 1: Check payment_mode field - handle all cases
+        if (entry.payment_mode != null && entry.payment_mode !== '') {
+          const pmStr = String(entry.payment_mode).trim();
+          if (pmStr && pmStr !== 'null' && pmStr !== 'undefined' && pmStr !== '') {
+            paymentMode = pmStr;
+          }
+        }
+        
+        // Priority 2: Fallback to credit_mode or debit_mode only if payment_mode is empty
+        if (!paymentMode) {
+          if (entry.credit_mode != null && entry.credit_mode !== '') {
+            const cmStr = String(entry.credit_mode).trim();
+            if (cmStr) paymentMode = cmStr;
+          } else if (entry.debit_mode != null && entry.debit_mode !== '') {
+            const dmStr = String(entry.debit_mode).trim();
+            if (dmStr) paymentMode = dmStr;
+          }
+        }
+        
+        // Debug first 5 entries - show ALL entries to see what's happening
+        if (idx < 5) {
+          console.log(`🔍 Entry ${idx + 1} (ID: ${entry.id}, SNO: ${entry.sno}):`, {
+            payment_mode_raw: entry.payment_mode,
+            payment_mode_type: typeof entry.payment_mode,
+            payment_mode_processed: paymentMode,
+            credit_mode: entry.credit_mode,
+            debit_mode: entry.debit_mode
+          });
         }
         
         return {
@@ -656,7 +691,7 @@ class SupabaseDatabase {
           particulars: entry.particulars?.replace(/\[DELETED\]\s*/g, '').trim() || '',
           company_name: entry.company_name?.replace(/\[DELETED\]\s*/g, '').trim() || '',
           approved: entry.approved === true || entry.approved === 'true',
-          payment_mode: paymentMode
+          payment_mode: paymentMode // Ensure this is set even if empty string
         };
       });
       
@@ -714,12 +749,24 @@ class SupabaseDatabase {
       const cleanedData = (data || []).map(entry => {
         // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
         let paymentMode = '';
-        if (entry.payment_mode && String(entry.payment_mode).trim()) {
-          paymentMode = String(entry.payment_mode).trim();
-        } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
-          paymentMode = String(entry.credit_mode).trim();
-        } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
-          paymentMode = String(entry.debit_mode).trim();
+        
+        // Priority 1: Check payment_mode field - handle all cases
+        if (entry.payment_mode != null && entry.payment_mode !== '') {
+          const pmStr = String(entry.payment_mode).trim();
+          if (pmStr && pmStr !== 'null' && pmStr !== 'undefined' && pmStr !== '') {
+            paymentMode = pmStr;
+          }
+        }
+        
+        // Priority 2: Fallback to credit_mode or debit_mode only if payment_mode is empty
+        if (!paymentMode) {
+          if (entry.credit_mode != null && entry.credit_mode !== '') {
+            const cmStr = String(entry.credit_mode).trim();
+            if (cmStr) paymentMode = cmStr;
+          } else if (entry.debit_mode != null && entry.debit_mode !== '') {
+            const dmStr = String(entry.debit_mode).trim();
+            if (dmStr) paymentMode = dmStr;
+          }
         }
         
         return {
@@ -1053,9 +1100,26 @@ class SupabaseDatabase {
       lastEntry && lastEntry.length > 0 ? lastEntry[0].sno + 1 : 1;
 
     // Filter out undefined values to allow database defaults to work
+    // Always include payment_mode field (even if null or empty string) to ensure it's saved
     const filteredEntry = Object.fromEntries(
-      Object.entries(entry).filter(([_, value]) => value !== undefined)
+      Object.entries(entry).filter(([key, value]) => {
+        // Always include payment_mode field if it exists in the entry object
+        if (key === 'payment_mode') {
+          // If it's null, empty string, or a valid string, include it
+          return true;
+        }
+        return value !== undefined;
+      })
     );
+    
+    // Ensure payment_mode is properly formatted (trim and handle empty strings)
+    if ('payment_mode' in filteredEntry) {
+      if (filteredEntry.payment_mode && typeof filteredEntry.payment_mode === 'string') {
+        filteredEntry.payment_mode = filteredEntry.payment_mode.trim() || null;
+      } else if (filteredEntry.payment_mode === '') {
+        filteredEntry.payment_mode = null;
+      }
+    }
 
     // Try to insert with payment_mode, if it fails due to missing column, retry without it
     let data, error;
@@ -1071,6 +1135,15 @@ class SupabaseDatabase {
       lock_record: false,
     };
     
+    // Debug: Log payment_mode being saved
+    if ('payment_mode' in insertData) {
+      console.log('💾 Database insert with payment_mode:', {
+        payment_mode: insertData.payment_mode,
+        company: insertData.company_name,
+        account: insertData.acc_name
+      });
+    }
+    
     const result = await supabase
       .from('cash_book')
       .insert(insertData)
@@ -1079,6 +1152,15 @@ class SupabaseDatabase {
     
     data = result.data;
     error = result.error;
+    
+    // Debug: Log what was saved
+    if (data && !error && 'payment_mode' in data) {
+      console.log('✅ Entry saved successfully with payment_mode:', {
+        id: data.id,
+        payment_mode_saved: data.payment_mode,
+        company: data.company_name
+      });
+    }
     
     // If error is about payment_mode column not existing, retry without it
     if (error && (error.message?.includes('payment_mode') || error.code === '42703')) {
@@ -1134,7 +1216,31 @@ class SupabaseDatabase {
       console.error('Error fetching cash book entry by id:', error);
       return null;
     }
-    return data as CashBookEntry;
+    
+    if (!data) return null;
+    
+    // Normalize payment_mode like other functions
+    let paymentMode = '';
+    if (data.payment_mode != null && data.payment_mode !== '') {
+      const pmStr = String(data.payment_mode).trim();
+      if (pmStr && pmStr !== 'null' && pmStr !== 'undefined' && pmStr !== '') {
+        paymentMode = pmStr;
+      }
+    }
+    if (!paymentMode) {
+      if (data.credit_mode != null && data.credit_mode !== '') {
+        const cmStr = String(data.credit_mode).trim();
+        if (cmStr) paymentMode = cmStr;
+      } else if (data.debit_mode != null && data.debit_mode !== '') {
+        const dmStr = String(data.debit_mode).trim();
+        if (dmStr) paymentMode = dmStr;
+      }
+    }
+    
+    return {
+      ...data,
+      payment_mode: paymentMode
+    } as CashBookEntry;
   }
 
   // Fetch entries by exact date (YYYY-MM-DD) (used by hooks)
@@ -1154,12 +1260,24 @@ class SupabaseDatabase {
     const cleanedData = (data || []).map(entry => {
       // Preserve payment_mode if it exists, otherwise fallback to credit_mode/debit_mode
       let paymentMode = '';
-      if (entry.payment_mode && String(entry.payment_mode).trim()) {
-        paymentMode = String(entry.payment_mode).trim();
-      } else if (entry.credit_mode && String(entry.credit_mode).trim()) {
-        paymentMode = String(entry.credit_mode).trim();
-      } else if (entry.debit_mode && String(entry.debit_mode).trim()) {
-        paymentMode = String(entry.debit_mode).trim();
+      
+      // Priority 1: Check payment_mode field - handle all cases
+      if (entry.payment_mode != null && entry.payment_mode !== '') {
+        const pmStr = String(entry.payment_mode).trim();
+        if (pmStr && pmStr !== 'null' && pmStr !== 'undefined' && pmStr !== '') {
+          paymentMode = pmStr;
+        }
+      }
+      
+      // Priority 2: Fallback to credit_mode or debit_mode only if payment_mode is empty
+      if (!paymentMode) {
+        if (entry.credit_mode != null && entry.credit_mode !== '') {
+          const cmStr = String(entry.credit_mode).trim();
+          if (cmStr) paymentMode = cmStr;
+        } else if (entry.debit_mode != null && entry.debit_mode !== '') {
+          const dmStr = String(entry.debit_mode).trim();
+          if (dmStr) paymentMode = dmStr;
+        }
       }
       
       return {
@@ -1182,10 +1300,25 @@ class SupabaseDatabase {
       if (!operations || operations.length === 0) return [];
 
       // Filter out undefined fields to respect DB defaults
+      // But always include payment_mode if it exists (even if null)
       const sanitized = operations.map((op) => {
         const base = Object.fromEntries(
-          Object.entries(op).filter(([_, v]) => v !== undefined)
+          Object.entries(op).filter(([key, v]) => {
+            // Always include payment_mode field if it exists (even if null)
+            if (key === 'payment_mode') return true;
+            return v !== undefined;
+          })
         );
+        
+        // Ensure payment_mode is properly formatted
+        if ('payment_mode' in base) {
+          if (base.payment_mode && typeof base.payment_mode === 'string') {
+            base.payment_mode = base.payment_mode.trim() || null;
+          } else if (base.payment_mode === '') {
+            base.payment_mode = null;
+          }
+        }
+        
         // Ensure default flags are set for new inserts (pending by default)
         return {
           approved: false,
@@ -1234,6 +1367,7 @@ class SupabaseDatabase {
       'c_date',
       'e_count',
       'edited',
+      'payment_mode',
     ];
     const filteredUpdates: any = {};
     for (const key of allowedFields) {
@@ -2559,15 +2693,24 @@ class SupabaseDatabase {
     };
   }
 
-  // Get company-wise closing balances (optimized version)
-  async getCompanyClosingBalances(): Promise<Array<{companyName: string, closingBalance: number, totalCredit: number, totalDebit: number}>> {
+  // Get company-wise closing balances up to a specific date (for opening balance calculation)
+  async getCompanyClosingBalancesByDate(endDate?: string): Promise<Array<{companyName: string, closingBalance: number, totalCredit: number, totalDebit: number}>> {
     try {
-      console.log('🔄 Fetching company-wise closing balances (server-side)...');
-      const { data, error } = await supabase
+      console.log(`🔄 Fetching company-wise closing balances up to date: ${endDate || 'all time'}...`);
+      
+      let query = supabase
         .from('cash_book')
         .select('company_name, credit, debit')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '');
+      
+      // If endDate is provided, filter entries up to and including that date
+      if (endDate) {
+        query = query.lte('c_date', endDate);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) {
         console.error('Error fetching company data:', error);
         return [];
@@ -2612,7 +2755,7 @@ class SupabaseDatabase {
         })
         .sort((a, b) => a.companyName.localeCompare(b.companyName));
         
-      console.log(`📊 Calculated balances for ${companyBalances.length} companies`);
+      console.log(`📊 Calculated balances for ${companyBalances.length} companies up to ${endDate || 'all time'}`);
       return companyBalances;
     } catch (error) {
       console.error('Error fetching company closing balances:', error);

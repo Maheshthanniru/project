@@ -115,13 +115,19 @@ const ReplaceForm: React.FC = () => {
   const loadEntries = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-
+      toast.loading('Loading entries...', { id: 'load-entries' });
+      
       const allEntries = await supabaseDB.getAllCashBookEntries();
       setEntries(allEntries);
+      
+      toast.success(`Loaded ${allEntries.length} entries`, { id: 'load-entries' });
+      
+      // Reset preview when reloading
+      setPreviewMode(false);
     } catch (error) {
       console.error('Error loading entries:', error);
-      toast.error('Failed to load entries');
+      toast.error('Failed to load entries', { id: 'load-entries' });
+      setEntries([]);
     } finally {
       setLoading(false);
     }
@@ -130,25 +136,31 @@ const ReplaceForm: React.FC = () => {
   const applyFilters = () => {
     let filtered = [...entries];
 
-    // Filter by company name
+    // Filter by company name (case-insensitive and trimmed)
     if (replaceData.oldCompanyName) {
-      filtered = filtered.filter(
-        entry => entry.company_name === replaceData.oldCompanyName
-      );
+      filtered = filtered.filter(entry => {
+        const entryCompany = entry.company_name?.trim() || '';
+        const oldCompany = replaceData.oldCompanyName?.trim() || '';
+        return entryCompany === oldCompany;
+      });
     }
 
-    // Filter by old account name
+    // Filter by old account name (case-insensitive and trimmed)
     if (replaceData.oldAccountName) {
-      filtered = filtered.filter(
-        entry => entry.acc_name === replaceData.oldAccountName
-      );
+      filtered = filtered.filter(entry => {
+        const entryAccount = entry.acc_name?.trim() || '';
+        const oldAccount = replaceData.oldAccountName?.trim() || '';
+        return entryAccount === oldAccount;
+      });
     }
 
-    // Filter by old sub account
+    // Filter by old sub account (case-insensitive and trimmed)
     if (replaceData.oldSubAccount) {
-      filtered = filtered.filter(
-        entry => entry.sub_acc_name === replaceData.oldSubAccount
-      );
+      filtered = filtered.filter(entry => {
+        const entrySubAccount = entry.sub_acc_name?.trim() || '';
+        const oldSubAccount = replaceData.oldSubAccount?.trim() || '';
+        return entrySubAccount === oldSubAccount;
+      });
     }
 
     setFilteredEntries(filtered);
@@ -157,6 +169,7 @@ const ReplaceForm: React.FC = () => {
 
   const updateSummary = (entries: any[]) => {
     const totalRecords = entries.length;
+    // Calculate affected records - entries that match the old values being replaced
     const affectedRecords = entries.filter(
       entry =>
         (replaceData.oldAccountName &&
@@ -166,12 +179,21 @@ const ReplaceForm: React.FC = () => {
         (replaceData.oldCompanyName &&
           entry.company_name === replaceData.oldCompanyName)
     ).length;
-    const totalCredit = entries.reduce((sum, entry) => sum + entry.credit, 0);
-    const totalDebit = entries.reduce((sum, entry) => sum + entry.debit, 0);
+    
+    // Safely calculate totals, handling null/undefined values
+    const totalCredit = entries.reduce((sum, entry) => {
+      const credit = parseFloat(entry.credit) || 0;
+      return sum + credit;
+    }, 0);
+    
+    const totalDebit = entries.reduce((sum, entry) => {
+      const debit = parseFloat(entry.debit) || 0;
+      return sum + debit;
+    }, 0);
 
     setSummary({
       totalRecords,
-      affectedRecords,
+      affectedRecords: affectedRecords || totalRecords, // Use totalRecords if no filters applied
       totalCredit,
       totalDebit,
     });
@@ -203,10 +225,14 @@ const ReplaceForm: React.FC = () => {
       return;
     }
 
-    setPreviewMode(true);
+    // Apply filters first to get correct count
     applyFilters();
+    setPreviewMode(true);
+    
+    // Get updated summary after filtering
+    const affectedCount = filteredEntries.length;
     toast.success(
-      `Preview: ${summary.affectedRecords} records will be affected`
+      `Preview: ${affectedCount} records will be affected`
     );
   };
 
@@ -250,13 +276,25 @@ const ReplaceForm: React.FC = () => {
         let updatedCount = 0;
 
         for (const entry of filteredEntries) {
-          if (entry.acc_name === replaceData.oldAccountName) {
-            const result = await supabaseDB.updateCashBookEntry(
-              entry.id,
-              { acc_name: replaceData.newAccountName },
-              user?.username
-            );
-            if (result) updatedCount++;
+          // Match with trimmed values for consistency
+          const entryAccount = entry.acc_name?.trim() || '';
+          const oldAccount = replaceData.oldAccountName?.trim() || '';
+          
+          if (entryAccount === oldAccount) {
+            try {
+              const result = await supabaseDB.updateCashBookEntry(
+                entry.id,
+                { acc_name: replaceData.newAccountName.trim() },
+                user?.username || 'admin'
+              );
+              if (result) {
+                updatedCount++;
+              } else {
+                console.warn(`Failed to update entry ${entry.id}`);
+              }
+            } catch (error) {
+              console.error(`Error updating entry ${entry.id}:`, error);
+            }
           }
         }
 
@@ -298,13 +336,25 @@ const ReplaceForm: React.FC = () => {
         let updatedCount = 0;
 
         for (const entry of filteredEntries) {
-          if (entry.sub_acc_name === replaceData.oldSubAccount) {
-            const result = await supabaseDB.updateCashBookEntry(
-              entry.id,
-              { sub_acc_name: replaceData.newSubAccount },
-              user?.username
-            );
-            if (result) updatedCount++;
+          // Match with trimmed values for consistency
+          const entrySubAccount = entry.sub_acc_name?.trim() || '';
+          const oldSubAccount = replaceData.oldSubAccount?.trim() || '';
+          
+          if (entrySubAccount === oldSubAccount) {
+            try {
+              const result = await supabaseDB.updateCashBookEntry(
+                entry.id,
+                { sub_acc_name: replaceData.newSubAccount.trim() },
+                user?.username || 'admin'
+              );
+              if (result) {
+                updatedCount++;
+              } else {
+                console.warn(`Failed to update entry ${entry.id}`);
+              }
+            } catch (error) {
+              console.error(`Error updating entry ${entry.id}:`, error);
+            }
           }
         }
 
@@ -416,19 +466,23 @@ const ReplaceForm: React.FC = () => {
             `Updating entry ${entry.id} with company name: ${entry.company_name}`
           );
 
-          const result = await supabaseDB.updateCashBookEntry(
-            entry.id,
-            { company_name: replaceData.newCompanyName },
-            user?.username
-          );
+          try {
+            const result = await supabaseDB.updateCashBookEntry(
+              entry.id,
+              { company_name: replaceData.newCompanyName.trim() },
+              user?.username || 'admin'
+            );
 
-          console.log(`Update result for entry ${entry.id}:`, result);
+            console.log(`Update result for entry ${entry.id}:`, result);
 
-          if (result) {
-            updatedCount++;
-            console.log(`Successfully updated entry ${entry.id}`);
-          } else {
-            console.log(`Failed to update entry ${entry.id}`);
+            if (result) {
+              updatedCount++;
+              console.log(`Successfully updated entry ${entry.id}`);
+            } else {
+              console.warn(`Failed to update entry ${entry.id}`);
+            }
+          } catch (error) {
+            console.error(`Error updating entry ${entry.id}:`, error);
           }
         }
 
@@ -549,9 +603,10 @@ const ReplaceForm: React.FC = () => {
                 disabled={
                   !replaceData.oldCompanyName ||
                   !replaceData.newCompanyName ||
-                  loading
+                  loading ||
+                  replaceData.oldCompanyName.trim() === replaceData.newCompanyName.trim()
                 }
-                className='bg-purple-600 hover:bg-purple-700'
+                className='bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Replace Company Name
               </Button>
@@ -559,7 +614,7 @@ const ReplaceForm: React.FC = () => {
                 variant='secondary'
                 onClick={handlePreviewCompanyName}
                 disabled={!replaceData.oldCompanyName || loading}
-                className='ml-2 bg-blue-600 hover:bg-blue-700'
+                className='ml-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Preview
               </Button>
@@ -598,9 +653,10 @@ const ReplaceForm: React.FC = () => {
                 disabled={
                   !replaceData.oldAccountName ||
                   !replaceData.newAccountName ||
-                  loading
+                  loading ||
+                  replaceData.oldAccountName.trim() === replaceData.newAccountName.trim()
                 }
-                className='bg-blue-600 hover:bg-blue-700'
+                className='bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Replace Account Name
               </Button>
@@ -639,9 +695,10 @@ const ReplaceForm: React.FC = () => {
                 disabled={
                   !replaceData.oldSubAccount ||
                   !replaceData.newSubAccount ||
-                  loading
+                  loading ||
+                  replaceData.oldSubAccount.trim() === replaceData.newSubAccount.trim()
                 }
-                className='bg-purple-600 hover:bg-purple-700'
+                className='bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Replace Sub Account
               </Button>
@@ -679,7 +736,7 @@ const ReplaceForm: React.FC = () => {
             <div>
               <p className='text-green-100 text-sm font-medium'>Total Credit</p>
               <p className='text-xl font-bold'>
-                ₹{summary.totalCredit.toLocaleString()}
+                ₹{summary.totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
             <TrendingUp className='w-8 h-8 text-green-200' />
@@ -691,7 +748,7 @@ const ReplaceForm: React.FC = () => {
             <div>
               <p className='text-red-100 text-sm font-medium'>Total Debit</p>
               <p className='text-xl font-bold'>
-                ₹{summary.totalDebit.toLocaleString()}
+                ₹{summary.totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
             <TrendingDown className='w-8 h-8 text-red-200' />
@@ -699,8 +756,20 @@ const ReplaceForm: React.FC = () => {
         </Card>
       </div>
 
+      {/* Loading Indicator */}
+      {loading && (
+        <Card>
+          <div className='flex items-center justify-center p-8'>
+            <div className='text-center'>
+              <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4'></div>
+              <p className='text-gray-600'>Loading entries...</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Preview Table */}
-      {previewMode && filteredEntries.length > 0 && (
+      {previewMode && !loading && filteredEntries.length > 0 && (
         <Card
           title='Preview of Affected Records'
           subtitle={`${filteredEntries.length} records will be modified`}
@@ -787,13 +856,13 @@ const ReplaceForm: React.FC = () => {
                       {entry.particulars}
                     </td>
                     <td className='px-3 py-2 text-right font-medium text-green-600'>
-                      {entry.credit > 0
-                        ? `₹${entry.credit.toLocaleString()}`
+                      {entry.credit && parseFloat(entry.credit) > 0
+                        ? `₹${parseFloat(entry.credit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : '-'}
                     </td>
                     <td className='px-3 py-2 text-right font-medium text-red-600'>
-                      {entry.debit > 0
-                        ? `₹${entry.debit.toLocaleString()}`
+                      {entry.debit && parseFloat(entry.debit) > 0
+                        ? `₹${parseFloat(entry.debit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : '-'}
                     </td>
                   </tr>

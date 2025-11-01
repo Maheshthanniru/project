@@ -15,6 +15,8 @@ export interface PrintOptions {
   includeFooter?: boolean;
   headerText?: string;
   footerText?: string;
+  openingBalance?: number;
+  closingBalance?: number;
 }
 
 export const printTable = (
@@ -439,6 +441,8 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     includeFooter = true,
     headerText = 'Thirumala Group - Daily Transaction Report',
     footerText = `Generated on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`,
+    openingBalance = 0,
+    closingBalance = 0,
   } = options;
 
   // Create print window
@@ -702,7 +706,7 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     .map(col => `<th style="width: ${col.width || 'auto'}">${col.label}</th>`)
     .join('');
 
-  // Generate summary
+  // Generate summary with opening and closing balance table
   let summaryHTML = '';
   if (data.length > 0) {
     const creditTotal = data.reduce((sum, row) => sum + (parseFloat(row.credit) || 0), 0);
@@ -710,6 +714,23 @@ export const printDailyReport = (data: any[], options: PrintOptions = {}) => {
     const balance = creditTotal - debitTotal;
 
     summaryHTML = `
+      <div class="print-summary">
+        <table class="boxed-table">
+          <thead>
+            <tr><th colspan="2">Opening and Closing Balance</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Opening Balance</strong></td>
+              <td class="${openingBalance >= 0 ? 'text-green' : 'text-red'}"><strong>₹${Math.abs(openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${openingBalance >= 0 ? 'CR' : 'DR'}</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Closing Balance</strong></td>
+              <td class="${closingBalance >= 0 ? 'text-green' : 'text-red'}"><strong>₹${Math.abs(closingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${closingBalance >= 0 ? 'CR' : 'DR'}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div class="print-summary">
         <table class="boxed-table">
           <thead>

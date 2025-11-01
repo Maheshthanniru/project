@@ -64,6 +64,7 @@ const DetailedLedger: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingPaymentMode, setEditingPaymentMode] = useState<{ id: string; value: string } | null>(null);
   
   // Pagination states
   const [pageSize] = useState(1000); // Show 1000 entries per page
@@ -343,6 +344,25 @@ const DetailedLedger: React.FC = () => {
         const balance = entry.credit - entry.debit;
         runningBalance += balance;
 
+        // Use the normalized payment_mode from getCashBookEntries directly
+        // getCashBookEntries already normalizes payment_mode from database
+        // Make sure to preserve it as-is (already normalized)
+        const paymentMode = (entry.payment_mode && typeof entry.payment_mode === 'string') 
+          ? entry.payment_mode.trim() 
+          : (entry.payment_mode || '');
+        
+        // Debug: Log payment_mode for first few entries to verify values are present
+        if (index < 5) {
+          console.log(`📋 DetailedLedger Mapping Entry ${index + 1}:`, {
+            id: entry.id,
+            sno: entry.sno,
+            payment_mode_from_entry: entry.payment_mode,
+            payment_mode_type: typeof entry.payment_mode,
+            payment_mode_final: paymentMode,
+            is_empty: !paymentMode || paymentMode.trim() === ''
+          });
+        }
+
         return {
           id: entry.id,
           sno: entry.sno,
@@ -361,9 +381,7 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: (
-            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
-          ).trim(),
+          payment_mode: paymentMode,
         };
       });
 
@@ -419,9 +437,9 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: (
-            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
-          ).trim(),
+          payment_mode: entry.payment_mode && String(entry.payment_mode).trim()
+            ? String(entry.payment_mode).trim()
+            : '',
         };
       });
       
@@ -479,9 +497,11 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: (
-            (entry as any).payment_mode || (entry as any).credit_mode || (entry as any).debit_mode || ''
-          ).trim(),
+          payment_mode: entry.payment_mode && String(entry.payment_mode).trim()
+            ? String(entry.payment_mode).trim()
+            : '',
+          saleQuantity: entry.sale_qty || 0,
+          purchaseQuantity: entry.purchase_qty || 0,
         };
       });
       
@@ -1239,8 +1259,67 @@ const DetailedLedger: React.FC = () => {
                     <td className='w-20 px-1 py-1 text-xs truncate' title={entry.staff}>
                       {entry.staff}
                     </td>
-                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || 'Not specified'}>
-                      {entry.payment_mode || '-'}
+                    <td 
+                      className='w-16 px-1 py-1 text-xs truncate cursor-pointer hover:bg-blue-50' 
+                      title={entry.payment_mode || 'Click to edit payment mode'}
+                      onClick={(e) => {
+                        if (editingPaymentMode?.id !== entry.id) {
+                          e.stopPropagation();
+                          setEditingPaymentMode({ id: entry.id, value: entry.payment_mode || '' });
+                        }
+                      }}
+                    >
+                      {editingPaymentMode?.id === entry.id ? (
+                        <select
+                          className='w-full px-1 py-0.5 text-xs border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
+                          value={editingPaymentMode.value}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setEditingPaymentMode({ id: entry.id, value: e.target.value });
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onBlur={async () => {
+                            if (editingPaymentMode && editingPaymentMode.id === entry.id) {
+                              try {
+                                await supabaseDB.updateCashBookEntry(entry.id, {
+                                  payment_mode: editingPaymentMode.value || null,
+                                }, user?.username || 'admin');
+                                // Update local state
+                                setLedgerEntries(prev => prev.map(e => 
+                                  e.id === entry.id 
+                                    ? { ...e, payment_mode: editingPaymentMode.value || '' }
+                                    : e
+                                ));
+                                setEditingPaymentMode(null);
+                                toast.success('Payment mode updated successfully');
+                                // Refresh data
+                                loadLedgerData();
+                              } catch (error) {
+                                console.error('Error updating payment mode:', error);
+                                toast.error('Failed to update payment mode');
+                                setEditingPaymentMode(null);
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur();
+                            } else if (e.key === 'Escape') {
+                              setEditingPaymentMode(null);
+                            }
+                          }}
+                          autoFocus
+                        >
+                          <option value=''>Select payment mode...</option>
+                          <option value='Cash'>Cash</option>
+                          <option value='Bank Transfer'>Bank Transfer</option>
+                          <option value='Online'>Online</option>
+                        </select>
+                      ) : (
+                        <span title={entry.payment_mode || 'No payment mode'}>
+                          {entry.payment_mode && entry.payment_mode.trim() ? entry.payment_mode.trim() : '-'}
+                        </span>
+                      )}
                     </td>
                     <td className='w-16 px-1 py-1 text-xs truncate' title={entry.user}>
                       {entry.user}
