@@ -16,6 +16,7 @@ interface DetailedLedgerFilters {
   mainAccount: string;
   subAccount: string;
   staffwise: string;
+  user: string;
   creditAmount: string; // keep as string for easy typing; parse on apply
   debitAmount: string;  // keep as string for easy typing; parse on apply
   betweenDates: boolean;
@@ -53,6 +54,7 @@ const DetailedLedger: React.FC = () => {
     mainAccount: '',
     subAccount: '',
     staffwise: '',
+    user: '',
     creditAmount: 0,
     debitAmount: 0,
     betweenDates: true,
@@ -64,7 +66,6 @@ const DetailedLedger: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingPaymentMode, setEditingPaymentMode] = useState<{ id: string; value: string } | null>(null);
   
   // Pagination states
   const [pageSize] = useState(1000); // Show 1000 entries per page
@@ -76,9 +77,11 @@ const DetailedLedger: React.FC = () => {
   // Re-load on dashboard-wide refresh events (emitted after New Entry save)
   useEffect(() => {
     const handler = () => {
+      // Longer delay to ensure database has saved the entry
       setTimeout(() => {
+        console.log('🔄 DetailedLedger: Refreshing after dashboard-refresh event');
         loadLedgerData();
-      }, 250);
+      }, 500); // Increased delay to 500ms to ensure database save is complete
     };
     window.addEventListener('dashboard-refresh', handler);
     return () => window.removeEventListener('dashboard-refresh', handler);
@@ -95,6 +98,9 @@ const DetailedLedger: React.FC = () => {
     { value: string; label: string }[]
   >([]);
   const [staffList, setStaffList] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [userList, setUserList] = useState<
     { value: string; label: string }[]
   >([]);
 
@@ -199,7 +205,7 @@ const DetailedLedger: React.FC = () => {
       setAccounts([{ value: '', label: 'Select a company first' }]);
       setSubAccounts([{ value: '', label: 'Select a company first' }]);
 
-      // Load staff
+      // Load staff and users
       const users = await supabaseDB.getUsers();
       const usersData = users
         .filter(u => u.is_active)
@@ -208,6 +214,7 @@ const DetailedLedger: React.FC = () => {
           label: user.username,
         }));
       setStaffList([{ value: '', label: 'All Staff' }, ...usersData]);
+      setUserList([{ value: '', label: 'All Users' }, ...usersData]);
     } catch (error) {
       console.error('Error loading dropdown data:', error);
       toast.error('Failed to load dropdown data');
@@ -346,10 +353,14 @@ const DetailedLedger: React.FC = () => {
 
         // Use the normalized payment_mode from getCashBookEntries directly
         // getCashBookEntries already normalizes payment_mode from database
-        // Make sure to preserve it as-is (already normalized)
-        const paymentMode = (entry.payment_mode && typeof entry.payment_mode === 'string') 
-          ? entry.payment_mode.trim() 
-          : (entry.payment_mode || '');
+        // Ensure we properly extract and display the payment_mode value
+        let paymentMode = '';
+        if (entry.payment_mode) {
+          const pmStr = String(entry.payment_mode).trim();
+          if (pmStr && pmStr !== 'null' && pmStr !== 'undefined' && pmStr !== '') {
+            paymentMode = pmStr;
+          }
+        }
         
         // Debug: Log payment_mode for first few entries to verify values are present
         if (index < 5) {
@@ -359,7 +370,7 @@ const DetailedLedger: React.FC = () => {
             payment_mode_from_entry: entry.payment_mode,
             payment_mode_type: typeof entry.payment_mode,
             payment_mode_final: paymentMode,
-            is_empty: !paymentMode || paymentMode.trim() === ''
+            company: entry.company_name
           });
         }
 
@@ -381,11 +392,22 @@ const DetailedLedger: React.FC = () => {
           approved: entry.approved,
           balance: balance,
           runningBalance: runningBalance,
-          payment_mode: paymentMode,
+          payment_mode: paymentMode, // Payment mode from NewEntry form (Cash/Bank Transfer/Online)
         };
       });
 
       setLedgerEntries(ledgerData);
+      
+      // Debug: Log summary of payment_mode values
+      const entriesWithPaymentMode = ledgerData.filter(e => e.payment_mode && e.payment_mode.trim());
+      console.log(`✅ DetailedLedger loaded: ${ledgerData.length} entries, ${entriesWithPaymentMode.length} have payment_mode values`);
+      if (entriesWithPaymentMode.length > 0) {
+        console.log('📊 Payment mode summary:', {
+          Cash: entriesWithPaymentMode.filter(e => e.payment_mode === 'Cash').length,
+          'Bank Transfer': entriesWithPaymentMode.filter(e => e.payment_mode === 'Bank Transfer').length,
+          Online: entriesWithPaymentMode.filter(e => e.payment_mode === 'Online').length
+        });
+      }
       
       if (entries.length === 0) {
         toast.success('No entries found in database');
@@ -562,6 +584,11 @@ const DetailedLedger: React.FC = () => {
       filtered = filtered.filter(entry => entry.staff === filters.staffwise);
     }
 
+    // User filter
+    if (filters.user) {
+      filtered = filtered.filter(entry => entry.user === filters.user);
+    }
+
     // Credit amount filter (exact match)
     if (filters.creditAmount && filters.creditAmount.trim() !== '') {
       const n = Number(filters.creditAmount);
@@ -595,6 +622,7 @@ const DetailedLedger: React.FC = () => {
           entry.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           entry.subAccount.toLowerCase().includes(searchTerm.toLowerCase()) ||
           entry.staff.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
           entry.credit.toString().includes(searchTerm) ||
           entry.debit.toString().includes(searchTerm)
       );
@@ -709,6 +737,7 @@ const DetailedLedger: React.FC = () => {
       mainAccount: '',
       subAccount: '',
       staffwise: '',
+      user: '',
       creditAmount: '',
       debitAmount: '',
       betweenDates: true,
@@ -967,6 +996,14 @@ const DetailedLedger: React.FC = () => {
                 options={staffList}
                 placeholder='Search staff...'
               />
+
+              <SearchableSelect
+                label='User'
+                value={filters.user}
+                onChange={value => handleFilterChange('user', value)}
+                options={userList}
+                placeholder='Search user...'
+              />
             </div>
 
             {/* Filtering guidance removed as requested */}
@@ -1162,54 +1199,52 @@ const DetailedLedger: React.FC = () => {
             No entries found matching your criteria.
           </div>
         ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-xs table-fixed'>
+          <div className='w-full'>
+            <table className='w-full text-xs table-fixed border-collapse'>
               <thead className='sticky top-0 bg-gray-50 z-10'>
                 <tr className='border-b border-gray-200'>
-                  <th className='w-6 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[3%]'>
                     S.No
                   </th>
-                  <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[6%]'>
                     Date
                   </th>
-                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[11%]'>
                     Company
                   </th>
-                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[9%]'>
                     Account
                   </th>
-                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[10%]'>
                     Sub Account
                   </th>
-                  <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[8%]'>
                     Particulars
                   </th>
-                  <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-right font-medium text-gray-700 w-[6%]'>
                     Credit
                   </th>
-                  <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-right font-medium text-gray-700 w-[6%]'>
                     Debit
                   </th>
-                  <th className='w-16 px-1 py-1 text-center font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-center font-medium text-gray-700 w-[5%]'>
                     Sale Qty
                   </th>
-                  <th className='w-16 px-1 py-1 text-center font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-center font-medium text-gray-700 w-[6%]'>
                     Purchase Qty
                   </th>
-                  
-                  <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[9%]'>
                     Staff
                   </th>
-                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[7%]'>
                     Payment Mode
                   </th>
-                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[7%]'>
                     User
                   </th>
-                  <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                  <th className='px-0.5 py-0.5 text-left font-medium text-gray-700 w-[8%]'>
                     Entry Time
                   </th>
-                  
                 </tr>
               </thead>
               <tbody>
@@ -1220,111 +1255,48 @@ const DetailedLedger: React.FC = () => {
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                     }`}
                   >
-                    <td className='w-6 px-1 py-1 font-medium text-xs'>{index + 1}</td>
-                    <td className='w-12 px-1 py-1 text-xs'>
+                    <td className='px-0.5 py-0.5 font-medium text-xs'>{index + 1}</td>
+                    <td className='px-0.5 py-0.5 text-xs'>
                       {format(new Date(entry.date), 'dd/MM/yyyy')}
                     </td>
-                    <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.companyName}>
+                    <td className='px-0.5 py-0.5 font-medium text-blue-600 text-xs truncate' title={entry.companyName}>
                       {entry.companyName}
                     </td>
-                    <td className='w-20 px-1 py-1 text-xs truncate' title={entry.accountName}>
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.accountName}>
                       {entry.accountName}
                     </td>
-                    <td className='w-20 px-1 py-1 text-xs truncate' title={entry.subAccount}>
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.subAccount}>
                       {entry.subAccount || '-'}
                     </td>
-                    <td
-                      className='w-32 px-1 py-1 text-xs truncate'
-                      title={entry.particulars}
-                    >
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.particulars}>
                       {entry.particulars}
                     </td>
-                    <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
+                    <td className='px-0.5 py-0.5 text-right font-medium text-green-600 text-xs'>
                       {entry.credit > 0
                         ? `₹${entry.credit.toLocaleString()}`
                         : '-'}
                     </td>
-                    <td className='w-16 px-1 py-1 text-right font-medium text-red-600 text-xs'>
+                    <td className='px-0.5 py-0.5 text-right font-medium text-red-600 text-xs'>
                       {entry.debit > 0
                         ? `₹${entry.debit.toLocaleString()}`
                         : '-'}
                     </td>
-                    <td className='w-16 px-1 py-1 text-center text-xs'>
+                    <td className='px-0.5 py-0.5 text-center text-xs'>
                       {entry.saleQuantity > 0 ? entry.saleQuantity.toLocaleString() : '-'}
                     </td>
-                    <td className='w-16 px-1 py-1 text-center text-xs'>
+                    <td className='px-0.5 py-0.5 text-center text-xs'>
                       {entry.purchaseQuantity > 0 ? entry.purchaseQuantity.toLocaleString() : '-'}
                     </td>
-                    
-                    <td className='w-20 px-1 py-1 text-xs truncate' title={entry.staff}>
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.staff}>
                       {entry.staff}
                     </td>
-                    <td 
-                      className='w-16 px-1 py-1 text-xs truncate cursor-pointer hover:bg-blue-50' 
-                      title={entry.payment_mode || 'Click to edit payment mode'}
-                      onClick={(e) => {
-                        if (editingPaymentMode?.id !== entry.id) {
-                          e.stopPropagation();
-                          setEditingPaymentMode({ id: entry.id, value: entry.payment_mode || '' });
-                        }
-                      }}
-                    >
-                      {editingPaymentMode?.id === entry.id ? (
-                        <select
-                          className='w-full px-1 py-0.5 text-xs border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500'
-                          value={editingPaymentMode.value}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            setEditingPaymentMode({ id: entry.id, value: e.target.value });
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          onBlur={async () => {
-                            if (editingPaymentMode && editingPaymentMode.id === entry.id) {
-                              try {
-                                await supabaseDB.updateCashBookEntry(entry.id, {
-                                  payment_mode: editingPaymentMode.value || null,
-                                }, user?.username || 'admin');
-                                // Update local state
-                                setLedgerEntries(prev => prev.map(e => 
-                                  e.id === entry.id 
-                                    ? { ...e, payment_mode: editingPaymentMode.value || '' }
-                                    : e
-                                ));
-                                setEditingPaymentMode(null);
-                                toast.success('Payment mode updated successfully');
-                                // Refresh data
-                                loadLedgerData();
-                              } catch (error) {
-                                console.error('Error updating payment mode:', error);
-                                toast.error('Failed to update payment mode');
-                                setEditingPaymentMode(null);
-                              }
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                            } else if (e.key === 'Escape') {
-                              setEditingPaymentMode(null);
-                            }
-                          }}
-                          autoFocus
-                        >
-                          <option value=''>Select payment mode...</option>
-                          <option value='Cash'>Cash</option>
-                          <option value='Bank Transfer'>Bank Transfer</option>
-                          <option value='Online'>Online</option>
-                        </select>
-                      ) : (
-                        <span title={entry.payment_mode || 'No payment mode'}>
-                          {entry.payment_mode && entry.payment_mode.trim() ? entry.payment_mode.trim() : '-'}
-                        </span>
-                      )}
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.payment_mode || 'No payment mode'}>
+                      {entry.payment_mode && String(entry.payment_mode).trim() ? String(entry.payment_mode).trim() : '-'}
                     </td>
-                    <td className='w-16 px-1 py-1 text-xs truncate' title={entry.user}>
+                    <td className='px-0.5 py-0.5 text-xs truncate' title={entry.user}>
                       {entry.user}
                     </td>
-                    <td className='w-24 px-1 py-1 text-xs'>
+                    <td className='px-0.5 py-0.5 text-xs'>
                       {format(new Date(entry.entryTime), 'dd/MM/yyyy HH:mm:ss')}
                     </td>
                     

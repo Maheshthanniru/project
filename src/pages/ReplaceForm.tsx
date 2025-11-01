@@ -3,6 +3,7 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
+import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -266,6 +267,18 @@ const ReplaceForm: React.FC = () => {
       return;
     }
 
+    // Verify that the new account name exists in the listed accounts
+    const newAccountExists = accounts.some(
+      account => account.value.trim() === replaceData.newAccountName.trim()
+    );
+
+    if (!newAccountExists) {
+      toast.error(
+        `Account "${replaceData.newAccountName}" does not exist. Please select an existing account from the list.`
+      );
+      return;
+    }
+
     if (
       window.confirm(
         `Replace "${replaceData.oldAccountName}" with "${replaceData.newAccountName}" in ${summary.affectedRecords} records?`
@@ -323,6 +336,18 @@ const ReplaceForm: React.FC = () => {
   const handleReplaceSubAccount = async () => {
     if (!replaceData.oldSubAccount || !replaceData.newSubAccount) {
       toast.error('Please select both old and new sub account names');
+      return;
+    }
+
+    // Verify that the new sub account name exists in the listed sub accounts
+    const newSubAccountExists = subAccounts.some(
+      subAccount => subAccount.value.trim() === replaceData.newSubAccount.trim()
+    );
+
+    if (!newSubAccountExists) {
+      toast.error(
+        `Sub Account "${replaceData.newSubAccount}" does not exist. Please select an existing sub account from the list.`
+      );
       return;
     }
 
@@ -426,36 +451,25 @@ const ReplaceForm: React.FC = () => {
     ) {
       setLoading(true);
       try {
-        // First, check if the new company name exists in the companies table
+        // Verify that the new company name exists in the companies table
         const allCompanies = await supabaseDB.getCompanies();
         const newCompanyExists = allCompanies.some(
           company =>
             company.company_name.trim() === replaceData.newCompanyName.trim()
         );
 
-        // If the new company doesn't exist, add it to the companies table
+        // The new company must already exist in the companies table
         if (!newCompanyExists) {
-          console.log(
-            `Adding new company "${replaceData.newCompanyName}" to companies table...`
+          toast.error(
+            `Company "${replaceData.newCompanyName}" does not exist. Please select an existing company from the list.`
           );
-          try {
-            await supabaseDB.addCompany(replaceData.newCompanyName, '');
-            console.log(
-              `Successfully added company "${replaceData.newCompanyName}"`
-            );
-          } catch (error) {
-            console.error('Error adding new company:', error);
-            toast.error(
-              `Failed to add new company "${replaceData.newCompanyName}". Please try again.`
-            );
-            setLoading(false);
-            return;
-          }
-        } else {
-          console.log(
-            `Company "${replaceData.newCompanyName}" already exists in companies table`
-          );
+          setLoading(false);
+          return;
         }
+
+        console.log(
+          `Company "${replaceData.newCompanyName}" exists in companies table`
+        );
 
         let updatedCount = 0;
 
@@ -589,11 +603,15 @@ const ReplaceForm: React.FC = () => {
                 />
               </div>
               <div>
-                <Input
+                <SearchableSelect
                   label='New Company Name'
                   value={replaceData.newCompanyName}
                   onChange={value => handleInputChange('newCompanyName', value)}
-                  placeholder='Enter new company name'
+                  options={[
+                    { value: '', label: 'Select new company...' },
+                    ...companies,
+                  ]}
+                  placeholder='Select new company...'
                 />
               </div>
             </div>
@@ -639,11 +657,15 @@ const ReplaceForm: React.FC = () => {
                 />
               </div>
               <div>
-                <Input
-                  label='New AccountName'
+                <SearchableSelect
+                  label='New Account Name'
                   value={replaceData.newAccountName}
                   onChange={value => handleInputChange('newAccountName', value)}
-                  placeholder='Enter new account name'
+                  options={[
+                    { value: '', label: 'Select new account...' },
+                    ...newAccounts,
+                  ]}
+                  placeholder='Select new account...'
                 />
               </div>
             </div>
@@ -681,11 +703,15 @@ const ReplaceForm: React.FC = () => {
                 />
               </div>
               <div>
-                <Input
-                  label='New SubAccount'
+                <SearchableSelect
+                  label='New Sub Account'
                   value={replaceData.newSubAccount}
                   onChange={value => handleInputChange('newSubAccount', value)}
-                  placeholder='Enter new sub account name'
+                  options={[
+                    { value: '', label: 'Select new sub account...' },
+                    ...newSubAccounts,
+                  ]}
+                  placeholder='Select new sub account...'
                 />
               </div>
             </div>

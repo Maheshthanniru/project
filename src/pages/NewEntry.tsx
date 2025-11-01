@@ -13,6 +13,7 @@ import { queryKeys } from '../lib/queryClient';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { importFromFile } from '../utils/excel';
+import { checkPaymentModeColumnExists, getAddColumnSQL } from '../utils/addPaymentModeColumn';
 import {
   Upload,
   FileText,
@@ -20,6 +21,9 @@ import {
   Building,
   RefreshCw,
   Calendar,
+  Database,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 
 interface NewEntryForm {
@@ -202,6 +206,57 @@ const NewEntry: React.FC = () => {
         nextRef.current.focus();
       }
     }
+  };
+
+  // State for payment_mode column check
+  const [paymentModeColumnStatus, setPaymentModeColumnStatus] = useState<{
+    exists: boolean;
+    checking: boolean;
+    sqlCommand: string;
+  }>({
+    exists: true, // Optimistic - assume it exists
+    checking: false,
+    sqlCommand: '',
+  });
+
+  // Check if payment_mode column exists on mount
+  useEffect(() => {
+    const checkPaymentModeColumn = async () => {
+      setPaymentModeColumnStatus(prev => ({ ...prev, checking: true }));
+      try {
+        const result = await checkPaymentModeColumnExists();
+        setPaymentModeColumnStatus({
+          exists: result.exists,
+          checking: false,
+          sqlCommand: result.exists ? '' : getAddColumnSQL(),
+        });
+        
+        if (!result.exists) {
+          console.error('❌ payment_mode column missing!', result.message);
+          toast.error('⚠️ Payment mode column missing. Click "Add Column" button below.', {
+            duration: 8000,
+          });
+        }
+      } catch (error) {
+        console.error('Error checking payment_mode column:', error);
+        setPaymentModeColumnStatus(prev => ({ ...prev, checking: false }));
+      }
+    };
+    
+    checkPaymentModeColumn();
+  }, []);
+
+  // Copy SQL to clipboard
+  const copySQLToClipboard = () => {
+    if (paymentModeColumnStatus.sqlCommand) {
+      navigator.clipboard.writeText(paymentModeColumnStatus.sqlCommand);
+      toast.success('SQL copied to clipboard! Paste it in Supabase SQL Editor.');
+    }
+  };
+
+  // Open Supabase dashboard
+  const openSupabaseDashboard = () => {
+    window.open('https://supabase.com/dashboard', '_blank');
   };
 
   useEffect(() => {
@@ -493,7 +548,29 @@ const NewEntry: React.FC = () => {
         };
 
         // Use bulk operations for dual entries
-        await bulkOperationsMutation.mutateAsync([mainEntryData, dualEntryData]);
+        const savedEntries = await bulkOperationsMutation.mutateAsync([mainEntryData, dualEntryData]);
+        
+        // Debug: Verify payment_mode was saved for dual entries
+        if (savedEntries && savedEntries.length > 0) {
+          savedEntries.forEach((savedEntry: any, idx: number) => {
+            console.log(`✅ Dual Entry ${idx + 1} saved, checking payment_mode:`, {
+              saved_entry_id: savedEntry?.id,
+              payment_mode_saved: savedEntry?.payment_mode,
+              payment_mode_input: idx === 0 ? paymentModeValue : dualPaymentModeValue
+            });
+          });
+          
+          // Show warning if payment_mode wasn't saved
+          const hasPaymentMode = savedEntries.some((e: any) => e?.payment_mode);
+          const expectedPaymentMode = paymentModeValue || dualPaymentModeValue;
+          if (expectedPaymentMode && !hasPaymentMode) {
+            toast.error('⚠️ Payment mode column missing in database. Please add it using SQL: ALTER TABLE cash_book ADD COLUMN payment_mode TEXT;');
+          }
+        }
+        
+        // Explicitly refetch recent entries for the current date to show payment_mode immediately
+        await queryClient.refetchQueries({ queryKey: ['recentEntries', entry.date] });
+        
         // Notify other pages (like Edit Entry) to refresh
         try {
           localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -501,7 +578,24 @@ const NewEntry: React.FC = () => {
         } catch {}
       } else {
         // Use single entry mutation
-        await createEntryMutation.mutateAsync(mainEntryData);
+        const savedEntry = await createEntryMutation.mutateAsync(mainEntryData);
+        
+        // Debug: Verify payment_mode was saved
+        console.log('✅ Entry saved, checking payment_mode:', {
+          saved_entry_id: savedEntry?.id,
+          payment_mode_saved: savedEntry?.payment_mode,
+          payment_mode_input: paymentModeValue,
+          payment_mode_match: savedEntry?.payment_mode === paymentModeValue
+        });
+        
+        // Show user-friendly message if payment_mode wasn't saved
+        if (paymentModeValue && !savedEntry?.payment_mode) {
+          toast.error('⚠️ Payment mode column missing in database. Please add it using SQL: ALTER TABLE cash_book ADD COLUMN payment_mode TEXT;');
+        }
+        
+        // Explicitly refetch recent entries for the current date to show payment_mode immediately
+        await queryClient.refetchQueries({ queryKey: ['recentEntries', entry.date] });
+        
         // Notify other pages (like Edit Entry) to refresh
         try {
           localStorage.setItem('dashboard-refresh', Date.now().toString());
@@ -1354,6 +1448,54 @@ const NewEntry: React.FC = () => {
 
   return (
     <div className='min-h-screen flex flex-col w-full max-w-full'>
+      {/* Payment Mode Column Missing Alert */}
+      {!paymentModeColumnStatus.exists && !paymentModeColumnStatus.checking && (
+        <div className='bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-2 mx-1'>
+          <div className='flex items-start'>
+            <div className='flex-shrink-0'>
+              <Database className='h-5 w-5 text-yellow-400' />
+            </div>
+            <div className='ml-3 flex-1'>
+              <h3 className='text-sm font-medium text-yellow-800'>
+                ⚠️ Payment Mode Column Missing
+              </h3>
+              <div className='mt-2 text-sm text-yellow-700'>
+                <p className='mb-2'>
+                  The <code className='bg-yellow-100 px-1 rounded'>payment_mode</code> column is missing from your database.
+                  Please add it to enable payment mode functionality.
+                </p>
+                <div className='mt-3 flex flex-wrap gap-2'>
+                  <Button
+                    onClick={copySQLToClipboard}
+                    variant='secondary'
+                    size='sm'
+                    className='text-xs'
+                  >
+                    <Copy className='h-3 w-3 mr-1' />
+                    Copy SQL Command
+                  </Button>
+                  <Button
+                    onClick={openSupabaseDashboard}
+                    variant='secondary'
+                    size='sm'
+                    className='text-xs'
+                  >
+                    <ExternalLink className='h-3 w-3 mr-1' />
+                    Open Supabase Dashboard
+                  </Button>
+                </div>
+                <div className='mt-3 p-2 bg-yellow-100 rounded text-xs font-mono text-yellow-900 overflow-x-auto'>
+                  {paymentModeColumnStatus.sqlCommand}
+                </div>
+                <p className='mt-2 text-xs text-yellow-600'>
+                  <strong>Steps:</strong> 1) Copy SQL above 2) Open Supabase Dashboard 3) Go to SQL Editor 4) Paste & Run 5) Refresh this page
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header - Fixed at top */}
       <div className='flex items-center justify-between p-1 bg-white border-b border-gray-200 flex-shrink-0'>
         <div>
@@ -2081,40 +2223,40 @@ const NewEntry: React.FC = () => {
                     <table className='w-full text-xs table-fixed'>
                       <thead className='sticky top-0 bg-gray-50 z-10'>
                         <tr className='border-b border-gray-200'>
-                          <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-12 px-1 py-0 text-left font-medium text-gray-700'>
                             S.No
                           </th>
-                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-0 text-left font-medium text-gray-700'>
                             Date
                           </th>
-                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-0 text-left font-medium text-gray-700'>
                             Company
                           </th>
-                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-0 text-left font-medium text-gray-700'>
                             Account
                           </th>
-                          <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-0 text-left font-medium text-gray-700'>
                             Sub Account
                           </th>
-                          <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-32 px-1 py-0 text-left font-medium text-gray-700'>
                             Particulars
                           </th>
-                          <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
-                            Credit
-                          </th>
-                          <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
-                            Debit
-                          </th>
-                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-0 text-left font-medium text-gray-700'>
                             Payment Mode
                           </th>
-                          <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                          <th className='w-16 px-1 py-0 text-right font-medium text-gray-700'>
+                            Credit
+                          </th>
+                          <th className='w-16 px-1 py-0 text-right font-medium text-gray-700'>
+                            Debit
+                          </th>
+                          <th className='w-16 px-1 py-0 text-left font-medium text-gray-700'>
                             Staff
                           </th>
-                          <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-0 text-center font-medium text-gray-700'>
                             Status
                           </th>
-                          <th className='w-20 px-1 py-1 text-center font-medium text-gray-700'>
+                          <th className='w-20 px-1 py-0 text-center font-medium text-gray-700'>
                             Entry Date and Time
                           </th>
                         </tr>
@@ -2127,42 +2269,42 @@ const NewEntry: React.FC = () => {
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                             }`}
                           >
-                            <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
-                            <td className='w-16 px-1 py-1 text-xs'>
+                            <td className='w-12 px-1 py-0 font-medium text-xs'>{index + 1}</td>
+                            <td className='w-16 px-1 py-0 text-xs'>
                               {format(new Date(entry.c_date), 'dd-MMM-yy')}
                             </td>
-                            <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
+                            <td className='w-20 px-1 py-0 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
                               {entry.company_name}
                             </td>
-                            <td className='w-20 px-1 py-1 text-xs truncate' title={entry.acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                            <td className='w-20 px-1 py-0 text-xs truncate' title={entry.acc_name?.replace(/\[DELETED\]\s*/g, '')}>
                               {entry.acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
                             </td>
-                            <td className='w-20 px-1 py-1 text-xs truncate' title={entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '')}>
+                            <td className='w-20 px-1 py-0 text-xs truncate' title={entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '')}>
                               {entry.sub_acc_name?.replace(/\[DELETED\]\s*/g, '') || '-'}
                             </td>
                             <td
-                              className='w-32 px-1 py-1 text-xs truncate'
+                              className='w-32 px-1 py-0 text-xs truncate'
                               title={entry.particulars?.replace(/\[DELETED\]\s*/g, '')}
                             >
                               {entry.particulars?.replace(/\[DELETED\]\s*/g, '') || '-'}
                             </td>
-                            <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
+                            <td className='w-16 px-1 py-0 text-xs truncate' title={entry.payment_mode || 'No payment mode'}>
+                              {entry.payment_mode && String(entry.payment_mode).trim() ? String(entry.payment_mode).trim() : '-'}
+                            </td>
+                            <td className='w-16 px-1 py-0 text-right font-medium text-green-600 text-xs'>
                               {entry.credit > 0
                                 ? `₹${entry.credit.toLocaleString()}`
                                 : '-'}
                             </td>
-                            <td className='w-16 px-1 py-1 text-right font-medium text-red-600 text-xs'>
+                            <td className='w-16 px-1 py-0 text-right font-medium text-red-600 text-xs'>
                               {entry.debit > 0
                                 ? `₹${entry.debit.toLocaleString()}`
                                 : '-'}
                             </td>
-                            <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || '-'}>
-                              {entry.payment_mode ? String(entry.payment_mode).trim() : '-'}
-                            </td>
-                            <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>
+                            <td className='w-16 px-1 py-0 text-xs truncate' title={entry.staff}>
                               {entry.staff}
                             </td>
-                            <td className='w-20 px-1 py-1 text-center'>
+                            <td className='w-20 px-1 py-0 text-center'>
                               {entry.approved ? (
                                 <span className='inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800'>
                                   Approved
@@ -2173,7 +2315,7 @@ const NewEntry: React.FC = () => {
                                 </span>
                               )}
                             </td>
-                            <td className='w-20 px-1 py-1 text-center text-xs'>
+                            <td className='w-20 px-1 py-0 text-center text-xs'>
                               <div className='text-xs'>
                                 {format(new Date(entry.c_date), 'dd/MM/yyyy')}
                               </div>

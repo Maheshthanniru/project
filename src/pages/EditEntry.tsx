@@ -69,6 +69,8 @@ const EditEntry: React.FC = () => {
   const [filterCredit, setFilterCredit] = useState('');
   const [filterDebit, setFilterDebit] = useState('');
   const [filterStaff, setFilterStaff] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterPaymentMode, setFilterPaymentMode] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterDateInput, setFilterDateInput] = useState('');
   
@@ -127,6 +129,21 @@ const EditEntry: React.FC = () => {
       );
     }
     
+    // Apply user filter
+    if (filterUser) {
+      filtered = filtered.filter(entry => 
+        entry.users?.toLowerCase().includes(filterUser.toLowerCase())
+      );
+    }
+    
+    // Apply payment mode filter
+    if (filterPaymentMode) {
+      filtered = filtered.filter(entry => {
+        const entryPaymentMode = entry.payment_mode ? String(entry.payment_mode).trim().toLowerCase() : '';
+        return entryPaymentMode === filterPaymentMode.toLowerCase();
+      });
+    }
+    
     // Apply date filter from calendar selection (priority over other date filters)
     if (selectedDateFilter) {
       filtered = filtered.filter(entry => {
@@ -164,13 +181,17 @@ const EditEntry: React.FC = () => {
     }
     
     return filtered;
-  }, [entries, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff, selectedDateFilter, searchTerm, filterDate, statusFilter]);
+  }, [entries, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff, filterUser, filterPaymentMode, selectedDateFilter, searchTerm, filterDate, statusFilter]);
   
   const [showHistory, setShowHistory] = useState(false);
   const [entryHistory] = useState<EditHistory[]>([]);
 
   // Form data for editing
   const [companies, setCompanies] = useState<
+    { value: string; label: string }[]
+  >([]);
+  // Separate state for filter dropdown companies (can be filtered by date)
+  const [filterCompanies, setFilterCompanies] = useState<
     { value: string; label: string }[]
   >([]);
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
@@ -185,12 +206,23 @@ const EditEntry: React.FC = () => {
   const [debitOptions, setDebitOptions] = useState<
     { value: string; label: string }[]
   >([]);
+  const [paymentModeOptions, setPaymentModeOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // New state for dependent dropdowns
   const [distinctAccountNames, setDistinctAccountNames] = useState<
     { value: string; label: string }[]
   >([]);
   const [dependentSubAccounts, setDependentSubAccounts] = useState<
+    { value: string; label: string }[]
+  >([]);
+  
+  // Separate state for filter dropdowns - always show ALL values
+  const [allAccountNames, setAllAccountNames] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [allSubAccounts, setAllSubAccounts] = useState<
     { value: string; label: string }[]
   >([]);
   const [dependentParticulars, setDependentParticulars] = useState<
@@ -201,6 +233,16 @@ const EditEntry: React.FC = () => {
   useEffect(() => {
     const initializeData = async () => {
       console.log('🔄 Initializing EditEntry data...');
+      // Load companies first to ensure they're available immediately
+      const allCompaniesList = await supabaseDB.getCompanies();
+      const allCompaniesData = allCompaniesList.map(company => ({
+        value: company.company_name?.trim() || '',
+        label: company.company_name?.trim() || '',
+      })).filter(item => item.value && item.label);
+      console.log('✅ Initial companies loaded:', allCompaniesData.length);
+      setCompanies(allCompaniesData);
+      setFilterCompanies(allCompaniesData);
+      
       await loadEntries();
       await loadDropdownData();
     };
@@ -212,7 +254,7 @@ const EditEntry: React.FC = () => {
   useEffect(() => {
     console.log('🔄 Filters changed, reloading entries...');
     loadEntries();
-  }, [searchTerm, filterDate, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff]);
+  }, [searchTerm, filterDate, statusFilter, filterCompanyName, filterAccountName, filterSubAccountName, filterParticulars, filterCredit, filterDebit, filterStaff, filterUser, filterPaymentMode]);
 
   // Listen for global dashboard refresh events (emitted after new entry creation)
   useEffect(() => {
@@ -253,6 +295,19 @@ const EditEntry: React.FC = () => {
       // If no date filter, load all options
       console.log('🔄 No date filter, loading all filter options...');
       loadDropdownData();
+      // Ensure companies are loaded even if loadDropdownData hasn't completed yet
+      if (companies.length === 0) {
+        supabaseDB.getCompanies().then(companiesList => {
+          const companiesData = companiesList.map(company => ({
+            value: company.company_name?.trim() || '',
+            label: company.company_name?.trim() || '',
+          })).filter(item => item.value && item.label);
+          if (companiesData.length > 0) {
+            setCompanies(companiesData);
+            setFilterCompanies(companiesData);
+          }
+        });
+      }
     }
   }, [filterDate, selectedDateFilter]);
 
@@ -319,21 +374,31 @@ const EditEntry: React.FC = () => {
       const companiesCount = await supabaseDB.getCompaniesCount();
       console.log('📊 Total companies in companies table:', companiesCount);
       
-      const companies = await supabaseDB.getCompaniesWithData();
-      console.log('🏢 Raw companies with data from companies table:', companies.length);
+      // Load ALL companies (not just those with data in cash_book)
+      const companies = await supabaseDB.getCompanies();
+      console.log('🏢 All companies loaded from companies table:', companies.length);
       const companiesData = companies.map(company => ({
-        value: company.company_name,
-        label: company.company_name,
-      }));
-      console.log('🏢 Companies with data loaded from companies table:', companiesData.length);
-      console.log('🏢 Company names with data from companies table:', companiesData.map(c => c.label));
+        value: company.company_name?.trim() || '',
+        label: company.company_name?.trim() || '',
+      })).filter(item => item.value && item.label); // Filter out empty values
+      console.log('🏢 All companies formatted:', companiesData.length);
+      console.log('🏢 Company names (first 10):', companiesData.slice(0, 10).map(c => c.label));
       
       // Verify we got all companies
       if (companiesData.length !== companiesCount) {
         console.warn(`⚠️ Warning: Expected ${companiesCount} companies but got ${companiesData.length}`);
       }
       
+      if (companiesData.length === 0) {
+        console.error('❌ ERROR: No companies loaded! Check database connection and companies table.');
+        toast.error('No companies found. Please check your database.');
+      } else {
+        console.log('✅ Successfully loaded', companiesData.length, 'companies');
+      }
+      
       setCompanies(companiesData);
+      // Also set filter companies to all companies initially
+      setFilterCompanies(companiesData);
       
       // Also log cash_book companies for comparison
       const { data: cashBookCompanyData, error: cashBookError } = await supabase
@@ -361,6 +426,26 @@ const EditEntry: React.FC = () => {
 
       // Load all account names initially for display
       await loadDistinctAccountNames();
+      
+      // Load ALL account names for filter dropdown (always show all)
+      const allAccountNamesList = await supabaseDB.getDistinctAccountNames();
+      console.log('📊 All account names loaded:', allAccountNamesList.length);
+      const allAccountNamesData = allAccountNamesList.map(name => ({
+        value: name?.trim() || '',
+        label: name?.trim() || '',
+      })).filter(item => item.value && item.label); // Filter out empty values
+      console.log('📊 All account names formatted:', allAccountNamesData.length);
+      setAllAccountNames(allAccountNamesData);
+      
+      // Load ALL sub account names for filter dropdown (always show all)
+      const allSubAccountNamesList = await supabaseDB.getDistinctSubAccountNames();
+      console.log('📊 All sub account names loaded:', allSubAccountNamesList.length);
+      const allSubAccountsData = allSubAccountNamesList.map(name => ({
+        value: name?.trim() || '',
+        label: name?.trim() || '',
+      })).filter(item => item.value && item.label); // Filter out empty values
+      console.log('📊 All sub account names formatted:', allSubAccountsData.length);
+      setAllSubAccounts(allSubAccountsData);
 
       // Load unique values for dropdowns
       const uniqueParticulars = await supabaseDB.getUniqueParticulars();
@@ -374,19 +459,27 @@ const EditEntry: React.FC = () => {
       // Load unique credit and debit amounts
       const { data: amountsData, error: amountsError } = await supabase
         .from('cash_book')
-        .select('credit, debit')
+        .select('credit, debit, payment_mode')
         .not('credit', 'is', null)
         .not('debit', 'is', null);
 
       if (!amountsError && amountsData) {
         const uniqueCredits = [...new Set(amountsData.map(entry => entry.credit).filter(val => val !== null && val !== undefined))];
         const uniqueDebits = [...new Set(amountsData.map(entry => entry.debit).filter(val => val !== null && val !== undefined))];
+        const uniquePaymentModes = [...new Set(
+          amountsData
+            .map(entry => entry.payment_mode)
+            .filter(mode => mode && String(mode).trim() !== '')
+            .map(mode => String(mode).trim())
+        )];
         
         console.log('💰 Credit amounts loaded:', uniqueCredits.length);
         console.log('💰 Debit amounts loaded:', uniqueDebits.length);
+        console.log('💳 Payment modes loaded:', uniquePaymentModes.length);
         
         setCreditOptions(uniqueCredits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
         setDebitOptions(uniqueDebits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+        setPaymentModeOptions(uniquePaymentModes.map(mode => ({ value: mode, label: mode })));
       }
       
       console.log('✅ All dropdown data loaded successfully');
@@ -482,11 +575,12 @@ const EditEntry: React.FC = () => {
       setFilterParticulars('');
       setFilterCredit('');
       setFilterDebit('');
+      setFilterPaymentMode('');
       
       // Get all entries for the specific date
       const { data, error } = await supabase
         .from('cash_book')
-        .select('company_name, acc_name, sub_acc_name, particulars, credit, debit')
+        .select('company_name, acc_name, sub_acc_name, particulars, credit, debit, payment_mode')
         .eq('c_date', date);
 
       if (error) {
@@ -501,6 +595,12 @@ const EditEntry: React.FC = () => {
       const uniqueParticulars = [...new Set(data.map(entry => entry.particulars).filter(Boolean))];
       const uniqueCredits = [...new Set(data.map(entry => entry.credit).filter(val => val !== null && val !== undefined))];
       const uniqueDebits = [...new Set(data.map(entry => entry.debit).filter(val => val !== null && val !== undefined))];
+      const uniquePaymentModes = [...new Set(
+        data
+          .map(entry => entry.payment_mode)
+          .filter(mode => mode && String(mode).trim() !== '')
+          .map(mode => String(mode).trim())
+      )];
       
       console.log(`📊 Found for date ${date}:`, {
         companies: uniqueCompanies.length,
@@ -508,16 +608,20 @@ const EditEntry: React.FC = () => {
         subAccounts: uniqueSubAccounts.length,
         particulars: uniqueParticulars.length,
         credits: uniqueCredits.length,
-        debits: uniqueDebits.length
+        debits: uniqueDebits.length,
+        paymentModes: uniquePaymentModes.length
       });
       
-      // Update dropdowns with date-specific options
-      setCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      // Update filter dropdowns with date-specific options (but keep edit form dropdowns showing all values)
+      setFilterCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      // Don't update companies, allAccountNames and allSubAccounts - keep them showing ALL values for edit form
+      // Only update the dependent dropdowns used for editing
       setDistinctAccountNames(uniqueAccounts.map(name => ({ value: name, label: name })));
       setDependentSubAccounts(uniqueSubAccounts.map(name => ({ value: name, label: name })));
       setParticularsOptions(uniqueParticulars.map(name => ({ value: name, label: name })));
       setCreditOptions(uniqueCredits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
       setDebitOptions(uniqueDebits.map(amount => ({ value: amount.toString(), label: amount.toString() })));
+      setPaymentModeOptions(uniquePaymentModes.map(mode => ({ value: mode, label: mode })));
       
       // Show toast with summary
       const summary = [
@@ -617,8 +721,9 @@ const EditEntry: React.FC = () => {
         debits: uniqueDebits.length
       });
       
-      // Update dropdowns with related options
-      setCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      // Update filter dropdowns with related options (but keep edit form dropdowns with all values)
+      setFilterCompanies(uniqueCompanies.map(name => ({ value: name, label: name })));
+      // Don't update companies state - keep it for edit form dropdown
       setDistinctAccountNames(uniqueAccounts.map(name => ({ value: name, label: name })));
       setDependentSubAccounts(uniqueSubAccounts.map(name => ({ value: name, label: name })));
       setParticularsOptions(uniqueParticulars.map(name => ({ value: name, label: name })));
@@ -1079,12 +1184,53 @@ const EditEntry: React.FC = () => {
     setFilterCompanyName(entry.company_name || '');
     setFilterAccountName(entry.acc_name || '');
     
-    // Load company-specific account names
+    // Ensure all dropdowns have ALL options loaded
+    // Load all account names if not already loaded
+    if (allAccountNames.length === 0) {
+      const allAccountNamesList = await supabaseDB.getDistinctAccountNames();
+      console.log('🔄 Loading all account names for edit form:', allAccountNamesList.length);
+      const allAccountNamesData = allAccountNamesList.map(name => ({
+        value: name?.trim() || '',
+        label: name?.trim() || '',
+      })).filter(item => item.value && item.label);
+      setAllAccountNames(allAccountNamesData);
+      console.log('✅ All account names set for edit form:', allAccountNamesData.length);
+    }
+    
+    // Load all sub accounts if not already loaded
+    if (allSubAccounts.length === 0) {
+      const allSubAccountNamesList = await supabaseDB.getDistinctSubAccountNames();
+      console.log('🔄 Loading all sub account names for edit form:', allSubAccountNamesList.length);
+      const allSubAccountsData = allSubAccountNamesList.map(name => ({
+        value: name?.trim() || '',
+        label: name?.trim() || '',
+      })).filter(item => item.value && item.label);
+      setAllSubAccounts(allSubAccountsData);
+      console.log('✅ All sub account names set for edit form:', allSubAccountsData.length);
+    }
+    
+    // Also ensure companies are loaded for edit form - ALWAYS reload to ensure fresh data
+    console.log('🔄 Ensuring companies are loaded for edit form...');
+    const allCompaniesList = await supabaseDB.getCompanies();
+    const allCompaniesData = allCompaniesList.map(company => ({
+      value: company.company_name?.trim() || '',
+      label: company.company_name?.trim() || '',
+    })).filter(item => item.value && item.label);
+    if (allCompaniesData.length > 0) {
+      setCompanies(allCompaniesData);
+      console.log('✅ All companies loaded for edit form:', allCompaniesData.length);
+      console.log('✅ Company names (first 10):', allCompaniesData.slice(0, 10).map(c => c.label));
+    } else {
+      console.error('❌ ERROR: No companies found when opening edit form!');
+      toast.error('No companies found. Please check your database.');
+    }
+    
+    // Also load company-specific account names for reference (but edit form will use allAccountNames)
     if (entry.company_name) {
       await loadAccountNamesByCompany(entry.company_name);
     }
     
-    // Load dependent dropdown data for the selected entry
+    // Load dependent dropdown data for the selected entry (for particulars)
     if (entry.acc_name && entry.company_name) {
       await loadSubAccountsByAccountAndCompany(entry.acc_name, entry.company_name);
     } else if (entry.acc_name) {
@@ -1936,8 +2082,8 @@ const EditEntry: React.FC = () => {
               label='Company Name'
               value={filterCompanyName}
               onChange={setFilterCompanyName}
-              options={companies}
-              placeholder='Select company...'
+              options={companies.length > 0 ? companies : (filterCompanies.length > 0 ? filterCompanies : [])}
+              placeholder={companies.length === 0 && filterCompanies.length === 0 ? 'Loading companies...' : 'Select company...'}
             />
           </div>
           
@@ -1947,7 +2093,7 @@ const EditEntry: React.FC = () => {
               label='Account Name'
               value={filterAccountName}
               onChange={setFilterAccountName}
-              options={distinctAccountNames}
+              options={allAccountNames}
               placeholder='Select account...'
             />
           </div>
@@ -1958,7 +2104,7 @@ const EditEntry: React.FC = () => {
               label='Sub Account'
               value={filterSubAccountName}
               onChange={setFilterSubAccountName}
-              options={dependentSubAccounts}
+              options={allSubAccounts}
               placeholder='Select sub account...'
             />
           </div>
@@ -2007,6 +2153,28 @@ const EditEntry: React.FC = () => {
             />
           </div>
           
+          {/* Payment Mode */}
+          <div className='col-span-1'>
+            <SearchableSelect
+              label='Payment Mode'
+              value={filterPaymentMode}
+              onChange={setFilterPaymentMode}
+              options={paymentModeOptions}
+              placeholder='Select payment mode...'
+            />
+          </div>
+          
+          {/* User */}
+          <div className='col-span-1'>
+            <SearchableSelect
+              label='User'
+              value={filterUser}
+              onChange={setFilterUser}
+              options={users}
+              placeholder='Select user...'
+            />
+          </div>
+          
           {/* Remaining fields */}
           <div className='col-span-1'>
             <Input
@@ -2039,6 +2207,8 @@ const EditEntry: React.FC = () => {
                 setFilterCredit('');
                 setFilterDebit('');
                 setFilterStaff('');
+                setFilterUser('');
+                setFilterPaymentMode('');
                 setFilterDate('');
                 setSelectedDateFilter(''); // Clear calendar date filter
                 setEntriesForSelectedDate([]); // Clear multiple entries selection
@@ -2074,9 +2244,17 @@ const EditEntry: React.FC = () => {
             variant='secondary'
             icon={RefreshCw}
             onClick={async () => {
-              console.log('🔄 Refreshing company names...');
+              console.log('🔄 Refreshing all dropdown options...');
               await loadDropdownData();
-              toast.success('Company names refreshed');
+              
+              // Also refresh all filter dropdown options
+              const allAccountNamesList = await supabaseDB.getDistinctAccountNames();
+              setAllAccountNames(allAccountNamesList.map(name => ({ value: name, label: name })));
+              
+              const allSubAccountNamesList = await supabaseDB.getDistinctSubAccountNames();
+              setAllSubAccounts(allSubAccountNamesList.map(name => ({ value: name, label: name })));
+              
+              toast.success('All dropdown options refreshed');
             }}
           >
             Refresh Companies
@@ -2121,10 +2299,10 @@ const EditEntry: React.FC = () => {
               <table className='w-full text-xs table-fixed'>
                 <thead className='bg-gray-50 border-b border-gray-200'>
                   <tr>
-                    <th className='w-12 px-1 py-1 text-left font-medium text-gray-700'>
+                    <th className='w-12 px-1 py-0 text-left font-medium text-gray-700'>
                       S.No
                     </th>
-                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                    <th className='w-16 px-1 py-0 text-left font-medium text-gray-700'>
                       Date
                     </th>
                     <th className='w-20 px-1 py-1 text-left font-medium text-gray-700'>
@@ -2140,6 +2318,9 @@ const EditEntry: React.FC = () => {
                     <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
                       Particulars
                     </th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                      Payment Mode
+                    </th>
                     <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                       Credit
                     </th>
@@ -2147,10 +2328,10 @@ const EditEntry: React.FC = () => {
                       Debit
                     </th>
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
-                      Payment Mode
+                      Staff
                     </th>
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
-                      Staff
+                      User
                     </th>
                     <th className='w-24 px-1 py-1 text-left font-medium text-gray-700'>
                       Entry Date and Time
@@ -2171,8 +2352,8 @@ const EditEntry: React.FC = () => {
                       }`}
                       onClick={() => setSelectedEntry(entry)}
                     >
-                      <td className='w-12 px-1 py-1 font-medium text-xs'>{index + 1}</td>
-                      <td className='w-16 px-1 py-1 text-xs'>
+                      <td className='w-12 px-1 py-0 font-medium text-xs'>{index + 1}</td>
+                      <td className='w-16 px-1 py-0 text-xs'>
                         {format(new Date(entry.c_date), 'dd/MM/yyyy')}
                       </td>
                       <td className='w-20 px-1 py-1 font-medium text-blue-600 text-xs truncate' title={entry.company_name}>
@@ -2187,6 +2368,9 @@ const EditEntry: React.FC = () => {
                       >
                         {entry.particulars}
                       </td>
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || 'No payment mode'}>
+                        {entry.payment_mode && String(entry.payment_mode).trim() ? String(entry.payment_mode).trim() : '-'}
+                      </td>
                       <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
                         {entry.credit > 0
                           ? `₹${entry.credit.toLocaleString()}`
@@ -2197,10 +2381,10 @@ const EditEntry: React.FC = () => {
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
                       </td>
-                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || '-'}>
-                        {entry.payment_mode ? String(entry.payment_mode).trim() : '-'}
-                      </td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.users || 'No user'}>
+                        {entry.users || '-'}
+                      </td>
                       <td className='w-24 px-1 py-1 text-left'>
                         <div className='text-xs'>
                           {format(new Date(entry.c_date), 'dd/MM/yyyy')}
@@ -2600,14 +2784,15 @@ const EditEntry: React.FC = () => {
                         label='Company Name'
                         value={selectedEntry?.company_name || ''}
                         onChange={value => editMode ? handleInputChange('company_name', value) : undefined}
-                        options={companies}
+                        options={companies.length > 0 ? companies : (filterCompanies.length > 0 ? filterCompanies : [])}
                         disabled={!editMode}
+                        placeholder={companies.length === 0 && filterCompanies.length === 0 ? 'Loading companies...' : 'Select company...'}
                       />
                       <SearchableSelect
                         label='Main Account'
                         value={selectedEntry?.acc_name || ''}
                         onChange={value => editMode ? handleInputChange('acc_name', value) : undefined}
-                        options={distinctAccountNames}
+                        options={allAccountNames.length > 0 ? allAccountNames : distinctAccountNames}
                         disabled={!editMode}
                         placeholder='Select account...'
                       />
@@ -2615,7 +2800,7 @@ const EditEntry: React.FC = () => {
                         label='Sub Account'
                         value={selectedEntry?.sub_acc_name || ''}
                         onChange={value => editMode ? handleInputChange('sub_acc_name', value) : undefined}
-                        options={dependentSubAccounts}
+                        options={allSubAccounts.length > 0 ? allSubAccounts : dependentSubAccounts}
                         disabled={!editMode || !selectedEntry?.acc_name}
                         placeholder='Select sub account...'
                       />

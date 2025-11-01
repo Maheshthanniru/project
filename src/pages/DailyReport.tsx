@@ -629,7 +629,6 @@ const DailyReport: React.FC = () => {
                     <th className='px-3 py-2 text-left'>Particulars</th>
                     <th className='px-3 py-2 text-right'>Credit</th>
                     <th className='px-3 py-2 text-right'>Debit</th>
-                    <th className='px-3 py-2 text-center'>Payment Mode</th>
                     <th className='px-3 py-2 text-left'>Staff</th>
                     <th className='px-3 py-2 text-left'>User</th>
                   </tr>
@@ -662,37 +661,6 @@ const DailyReport: React.FC = () => {
                         {entry.debit > 0
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
-                      </td>
-                      <td className='px-3 py-2 text-center'>
-                        {entry.credit > 0 && (
-                          <div className='space-y-1'>
-                            {entry.credit_online > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                                Online: ₹{entry.credit_online.toLocaleString()}
-                              </span>
-                            )}
-                            {entry.credit_offline > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                                Offline: ₹
-                                {entry.credit_offline.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {entry.debit > 0 && (
-                          <div className='space-y-1'>
-                            {entry.debit_online > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800'>
-                                Online: ₹{entry.debit_online.toLocaleString()}
-                              </span>
-                            )}
-                            {entry.debit_offline > 0 && (
-                              <span className='inline-block px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800'>
-                                Offline: ₹{entry.debit_offline.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </td>
                       <td className='px-3 py-2'>{entry.staff}</td>
                       <td className='px-3 py-2'>
