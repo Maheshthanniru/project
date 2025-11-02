@@ -300,7 +300,52 @@ const ReplaceForm: React.FC = () => {
 
         if (result.success && result.updatedCount > 0) {
           await loadEntries();
-          toast.success(`${result.updatedCount} account names replaced successfully!`);
+          
+          // After successful replacement, delete the old account name from company_main_accounts
+          console.log(`Deleting old account name "${replaceData.oldAccountName}" from company_main_accounts...`);
+          try {
+            // Delete all entries with the old account name from company_main_accounts table
+            // Since we've already replaced all cash_book entries, it's safe to delete
+            const { error: deleteError } = await supabase
+              .from('company_main_accounts')
+              .delete()
+              .eq('acc_name', replaceData.oldAccountName.trim());
+
+            if (deleteError) {
+              console.warn('Warning: Could not delete old account name from company_main_accounts:', deleteError);
+              // Don't fail the whole operation if deletion fails - it's a cleanup step
+              toast.warning(
+                `${result.updatedCount} account names replaced successfully, but could not delete old account from reference table.`,
+                { duration: 4000 }
+              );
+            } else {
+              console.log('✅ Old account name deleted from company_main_accounts');
+              // Also delete related sub accounts if any
+              const { error: subDeleteError } = await supabase
+                .from('company_main_sub_acc')
+                .delete()
+                .eq('acc_name', replaceData.oldAccountName.trim());
+
+              if (subDeleteError) {
+                console.warn('Warning: Could not delete old sub accounts:', subDeleteError);
+              } else {
+                console.log('✅ Old sub accounts deleted');
+              }
+              
+              toast.success(
+                `${result.updatedCount} account names replaced and old account "${replaceData.oldAccountName}" deleted successfully!`,
+                { duration: 4000 }
+              );
+            }
+          } catch (deleteErr) {
+            console.error('Error deleting old account name:', deleteErr);
+            // Continue with success message even if deletion fails
+            toast.success(`${result.updatedCount} account names replaced successfully!`);
+          }
+          
+          // Refresh dropdown data to reflect the changes
+          await loadDropdownData();
+          
           setReplaceData(prev => ({
             ...prev,
             oldAccountName: '',
