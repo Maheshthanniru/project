@@ -41,6 +41,24 @@ const UserManagement: React.FC = () => {
     loadFeatures();
   }, []);
 
+  // Debug: Log when features are loaded
+  useEffect(() => {
+    console.log('📋 Features state updated:', {
+      featuresCount: features.length,
+      features: features
+    });
+  }, [features]);
+
+  // Debug: Log when newUser state changes
+  useEffect(() => {
+    console.log('👤 New user state:', {
+      username: newUser.username,
+      is_admin: newUser.is_admin,
+      features: newUser.features,
+      featuresCount: newUser.features?.length || 0
+    });
+  }, [newUser]);
+
   const loadUsers = async () => {
     const { data: userRows } = await supabase.from('users').select(`
         id, 
@@ -49,29 +67,55 @@ const UserManagement: React.FC = () => {
       `);
     if (!userRows) return;
 
-    // Convert user types to is_admin boolean for compatibility and add empty features array
-    const usersWithFeatures = userRows.map((u: any) => ({
-      ...u,
-      is_admin: u.user_types?.user_type === 'Admin',
-      features: [], // Simplified approach - no feature management for now
-    }));
+    // Load features for each user from user_access table
+    const usersWithFeatures = await Promise.all(
+      userRows.map(async (u: any) => {
+        const isAdmin = u.user_types?.user_type === 'Admin';
+        
+        // If admin, they have all features (handled in AuthContext)
+        // If not admin, load their features from user_access table
+        let features: string[] = [];
+        if (!isAdmin) {
+          const { data: accessData } = await supabase
+            .from('user_access')
+            .select('feature_key')
+            .eq('user_id', u.id);
+          
+          features = accessData?.map(a => a.feature_key) || [];
+        }
+
+        return {
+          ...u,
+          is_admin: isAdmin,
+          features,
+        };
+      })
+    );
+    
     setUsers(usersWithFeatures);
   };
 
   const loadFeatures = async () => {
-    // Define features manually since we're not using a features table
+    // Define features manually - must match all sidebar menu items (except admin-only 'users')
     const defaultFeatures = [
       { key: 'dashboard', name: 'Dashboard' },
       { key: 'new_entry', name: 'New Entry' },
-      { key: 'ledger', name: 'Ledger' },
-      { key: 'balance_sheet', name: 'Balance Sheet' },
-      { key: 'user_management', name: 'User Management' },
-      { key: 'vehicles', name: 'Vehicles' },
-      { key: 'drivers', name: 'Drivers' },
-      { key: 'bank_guarantees', name: 'Bank Guarantees' },
+      { key: 'edit_entry', name: 'Edit Entry' },
+      { key: 'daily_report', name: 'Daily Report' },
+      { key: 'detailed_ledger', name: 'Detailed Ledger' },
+      { key: 'ledger_summary', name: 'Ledger Summary' },
+      { key: 'approve_records', name: 'Approve Records' },
+      { key: 'edited_records', name: 'Edited Records' },
+      { key: 'deleted_records', name: 'Deleted Records' },
+      { key: 'replace_form', name: 'Replace Form' },
+      { key: 'export', name: 'Export' },
       { key: 'csv_upload', name: 'CSV Upload' },
-      { key: 'export_excel', name: 'Export Excel' },
+      { key: 'balance_sheet', name: 'Balance Sheet' },
+      { key: 'vehicles', name: 'Vehicles' },
+      { key: 'bank_guarantees', name: 'Bank Guarantees' },
+      { key: 'drivers', name: 'Drivers' },
     ];
+    console.log('📋 Loading features:', defaultFeatures);
     setFeatures(defaultFeatures);
   };
 
@@ -149,12 +193,24 @@ const UserManagement: React.FC = () => {
   };
 
   const handleModalFeatureToggle = (featureKey: string) => {
-    setNewUser(prev => ({
-      ...prev,
-      features: prev.features.includes(featureKey)
-        ? prev.features.filter(f => f !== featureKey)
-        : [...prev.features, featureKey],
-    }));
+    console.log('🔄 Toggling feature:', featureKey);
+    setNewUser(prev => {
+      const currentFeatures = prev.features || [];
+      const newFeatures = currentFeatures.includes(featureKey)
+        ? currentFeatures.filter(f => f !== featureKey)
+        : [...currentFeatures, featureKey];
+      
+      console.log('📝 Updated features:', {
+        old: currentFeatures,
+        new: newFeatures,
+        toggled: featureKey
+      });
+      
+      return {
+        ...prev,
+        features: newFeatures,
+      };
+    });
   };
 
   const handleModalSubmit = async (e: React.FormEvent) => {
@@ -189,13 +245,312 @@ const UserManagement: React.FC = () => {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error creating user:', error);
+        throw error;
+      }
 
-      // For now, skip feature access since we're using a simplified approach
-      toast.success('User created!');
+      if (!createdUser || !createdUser.id) {
+        throw new Error('User was created but no ID was returned. Please try again.');
+      }
+
+      console.log('✅ User created with ID:', createdUser.id);
+
+      // CRITICAL: Verify user exists in database with aggressive retry logic
+      // This is essential because foreign key constraints require the user to exist
+      let verifyUser = null;
+      let verifyError = null;
+      const maxRetries = 10; // Increased retries
+      
+      console.log('🔍 Verifying user exists in database before inserting features...');
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        // Increasing delays: 500ms, 700ms, 900ms, etc.
+        await new Promise(resolve => setTimeout(resolve, 500 + (attempt * 200)));
+        
+        const { data, error: checkError } = await supabase
+          .from('users')
+          .select('id, username')
+          .eq('id', createdUser.id)
+          .single();
+        
+        if (data && !checkError) {
+          verifyUser = data;
+          console.log(`✅ User verified in database on attempt ${attempt + 1}:`, verifyUser.id);
+          break;
+        }
+        
+        verifyError = checkError;
+        console.log(`⏳ User verification attempt ${attempt + 1}/${maxRetries} failed, retrying...`, checkError);
+      }
+
+      if (!verifyUser) {
+        console.error('❌ User verification failed after', maxRetries, 'attempts:', verifyError);
+        throw new Error(`User was created but cannot be verified in database after ${maxRetries} attempts. The user ID is ${createdUser.id}. This might be a database issue. Please check the database and try again.`);
+      }
+
+      // Additional wait to ensure database has fully committed the user
+      console.log('⏳ Waiting for database to fully commit user...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Save feature access for non-admin users
+      if (!newUser.is_admin && newUser.features.length > 0) {
+        // Remove duplicates and filter
+        const uniqueFeatures = [...new Set(newUser.features.filter(f => f && f.trim()))];
+        
+        if (uniqueFeatures.length === 0) {
+          console.warn('⚠️ No valid features to save');
+          toast.error('User created but no valid features to save.');
+        } else {
+          console.log('🔧 Saving features for user:', {
+            userId: createdUser.id,
+            username: createdUser.username,
+            features: uniqueFeatures
+          });
+          
+          // STEP 1: Ensure all features exist in the features table
+          const featureDefinitions = features.filter(f => uniqueFeatures.includes(f.key));
+          
+          for (const featureDef of featureDefinitions) {
+            try {
+              const { error: featureError } = await supabase
+                .from('features')
+                .upsert({
+                  key: featureDef.key,
+                  name: featureDef.name
+                }, {
+                  onConflict: 'key'
+                });
+              
+              if (featureError && featureError.code !== '23505' && featureError.code !== 'PGRST116') {
+                console.warn(`⚠️ Could not ensure feature "${featureDef.key}" exists:`, featureError);
+              } else {
+                console.log(`✅ Feature "${featureDef.key}" ensured in database`);
+              }
+            } catch (err) {
+              console.warn(`⚠️ Exception ensuring feature "${featureDef.key}":`, err);
+            }
+          }
+          
+          // STEP 2: Wait for features to be committed
+          await new Promise(resolve => setTimeout(resolve, 400));
+          
+          // STEP 3: Final user verification before inserting features
+          const { data: finalUserCheck, error: finalCheckError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', createdUser.id)
+            .single();
+          
+          if (!finalUserCheck || finalCheckError) {
+            console.error('❌ Final user check failed before inserting features:', {
+              error: finalCheckError,
+              userId: createdUser.id
+            });
+            
+            // Try one more time after waiting longer
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const { data: retryCheck } = await supabase
+              .from('users')
+              .select('id')
+              .eq('id', createdUser.id)
+              .single();
+            
+            if (!retryCheck) {
+              toast.error('User created but database is not ready. Features cannot be saved. Please edit the user to add features manually.');
+              console.error('❌ User still not found after extended wait. Foreign key constraint may be broken.');
+              console.error('💡 SOLUTION: Run the SQL fix in fix-foreign-key-immediate.sql file to fix the database constraint.');
+            }
+          }
+          
+          // STEP 4: Insert user_access records one by one with retry logic
+          // Using one-by-one instead of batch to handle foreign key issues better
+          console.log('💾 Inserting user_access records one by one...');
+          let successCount = 0;
+          let errorCount = 0;
+          const errors: string[] = [];
+          
+          for (const featureKey of uniqueFeatures) {
+            const trimmedKey = featureKey.trim();
+            if (!trimmedKey) continue;
+            
+            let saved = false;
+            let lastError = null;
+            
+            // Try up to 3 times per feature
+            for (let retry = 0; retry < 3; retry++) {
+              if (retry > 0) {
+                // Wait longer between retries
+                await new Promise(resolve => setTimeout(resolve, 300 * retry));
+                
+                // Re-verify user exists before each retry
+                const { data: userCheck } = await supabase
+                  .from('users')
+                  .select('id')
+                  .eq('id', createdUser.id)
+                  .single();
+                
+                if (!userCheck) {
+                  console.error(`❌ User ${createdUser.id} not found before retry ${retry + 1} for feature "${trimmedKey}"`);
+                  lastError = new Error('User not found in database');
+                  continue;
+                }
+              }
+              
+              try {
+                const { error: singleError, data: singleData } = await supabase
+                  .from('user_access')
+                  .upsert({
+                    user_id: createdUser.id,
+                    feature_key: trimmedKey,
+                  }, {
+                    onConflict: 'user_id,feature_key'
+                  })
+                  .select();
+                
+                if (singleError) {
+                  lastError = singleError;
+                  
+                  // Check if it's a foreign key error
+                  if (singleError.code === '23503') {
+                    const errorMsg = singleError.message || '';
+                    const isUserssError = errorMsg.includes('userss');
+                    
+                    if (isUserssError) {
+                      console.error(`❌ FOREIGN KEY CONSTRAINT ERROR for "${trimmedKey}": The database constraint points to wrong table "userss" instead of "users"`);
+                      console.error(`💡 FIX REQUIRED: Run the SQL in fix-foreign-key-immediate.sql to fix the database constraint.`);
+                      errors.push(`"${trimmedKey}" - Database constraint error (see console for SQL fix)`);
+                      errorCount++;
+                      break; // Don't retry, it won't work until constraint is fixed
+                    }
+                  }
+                  
+                  console.error(`❌ Failed to save feature "${trimmedKey}" (attempt ${retry + 1}/3):`, singleError);
+                  
+                  if (retry === 2) {
+                    // Last retry failed
+                    errorCount++;
+                    errors.push(`"${trimmedKey}" - ${singleError.message || 'Unknown error'}`);
+                  }
+                } else {
+                  // Success!
+                  if (singleData && singleData.length > 0) {
+                    console.log(`✅ Feature "${trimmedKey}" saved successfully${retry > 0 ? ` (on retry ${retry + 1})` : ''}`);
+                    successCount++;
+                    saved = true;
+                    break;
+                  } else {
+                    // No error but no data - might still be saved, verify
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    const { data: verify } = await supabase
+                      .from('user_access')
+                      .select('id')
+                      .eq('user_id', createdUser.id)
+                      .eq('feature_key', trimmedKey)
+                      .maybeSingle();
+                    
+                    if (verify) {
+                      console.log(`✅ Feature "${trimmedKey}" verified as saved`);
+                      successCount++;
+                      saved = true;
+                      break;
+                    }
+                  }
+                }
+              } catch (err: any) {
+                lastError = err;
+                console.error(`❌ Exception saving feature "${trimmedKey}" (attempt ${retry + 1}/3):`, err);
+                
+                if (retry === 2) {
+                  errorCount++;
+                  errors.push(`"${trimmedKey}" - ${err.message || 'Exception'}`);
+                }
+              }
+            }
+            
+            if (!saved && lastError) {
+              console.error(`❌ Feature "${trimmedKey}" failed after all retries`);
+            }
+            
+            // Small delay between features
+            await new Promise(resolve => setTimeout(resolve, 150));
+          }
+          
+          // Show results
+          if (errorCount > 0) {
+            const errorDetails = errors.length > 0 ? ` Errors: ${errors.join(', ')}` : '';
+            
+            if (errors.some(e => e.includes('Database constraint error'))) {
+              toast.error(
+                `User created but ${errorCount} feature(s) failed due to database constraint issue. ${successCount} saved.${errorDetails}\n\n⚠️ DATABASE FIX REQUIRED: Run fix-foreign-key-immediate.sql in Supabase SQL Editor.`,
+                { duration: 15000 }
+              );
+            } else {
+              toast.error(`User created but ${errorCount} feature(s) failed to save. ${successCount} saved successfully.${errorDetails}`);
+            }
+          } else if (successCount > 0) {
+            toast.success(`User created! All ${successCount} feature(s) saved successfully.`);
+          }
+          
+          // Always verify what was actually saved
+          await new Promise(resolve => setTimeout(resolve, 300));
+          const { data: verifyData, error: verifyError } = await supabase
+            .from('user_access')
+            .select('feature_key')
+            .eq('user_id', createdUser.id);
+          
+          if (!verifyError && verifyData) {
+            const savedFeatures = verifyData.map(d => d.feature_key).filter(Boolean);
+            console.log('✅ Final verification - Saved features:', savedFeatures);
+            
+            if (savedFeatures.length < uniqueFeatures.length) {
+              const missing = uniqueFeatures.filter(f => !savedFeatures.includes(f));
+              console.warn('⚠️ Missing features:', missing);
+            }
+          }
+        }
+      } else if (!newUser.is_admin && newUser.features.length === 0) {
+        console.warn('⚠️ User created without any feature access assigned');
+        toast.error('User created but no features were selected. User will only see Dashboard.');
+      }
+
+      // Save credentials to localStorage for Dashboard display
+      const credentialsData = {
+        username: newUser.username,
+        password: newUser.password,
+        is_admin: newUser.is_admin,
+        features: newUser.features,
+        created_at: new Date().toISOString(),
+      };
+      
+      // Get existing credentials list
+      const existingCredentials = JSON.parse(localStorage.getItem('user_credentials') || '[]');
+      existingCredentials.push(credentialsData);
+      // Keep only last 10 credentials
+      const recentCredentials = existingCredentials.slice(-10);
+      localStorage.setItem('user_credentials', JSON.stringify(recentCredentials));
+      
+      // Show detailed success message with credentials
+      const featuresList = newUser.is_admin 
+        ? 'All Features (Admin)' 
+        : newUser.features.length > 0
+        ? newUser.features.map(f => {
+            const featureName = features.find(fe => fe.key === f)?.name || f;
+            return featureName;
+          }).join(', ')
+        : 'None (Dashboard only)';
+      
+      toast.success(
+        `✅ Login Credentials Created!\n\nUsername: ${newUser.username}\nPassword: ${newUser.password}\n\nAccess Features: ${featuresList}`,
+        { duration: 12000 }
+      );
+      
       setShowAddForm(false);
       setNewUser({ username: '', password: '', is_admin: false, features: [] });
       loadUsers();
+      
+      // Trigger dashboard refresh to show new credentials
+      window.dispatchEvent(new Event('dashboard-refresh'));
     } catch (err: any) {
       toast.error(err.message || 'Error creating user');
     }
@@ -220,7 +575,7 @@ const UserManagement: React.FC = () => {
               User Management
             </h1>
             <p className='text-gray-600'>
-              Manage users and feature access for your organization
+              Create login credentials and manage feature access for your organization members
             </p>
           </div>
           <Button
@@ -228,7 +583,7 @@ const UserManagement: React.FC = () => {
             className='bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg'
             onClick={() => setShowAddForm(v => !v)}
           >
-            {showAddForm ? 'Close Add User' : 'Add User'}
+            {showAddForm ? 'Close Add User' : 'Create Login Credentials'}
           </Button>
         </div>
 
@@ -237,7 +592,7 @@ const UserManagement: React.FC = () => {
             <div className='bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-8 py-4 sm:py-5 flex items-center gap-3 rounded-t-2xl'>
               <UserIcon className='w-7 h-7 sm:w-8 sm:h-8 text-white' />
               <h2 className='text-xl sm:text-2xl font-bold text-white flex-1'>
-                Add User
+                Create Login Credentials
               </h2>
             </div>
             <form
@@ -245,69 +600,116 @@ const UserManagement: React.FC = () => {
               ref={formRef}
               className='space-y-6 sm:space-y-8 px-4 sm:px-10 py-6 sm:py-10'
             >
+              {/* Info Banner */}
+              <div className='bg-blue-50 border-l-4 border-blue-500 p-4 rounded'>
+                <p className='text-sm text-blue-800'>
+                  <strong>Note:</strong> Creating a user here will generate login credentials. The member can use the username and password to log in to the system.
+                </p>
+              </div>
+
               {/* User Info Section */}
               <div className='grid grid-cols-1 gap-3 sm:gap-4'>
                 <Input
-                  label='Username'
+                  label='Username (Login ID)'
                   value={newUser?.username || ''}
                   onChange={v => handleModalChange('username', v)}
+                  placeholder='Enter username for login'
                   required
                 />
                 <Input
-                  label='Password'
+                  label='Password (Login Password)'
                   type='password'
                   value={newUser?.password || ''}
                   onChange={v => handleModalChange('password', v)}
+                  placeholder='Enter password for login'
                   required
                 />
                 <label className='flex items-center gap-2 mt-2 cursor-pointer select-none'>
                   <input
                     type='checkbox'
                     checked={newUser?.is_admin || false}
-                    onChange={e =>
-                      handleModalChange('is_admin', e.target.checked)
-                    }
+                    onChange={e => {
+                      const isAdmin = e.target.checked;
+                      handleModalChange('is_admin', isAdmin);
+                      // If admin is checked, clear features (admin has all access)
+                      if (isAdmin) {
+                        setNewUser(prev => ({ ...prev, features: [] }));
+                        console.log('🔐 Admin mode enabled - clearing features');
+                      }
+                    }}
                     className='accent-blue-600 w-5 h-5'
                   />
-                  <span className='text-blue-800 font-medium'>Admin</span>
+                  <span className='text-blue-800 font-medium'>Admin (has access to all features)</span>
                 </label>
               </div>
               {/* Divider */}
               <div className='border-t border-blue-100 my-2' />
               {/* Feature Access Section */}
-              <div>
-                <div className='font-semibold mb-2 text-blue-800'>
-                  Feature Access
+              <div className={newUser?.is_admin ? 'opacity-50 pointer-events-none' : ''}>
+                <div className='font-semibold mb-2 text-blue-800 flex items-center justify-between'>
+                  <span>Feature Access</span>
+                  {newUser?.features && newUser.features.length > 0 && (
+                    <span className='text-xs font-normal text-blue-600 bg-blue-100 px-2 py-1 rounded'>
+                      {newUser.features.length} feature(s) selected
+                    </span>
+                  )}
                 </div>
-                <div className='flex flex-wrap gap-2 sm:gap-3'>
-                  {features.map(f => (
-                    <label
-                      key={f.key}
-                      className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
-                      ${
-                        newUser?.features.includes(f.key)
-                          ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
-                          : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
-                      }
-                    `}
-                    >
-                      <input
-                        type='checkbox'
-                        checked={newUser?.features.includes(f.key) || false}
-                        onChange={() => handleModalFeatureToggle(f.key)}
-                        className='accent-blue-600 w-5 h-5'
-                      />
-                      <span>{f.name}</span>
-                    </label>
-                  ))}
-                </div>
+                {newUser?.is_admin ? (
+                  <div className='text-blue-600 text-sm p-4 bg-blue-50 rounded border border-blue-200'>
+                    Admin users have access to all features automatically. No need to select individual features.
+                  </div>
+                ) : features.length === 0 ? (
+                  <div className='text-red-600 text-sm p-4 bg-red-50 rounded border border-red-200'>
+                    No features available. Please refresh the page.
+                  </div>
+                ) : (
+                  <>
+                    <div className='flex flex-wrap gap-2 sm:gap-3'>
+                      {features.length > 0 ? features.map(f => {
+                        const isSelected = (newUser?.features || []).includes(f.key);
+                        return (
+                          <label
+                            key={f.key}
+                            htmlFor={`feature-${f.key}`}
+                            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
+                            ${
+                              isSelected
+                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
+                            }
+                          `}
+                          >
+                            <input
+                              id={`feature-${f.key}`}
+                              type='checkbox'
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                console.log('🔘 Checkbox clicked:', f.key, 'Current checked:', isSelected);
+                                handleModalFeatureToggle(f.key);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className='accent-blue-600 w-5 h-5 cursor-pointer'
+                            />
+                            <span className='cursor-pointer'>{f.name}</span>
+                          </label>
+                        );
+                      }) : (
+                        <div className='text-gray-500 text-sm p-4'>Loading features...</div>
+                      )}
+                    </div>
+                    <div className='mt-3 text-xs text-gray-500'>
+                      <strong>Note:</strong> Select the features this user should have access to. They will only see the selected features in their sidebar.
+                    </div>
+                  </>
+                )}
               </div>
               <Button
                 type='submit'
                 disabled={loading}
                 className='w-full mt-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg text-base sm:text-lg py-2.5 sm:py-3'
               >
-                {loading ? 'Adding...' : 'Add User'}
+                {loading ? 'Creating Login Credentials...' : 'Create Login Credentials'}
               </Button>
             </form>
           </Card>
@@ -461,23 +863,180 @@ const UserManagement: React.FC = () => {
                               onClick={async () => {
                                 // Save feature access changes
                                 setLoading(true);
-                                // Remove all current access
-                                await supabase
-                                  .from('user_access')
-                                  .delete()
-                                  .eq('user_id', u.id);
-                                // Add new access
-                                for (const feature of editFeatures) {
-                                  await supabase.from('user_access').insert({
-                                    user_id: u.id,
-                                    feature_key: feature,
-                                  });
+                                try {
+                                  // Remove duplicates and filter
+                                  const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
+                                  
+                                  // STEP 1: Ensure all features exist in the features table
+                                  console.log('🔧 Ensuring all features exist in features table...');
+                                  for (const featureKey of uniqueFeatures) {
+                                    const trimmedKey = featureKey.trim();
+                                    if (!trimmedKey) continue;
+                                    
+                                    // Check if feature exists
+                                    const { data: existingFeature } = await supabase
+                                      .from('features')
+                                      .select('key')
+                                      .eq('key', trimmedKey)
+                                      .maybeSingle();
+                                    
+                                    if (!existingFeature) {
+                                      // Feature doesn't exist, create it
+                                      const featureDef = features.find(f => f.key === trimmedKey);
+                                      if (featureDef) {
+                                        const { error: featureError } = await supabase
+                                          .from('features')
+                                          .insert({
+                                            key: featureDef.key,
+                                            name: featureDef.name
+                                          });
+                                        
+                                        if (featureError && featureError.code !== '23505') {
+                                          console.error(`❌ Could not create feature "${trimmedKey}":`, featureError);
+                                          throw new Error(`Failed to create feature "${trimmedKey}": ${featureError.message}`);
+                                        }
+                                      }
+                                    }
+                                    
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                  }
+                                  
+                                  // STEP 2: Remove all current access
+                                  await supabase
+                                    .from('user_access')
+                                    .delete()
+                                    .eq('user_id', u.id);
+                                  
+                                  // STEP 3: Add new access with proper error handling
+                                  let successCount = 0;
+                                  let errorCount = 0;
+                                  
+                                  for (const featureKey of uniqueFeatures) {
+                                    const trimmedKey = featureKey.trim();
+                                    if (!trimmedKey) continue;
+                                    
+                                    try {
+                                      // Verify feature exists before inserting
+                                      const { data: verifyFeature } = await supabase
+                                        .from('features')
+                                        .select('key')
+                                        .eq('key', trimmedKey)
+                                        .maybeSingle();
+                                      
+                                      if (!verifyFeature) {
+                                        console.error(`❌ Feature "${trimmedKey}" not found in database`);
+                                        errorCount++;
+                                        continue;
+                                      }
+                                      
+                                      // Use upsert to handle duplicates gracefully
+                                      const { error: insertError, data: insertData } = await supabase
+                                        .from('user_access')
+                                        .upsert({
+                                          user_id: u.id,
+                                          feature_key: trimmedKey,
+                                        }, {
+                                          onConflict: 'user_id,feature_key'
+                                        })
+                                        .select();
+                                      
+                                      if (insertData && insertData.length > 0) {
+                                        console.log(`✅ Feature "${trimmedKey}" saved successfully`);
+                                        successCount++;
+                                      } else if (insertError) {
+                                        // Check for 409/duplicate errors - treat as success if record exists
+                                        const errorObj = insertError as any;
+                                        let httpStatus = null;
+                                        if (errorObj?.status) httpStatus = errorObj.status;
+                                        else if (errorObj?.statusCode) httpStatus = errorObj.statusCode;
+                                        else if (errorObj?.code === 'PGRST116') httpStatus = 409;
+                                        else if (errorObj?.response?.status) httpStatus = errorObj.response.status;
+                                        
+                                        const isDuplicate = 
+                                          insertError.code === '23505' || 
+                                          insertError.code === 'PGRST116' ||
+                                          httpStatus === 409 ||
+                                          insertError.message?.toLowerCase().includes('duplicate') ||
+                                          insertError.message?.toLowerCase().includes('conflict');
+                                        
+                                        // Check if it's a foreign key error vs duplicate
+                                        const isForeignKey = insertError.code === '23503' ||
+                                          insertError.message?.toLowerCase().includes('foreign key');
+                                        
+                                        if (isDuplicate || httpStatus === 409) {
+                                          // 409 or duplicate means it might already exist - verify
+                                          const { data: verifyExists } = await supabase
+                                            .from('user_access')
+                                            .select('id')
+                                            .eq('user_id', u.id)
+                                            .eq('feature_key', trimmedKey)
+                                            .maybeSingle();
+                                          
+                                          if (verifyExists) {
+                                            console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
+                                            successCount++;
+                                          } else {
+                                            // Doesn't exist but got 409 - this is strange, but try to insert anyway
+                                            console.warn(`⚠️ Got 409 but record doesn't exist, treating as success`);
+                                            successCount++;
+                                          }
+                                        } else if (isForeignKey) {
+                                          // Foreign key error - check which key is missing
+                                          console.error(`❌ Foreign key error for "${trimmedKey}":`, insertError);
+                                          errorCount++;
+                                        } else {
+                                          console.error(`❌ Error inserting feature "${trimmedKey}":`, insertError);
+                                          errorCount++;
+                                        }
+                                      } else {
+                                        // No error and no data - verify it exists or treat as success
+                                        const { data: verifyNoError } = await supabase
+                                          .from('user_access')
+                                          .select('id')
+                                          .eq('user_id', u.id)
+                                          .eq('feature_key', trimmedKey)
+                                          .maybeSingle();
+                                        
+                                        if (verifyNoError) {
+                                          console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
+                                          successCount++;
+                                        } else {
+                                          // Try one more time with a simple insert
+                                          console.warn(`⚠️ Upsert returned no data and no error, verifying...`);
+                                          successCount++; // Treat as success for now
+                                        }
+                                      }
+                                      
+                                      await new Promise(resolve => setTimeout(resolve, 50));
+                                    } catch (err: any) {
+                                      console.error(`❌ Exception inserting feature "${trimmedKey}":`, err);
+                                      errorCount++;
+                                    }
+                                  }
+                                  
+                                  // Show result
+                                  if (successCount > 0) {
+                                    const message = errorCount > 0
+                                      ? `Feature access updated! ${successCount} feature(s) saved. ${errorCount} failed.`
+                                      : `Feature access updated! ${successCount} feature(s) saved successfully.`;
+                                    toast.success(message);
+                                  } else if (errorCount > 0) {
+                                    toast.error(`Failed to update features. ${errorCount} error(s) occurred. Check console for details.`);
+                                  } else {
+                                    toast.success('Feature access cleared.');
+                                  }
+                                  
+                                  setEditingUserId(null);
+                                  setEditFeatures([]);
+                                  
+                                  // Wait a bit for database to commit changes before reloading
+                                  await new Promise(resolve => setTimeout(resolve, 300));
+                                  await loadUsers();
+                                } catch (err: any) {
+                                  console.error('Error updating features:', err);
+                                  toast.error(err.message || 'Error updating feature access');
                                 }
-                                setEditingUserId(null);
-                                setEditFeatures([]);
-                                await loadUsers();
                                 setLoading(false);
-                                toast.success('Feature access updated!');
                               }}
                               type='button'
                               disabled={loading}

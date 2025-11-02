@@ -64,7 +64,7 @@ const Login: React.FC = () => {
         {/* Login Form */}
         <div className='px-8 py-6'>
           <h2 className='text-xl font-semibold text-gray-900 mb-6 text-center'>
-            Admin Login
+            Login
           </h2>
 
           <form onSubmit={handleSubmit} className='space-y-4'>

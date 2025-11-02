@@ -87,28 +87,27 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Protected Route Component
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-        <div className='text-center'>
-          <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto'></div>
-          <p className='mt-4 text-gray-600'>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return user ? <>{children}</> : <Navigate to='/login' replace />;
-};
-
-// Main App Component
+// Main App Component - Must be inside AuthProvider
 const AppContent: React.FC = () => {
+  // Protected Route Component - Must be inside AuthProvider and Router
+  // Defined here to ensure it's always within the AuthProvider context
+  const ProtectedRouteWrapper: React.FC = () => {
+    const { user, loading } = useAuth();
+
+    if (loading) {
+      return (
+        <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
+          <div className='text-center'>
+            <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto'></div>
+            <p className='mt-4 text-gray-600'>Loading...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return user ? <Layout /> : <Navigate to='/login' replace />;
+  };
+
   return (
     <Router>
       <Toaster
@@ -140,11 +139,7 @@ const AppContent: React.FC = () => {
         <Route path='/login' element={<Login />} />
         <Route
           path='/*'
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
+          element={<ProtectedRouteWrapper />}
         >
           <Route index element={<Dashboard />} />
           <Route path='new-entry' element={<NewEntry />} />

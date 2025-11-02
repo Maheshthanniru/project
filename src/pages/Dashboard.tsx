@@ -17,6 +17,10 @@ import {
   Building,
   Users,
   RefreshCw,
+  Key,
+  Copy,
+  X,
+  Shield,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -25,11 +29,13 @@ const Dashboard: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
   );
+  const [userCredentials, setUserCredentials] = useState<any[]>([]);
+  const [showCredentials, setShowCredentials] = useState(true);
 
   // React Query hooks for data fetching
   const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
   const { data: companyBalances, isLoading: companyLoading, isFetching: companyFetching } = useCompanyBalances();
-  const { companies, accounts, subAccounts, users, pendingApprovals, uniqueSubAccountsCount, activeOperatorCount, isLoading: dropdownLoading } = useDropdownData();
+  const { companies, accounts, subAccounts, users, pendingApprovals, uniqueSubAccountsCount, distinctMainAccountsCount, distinctCompaniesCount, activeOperatorCount, isLoading: dropdownLoading } = useDropdownData();
   const { invalidateAll, invalidateStats, invalidateRecentEntries } = useInvalidateDashboard();
 
   // Combined loading states
@@ -48,7 +54,8 @@ const Dashboard: React.FC = () => {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [invalidateAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only set up listener once
 
   // Also check for refresh trigger on component mount
   useEffect(() => {
@@ -57,21 +64,72 @@ const Dashboard: React.FC = () => {
       invalidateAll();
       localStorage.removeItem('dashboard-refresh');
     }
-  }, [invalidateAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only check on mount
+
+  // Load credentials on mount
+  useEffect(() => {
+    const credentials = JSON.parse(localStorage.getItem('user_credentials') || '[]');
+    setUserCredentials(credentials.reverse()); // Show newest first
+  }, []); // Only run on mount
 
   // Listen for custom events to refresh dashboard
   useEffect(() => {
     const handleDashboardRefresh = () => {
       invalidateAll();
+      // Also reload credentials when dashboard refreshes
+      const credentials = JSON.parse(localStorage.getItem('user_credentials') || '[]');
+      setUserCredentials(credentials.reverse()); // Show newest first
     };
 
     window.addEventListener('dashboard-refresh', handleDashboardRefresh);
     return () => window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
-  }, [invalidateAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - event listener doesn't need dependencies
+  
+  // Copy credentials to clipboard
+  const copyCredentials = (username: string, password: string) => {
+    const text = `Username: ${username}\nPassword: ${password}`;
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Credentials copied to clipboard!');
+    }).catch(() => {
+      toast.error('Failed to copy credentials');
+    });
+  };
+  
+  // Remove credentials from display
+  const removeCredentials = (index: number) => {
+    const updated = [...userCredentials];
+    updated.splice(index, 1);
+    setUserCredentials(updated);
+    localStorage.setItem('user_credentials', JSON.stringify(updated.reverse()));
+  };
+  
+  // Feature names mapping
+  const featureNames: { [key: string]: string } = {
+    dashboard: 'Dashboard',
+    new_entry: 'New Entry',
+    edit_entry: 'Edit Entry',
+    daily_report: 'Daily Report',
+    detailed_ledger: 'Detailed Ledger',
+    ledger_summary: 'Ledger Summary',
+    approve_records: 'Approve Records',
+    edited_records: 'Edited Records',
+    deleted_records: 'Deleted Records',
+    replace_form: 'Replace Form',
+    export: 'Export',
+    csv_upload: 'CSV Upload',
+    balance_sheet: 'Balance Sheet',
+    vehicles: 'Vehicles',
+    bank_guarantees: 'Bank Guarantees',
+    drivers: 'Drivers',
+  };
 
   // Set up Supabase real-time subscription for automatic updates
   useEffect(() => {
     console.log('🔄 Setting up Supabase real-time subscription for dashboard...');
+    
+    let isMounted = true;
     
     const subscription = supabase
       .channel('cash_book_changes')
@@ -83,6 +141,7 @@ const Dashboard: React.FC = () => {
           table: 'cash_book'
         },
         (payload) => {
+          if (!isMounted) return;
           console.log('📊 Database change detected:', payload.eventType, payload.new || payload.old);
           // Show a subtle notification that dashboard is updating
           toast.success('Dashboard updated automatically', {
@@ -101,9 +160,11 @@ const Dashboard: React.FC = () => {
 
     return () => {
       console.log('🔄 Cleaning up Supabase real-time subscription...');
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [invalidateAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount
 
   // Manual refresh function
   const handleManualRefresh = () => {
@@ -281,6 +342,130 @@ const Dashboard: React.FC = () => {
       {/* Online vs Offline Transaction Stats */}
       {/* Removed online and offline transaction cards */}
 
+      {/* User Login Credentials Section - Only show for Admin */}
+      {user?.is_admin && userCredentials.length > 0 && showCredentials && (
+        <Card className='bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200'>
+          <div className='flex items-center justify-between mb-4'>
+            <div className='flex items-center gap-2'>
+              <Key className='w-5 h-5 text-blue-600' />
+              <h2 className='text-xl font-bold text-gray-900'>Recently Created Login Credentials</h2>
+            </div>
+            <button
+              onClick={() => setShowCredentials(false)}
+              className='text-gray-400 hover:text-gray-600 transition-colors'
+              title='Hide credentials'
+            >
+              <X className='w-5 h-5' />
+            </button>
+          </div>
+          
+          <div className='space-y-3'>
+            {userCredentials.map((cred, index) => (
+              <div
+                key={index}
+                className='bg-white rounded-lg p-4 border border-blue-200 shadow-sm hover:shadow-md transition-shadow'
+              >
+                <div className='flex items-start justify-between gap-4'>
+                  <div className='flex-1'>
+                    <div className='flex items-center gap-2 mb-2'>
+                      <span className='font-semibold text-gray-900'>Username:</span>
+                      <code className='bg-blue-50 text-blue-700 px-2 py-1 rounded text-sm font-mono'>
+                        {cred.username}
+                      </code>
+                      {cred.is_admin && (
+                        <span className='inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-semibold'>
+                          <Shield className='w-3 h-3' />
+                          Admin
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className='flex items-center gap-2 mb-3'>
+                      <span className='font-semibold text-gray-900'>Password:</span>
+                      <code className='bg-red-50 text-red-700 px-2 py-1 rounded text-sm font-mono'>
+                        {cred.password}
+                      </code>
+                    </div>
+                    
+                    <div className='mb-2'>
+                      <span className='text-sm font-semibold text-gray-700'>Access Features: </span>
+                      {cred.is_admin ? (
+                        <span className='text-sm text-green-700 font-medium'>All Features (Admin)</span>
+                      ) : cred.features && cred.features.length > 0 ? (
+                        <div className='flex flex-wrap gap-1 mt-1'>
+                          {cred.features.map((featureKey: string) => (
+                            <span
+                              key={featureKey}
+                              className='inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium border border-blue-200'
+                            >
+                              {featureNames[featureKey] || featureKey}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className='text-sm text-gray-500'>None (Dashboard only)</span>
+                      )}
+                    </div>
+                    
+                    {cred.created_at && (
+                      <p className='text-xs text-gray-500 mt-2'>
+                        Created: {format(new Date(cred.created_at), 'MMM dd, yyyy HH:mm')}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className='flex flex-col gap-2'>
+                    <button
+                      onClick={() => copyCredentials(cred.username, cred.password)}
+                      className='flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm'
+                      title='Copy credentials'
+                    >
+                      <Copy className='w-4 h-4' />
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => removeCredentials(index)}
+                      className='flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm'
+                      title='Remove from list'
+                    >
+                      <X className='w-4 h-4' />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className='mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg'>
+            <p className='text-sm text-yellow-800'>
+              <strong>Note:</strong> These credentials are stored locally in your browser. Share them securely with the team member. 
+              They can use these credentials to login to the system.
+            </p>
+          </div>
+        </Card>
+      )}
+      
+      {/* Show button to display credentials if hidden */}
+      {user?.is_admin && userCredentials.length > 0 && !showCredentials && (
+        <Card className='bg-blue-50 border border-blue-200'>
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center gap-2'>
+              <Key className='w-5 h-5 text-blue-600' />
+              <p className='text-gray-700'>
+                You have {userCredentials.length} created user credential(s). 
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCredentials(true)}
+              className='px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm'
+            >
+              Show Credentials
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Quick Stats */}
       <div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
         <Card className='bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200 p-3'>
@@ -289,7 +474,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-indigo-800 text-xs'>Total Companies</p>
               <p className='text-lg font-bold text-indigo-900'>
-                {companies?.data?.length || 0}
+                {distinctCompaniesCount?.data || companies?.data?.length || 0}
               </p>
             </div>
           </div>
@@ -301,7 +486,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className='font-medium text-emerald-800 text-xs'>Total Accounts</p>
               <p className='text-lg font-bold text-emerald-900'>
-                {accounts?.data?.length || 0}
+                {distinctMainAccountsCount?.data || 0}
               </p>
             </div>
           </div>

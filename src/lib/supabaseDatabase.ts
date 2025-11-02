@@ -155,13 +155,6 @@ class SupabaseDatabase {
     try {
       console.log('🔄 Fetching all companies from companies table...');
       
-      // First get the total count
-      const { count: totalCount, error: countError } = await supabase
-        .from('companies')
-        .select('*', { count: 'exact', head: true });
-      
-      console.log('📊 Total companies in companies table:', totalCount);
-      
       // Load all companies with explicit high limit
       const { data, error } = await supabase
         .from('companies')
@@ -174,8 +167,23 @@ class SupabaseDatabase {
         return [];
       }
 
-      console.log('✅ Companies fetched:', data?.length || 0);
-      return data || [];
+      // Filter out duplicates and empty company names
+      const seen = new Set<string>();
+      const uniqueCompanies = (data || []).filter(company => {
+        const name = company.company_name?.trim();
+        if (!name) return false; // Filter out empty names
+        if (seen.has(name)) return false; // Filter out duplicates
+        seen.add(name);
+        return true;
+      });
+
+      console.log('✅ Companies fetched:', {
+        total: data?.length || 0,
+        unique: uniqueCompanies.length,
+        duplicates: (data?.length || 0) - uniqueCompanies.length
+      });
+      
+      return uniqueCompanies;
     } catch (error) {
       console.error('❌ Error in getCompanies:', error);
       return [];
@@ -184,20 +192,32 @@ class SupabaseDatabase {
 
   async getCompaniesCount(): Promise<number> {
     try {
-      const { count, error } = await supabase
+      // Get distinct company names to avoid counting duplicates
+      const { data, error } = await supabase
         .from('companies')
-        .select('*', { count: 'exact', head: true });
+        .select('company_name')
+        .not('company_name', 'is', null)
+        .not('company_name', 'eq', '');
 
       if (error) {
-        console.error('Error getting companies count:', error);
+        console.error('Error fetching companies count:', error);
         return 0;
       }
 
-      return count || 0;
+      // Get unique company names (in case there are duplicates)
+      const uniqueCompanies = [...new Set(data?.map(c => c.company_name?.trim()).filter(Boolean))];
+      console.log('📊 Distinct companies count:', uniqueCompanies.length);
+      
+      return uniqueCompanies.length;
     } catch (error) {
-      console.error('Error getting companies count:', error);
+      console.error('Error in getCompaniesCount:', error);
       return 0;
     }
+  }
+
+  // Get distinct companies count for dashboard (same as getCompaniesCount but with better logging)
+  async getDistinctCompaniesCount(): Promise<number> {
+    return this.getCompaniesCount();
   }
 
   // Get companies that have data in cash_book table
@@ -515,12 +535,12 @@ class SupabaseDatabase {
     return data || [];
   }
 
-  // Get unique sub accounts count (no duplicates)
+  // Get unique sub accounts count from company_main_sub_acc table (reference table)
   async getUniqueSubAccountsCount(): Promise<number> {
     try {
-      console.log('🔄 Fetching unique sub accounts count...');
+      console.log('🔄 Fetching unique sub accounts count from company_main_sub_acc table...');
       
-      // Get all sub accounts from the table
+      // Get all distinct sub accounts from company_main_sub_acc reference table
       const { data, error } = await supabase
         .from('company_main_sub_acc')
         .select('sub_acc')
@@ -534,11 +554,39 @@ class SupabaseDatabase {
 
       // Get unique sub account names
       const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc).filter(Boolean))];
-      console.log('📊 Unique sub accounts count:', uniqueSubAccounts.length);
+      console.log('📊 Unique sub accounts count from company_main_sub_acc:', uniqueSubAccounts.length);
       
       return uniqueSubAccounts.length;
     } catch (error) {
       console.error('❌ Error in getUniqueSubAccountsCount:', error);
+      return 0;
+    }
+  }
+
+  // Get count of distinct main accounts from company_main_accounts table (reference table)
+  async getDistinctMainAccountsCount(): Promise<number> {
+    try {
+      console.log('🔄 Fetching distinct main accounts count from company_main_accounts table...');
+      
+      // Get all distinct main accounts from company_main_accounts reference table
+      const { data, error } = await supabase
+        .from('company_main_accounts')
+        .select('acc_name')
+        .not('acc_name', 'is', null)
+        .not('acc_name', 'eq', '');
+
+      if (error) {
+        console.error('❌ Error fetching main accounts for count:', error);
+        return 0;
+      }
+
+      // Get unique account names
+      const uniqueAccounts = [...new Set(data?.map(item => item.acc_name).filter(Boolean))];
+      console.log('📊 Distinct main accounts count from company_main_accounts:', uniqueAccounts.length);
+      
+      return uniqueAccounts.length;
+    } catch (error) {
+      console.error('❌ Error in getDistinctMainAccountsCount:', error);
       return 0;
     }
   }
@@ -1518,6 +1566,115 @@ class SupabaseDatabase {
     }
 
     return data;
+  }
+
+  // Bulk update multiple cash book entries by IDs
+  async bulkUpdateCashBookEntriesByIds(
+    ids: string[],
+    updates: Partial<CashBookEntry>,
+    editedBy?: string
+  ): Promise<{ success: boolean; updatedCount: number; error?: any }> {
+    try {
+      if (!ids || ids.length === 0) {
+        return { success: false, updatedCount: 0, error: 'No IDs provided' };
+      }
+
+      console.log(`🔄 Bulk updating ${ids.length} entries...`);
+
+      // Only pick fields that exist in the table
+      const allowedFields = [
+        'acc_name',
+        'sub_acc_name',
+        'particulars',
+        'credit',
+        'debit',
+        'company_name',
+        'address',
+        'staff',
+        'users',
+        'entry_time',
+        'sale_qty',
+        'purchase_qty',
+        'approved',
+        'cb',
+        'c_date',
+        'e_count',
+        'edited',
+        'payment_mode',
+      ];
+      
+      const filteredUpdates: any = {};
+      for (const key of allowedFields) {
+        if (key in updates) {
+          const value = (updates as any)[key];
+          // Trim string values
+          filteredUpdates[key] = typeof value === 'string' ? value.trim() : value;
+        }
+      }
+      filteredUpdates.edited = true;
+      filteredUpdates.updated_at = new Date().toISOString();
+
+      // Fetch old entries for audit logging (before update)
+      const { data: oldEntries, error: fetchError } = await supabase
+        .from('cash_book')
+        .select('*')
+        .in('id', ids);
+
+      if (fetchError) {
+        console.error('Error fetching old entries for audit log:', fetchError);
+      }
+
+      // Perform bulk update using .in() to update multiple IDs at once
+      const { data: updatedEntries, error: updateError } = await supabase
+        .from('cash_book')
+        .update(filteredUpdates)
+        .in('id', ids)
+        .select();
+
+      if (updateError) {
+        console.error('Error in bulk update:', updateError);
+        return { success: false, updatedCount: 0, error: updateError };
+      }
+
+      const updatedCount = updatedEntries?.length || 0;
+      console.log(`✅ Successfully updated ${updatedCount} entries`);
+
+      // Create audit logs for each updated entry
+      if (oldEntries && updatedEntries && editedBy) {
+        const auditLogs = oldEntries.map((oldEntry) => {
+          const updatedEntry = updatedEntries.find(e => e.id === oldEntry.id);
+          if (!updatedEntry) return null;
+          
+          return {
+            cash_book_id: oldEntry.id,
+            old_values: JSON.stringify(oldEntry),
+            new_values: JSON.stringify(updatedEntry),
+            edited_by: editedBy,
+            edited_at: new Date().toISOString(),
+          };
+        }).filter(Boolean);
+
+        if (auditLogs.length > 0) {
+          // Insert audit logs in batches to avoid overwhelming the database
+          const batchSize = 100;
+          for (let i = 0; i < auditLogs.length; i += batchSize) {
+            const batch = auditLogs.slice(i, i + batchSize);
+            const { error: auditError } = await supabase
+              .from('edit_cash_book')
+              .insert(batch);
+            
+            if (auditError) {
+              console.error(`Error inserting audit log batch ${Math.floor(i / batchSize) + 1}:`, auditError);
+            }
+          }
+        }
+      }
+
+      return { success: true, updatedCount };
+    } catch (error) {
+      console.error('Error in bulkUpdateCashBookEntriesByIds:', error);
+      return { success: false, updatedCount: 0, error };
+    }
   }
 
   // Lock a cash book entry

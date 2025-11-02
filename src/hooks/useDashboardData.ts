@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { queryKeys } from '../lib/queryClient';
@@ -58,9 +59,16 @@ export const useCompanyBalances = () => {
 export const useDropdownData = () => {
   const companiesQuery = useQuery({
     queryKey: queryKeys.dropdowns.companies,
-    queryFn: () => supabaseDB.getCompanies(), // Use getCompanies() to show ALL companies, including newly created ones
+    queryFn: () => supabaseDB.getCompanies(), // getCompanies() now filters duplicates internally
     staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
     gcTime: 30 * 60 * 1000, // 30 minutes cache
+  });
+
+  const distinctCompaniesCountQuery = useQuery({
+    queryKey: ['companies', 'distinctCount'],
+    queryFn: () => supabaseDB.getDistinctCompaniesCount(),
+    staleTime: 10 * 60 * 1000, // 10 minutes for companies count
+    gcTime: 30 * 60 * 1000,
   });
 
   const accountsQuery = useQuery({
@@ -98,6 +106,13 @@ export const useDropdownData = () => {
     gcTime: 30 * 60 * 1000,
   });
 
+  const distinctMainAccountsCountQuery = useQuery({
+    queryKey: ['accounts', 'distinctCount'],
+    queryFn: () => supabaseDB.getDistinctMainAccountsCount(),
+    staleTime: 10 * 60 * 1000, // 10 minutes for main accounts count
+    gcTime: 30 * 60 * 1000,
+  });
+
   const activeOperatorCountQuery = useQuery({
     queryKey: ['operators', 'activeCount'],
     queryFn: () => supabaseDB.getActiveOperatorCount(),
@@ -112,9 +127,11 @@ export const useDropdownData = () => {
     users: usersQuery,
     pendingApprovals: pendingApprovalsQuery,
     uniqueSubAccountsCount: uniqueSubAccountsCountQuery,
+    distinctMainAccountsCount: distinctMainAccountsCountQuery,
+    distinctCompaniesCount: distinctCompaniesCountQuery,
     activeOperatorCount: activeOperatorCountQuery,
-    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || subAccountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading || uniqueSubAccountsCountQuery.isLoading || activeOperatorCountQuery.isLoading,
-    isError: companiesQuery.isError || accountsQuery.isError || subAccountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError || uniqueSubAccountsCountQuery.isError || activeOperatorCountQuery.isError,
+    isLoading: companiesQuery.isLoading || accountsQuery.isLoading || subAccountsQuery.isLoading || usersQuery.isLoading || pendingApprovalsQuery.isLoading || uniqueSubAccountsCountQuery.isLoading || distinctMainAccountsCountQuery.isLoading || distinctCompaniesCountQuery.isLoading || activeOperatorCountQuery.isLoading,
+    isError: companiesQuery.isError || accountsQuery.isError || subAccountsQuery.isError || usersQuery.isError || pendingApprovalsQuery.isError || uniqueSubAccountsCountQuery.isError || distinctMainAccountsCountQuery.isError || distinctCompaniesCountQuery.isError || activeOperatorCountQuery.isError,
   };
 };
 
@@ -122,23 +139,23 @@ export const useDropdownData = () => {
 export const useInvalidateDashboard = () => {
   const queryClient = useQueryClient();
 
-  const invalidateAll = () => {
+  const invalidateAll = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
     queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.approvals.count });
-  };
+  }, [queryClient]);
 
-  const invalidateStats = () => {
+  const invalidateStats = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
-  };
+  }, [queryClient]);
 
-  const invalidateRecentEntries = () => {
+  const invalidateRecentEntries = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
     queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-  };
+  }, [queryClient]);
 
   return {
     invalidateAll,

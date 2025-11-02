@@ -2343,14 +2343,14 @@ const EditEntry: React.FC = () => {
                     <th className='w-32 px-1 py-1 text-left font-medium text-gray-700'>
                       Particulars
                     </th>
-                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
-                      Payment Mode
-                    </th>
                     <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                       Credit
                     </th>
                     <th className='w-16 px-1 py-1 text-right font-medium text-gray-700'>
                       Debit
+                    </th>
+                    <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
+                      Payment Mode
                     </th>
                     <th className='w-16 px-1 py-1 text-left font-medium text-gray-700'>
                       Staff
@@ -2393,9 +2393,6 @@ const EditEntry: React.FC = () => {
                       >
                         {entry.particulars}
                       </td>
-                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || 'No payment mode'}>
-                        {entry.payment_mode && String(entry.payment_mode).trim() ? String(entry.payment_mode).trim() : '-'}
-                      </td>
                       <td className='w-16 px-1 py-1 text-right font-medium text-green-600 text-xs'>
                         {entry.credit > 0
                           ? `₹${entry.credit.toLocaleString()}`
@@ -2405,6 +2402,9 @@ const EditEntry: React.FC = () => {
                         {entry.debit > 0
                           ? `₹${entry.debit.toLocaleString()}`
                           : '-'}
+                      </td>
+                      <td className='w-16 px-1 py-1 text-xs truncate' title={entry.payment_mode || 'No payment mode'}>
+                        {entry.payment_mode && String(entry.payment_mode).trim() ? String(entry.payment_mode).trim() : '-'}
                       </td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.staff}>{entry.staff}</td>
                       <td className='w-16 px-1 py-1 text-xs truncate' title={entry.users || 'No user'}>

@@ -33,6 +33,18 @@ interface MenuItem {
 const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
 
+  // Debug: Log user features to help diagnose issues
+  React.useEffect(() => {
+    if (user) {
+      console.log('🔍 Sidebar - Current user:', {
+        username: user.username,
+        is_admin: user.is_admin,
+        features: user.features,
+        featuresCount: user.features?.length || 0
+      });
+    }
+  }, [user]);
+
   const menuItems: MenuItem[] = [
     { icon: Home, label: 'Dashboard', path: '/', key: 'dashboard' },
     { icon: Plus, label: 'New Entry', path: '/new-entry', key: 'new_entry' },
@@ -155,10 +167,34 @@ const Sidebar: React.FC = () => {
         <ul className='space-y-1'>
           {menuItems
             .filter(item => {
-              if (item.adminOnly) return user?.is_admin;
-              // Temporarily show CSV Upload for all users
-              if (item.key === 'csv_upload') return true;
-              return user?.features?.includes(item.key);
+              // Admin-only items: only show to admins
+              if (item.adminOnly) {
+                return user?.is_admin;
+              }
+              
+              // Dashboard should always be visible to logged-in users
+              if (item.key === 'dashboard') {
+                return true;
+              }
+              
+              // For non-admin users, check if they have this feature
+              if (!user?.is_admin) {
+                // Ensure features is an array before checking
+                const userFeatures = Array.isArray(user?.features) ? user.features : [];
+                const hasAccess = userFeatures.includes(item.key);
+                
+                // Debug log for missing features
+                if (item.key !== 'dashboard' && !hasAccess) {
+                  console.log(`🔒 Access denied: User "${user?.username}" doesn't have feature "${item.key}"`, {
+                    availableFeatures: userFeatures
+                  });
+                }
+                
+                return hasAccess;
+              }
+              
+              // Admins see everything (except items marked adminOnly which are already filtered)
+              return true;
             })
             .map(item => (
               <li key={item.path}>

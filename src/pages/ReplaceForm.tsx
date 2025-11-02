@@ -5,6 +5,7 @@ import Input from '../components/UI/Input';
 import Select from '../components/UI/Select';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
@@ -168,26 +169,17 @@ const ReplaceForm: React.FC = () => {
     updateSummary(filtered);
   };
 
-  const updateSummary = (entries: any[]) => {
+  const updateSummary = (filtered: any[]) => {
     const totalRecords = entries.length;
-    // Calculate affected records - entries that match the old values being replaced
-    const affectedRecords = entries.filter(
-      entry =>
-        (replaceData.oldAccountName &&
-          entry.acc_name === replaceData.oldAccountName) ||
-        (replaceData.oldSubAccount &&
-          entry.sub_acc_name === replaceData.oldSubAccount) ||
-        (replaceData.oldCompanyName &&
-          entry.company_name === replaceData.oldCompanyName)
-    ).length;
+    const affectedRecords = filtered.length;
     
     // Safely calculate totals, handling null/undefined values
-    const totalCredit = entries.reduce((sum, entry) => {
+    const totalCredit = filtered.reduce((sum, entry) => {
       const credit = parseFloat(entry.credit) || 0;
       return sum + credit;
     }, 0);
     
-    const totalDebit = entries.reduce((sum, entry) => {
+    const totalDebit = filtered.reduce((sum, entry) => {
       const debit = parseFloat(entry.debit) || 0;
       return sum + debit;
     }, 0);
@@ -268,7 +260,7 @@ const ReplaceForm: React.FC = () => {
     }
 
     // Verify that the new account name exists in the listed accounts
-    const newAccountExists = accounts.some(
+    const newAccountExists = newAccounts.some(
       account => account.value.trim() === replaceData.newAccountName.trim()
     );
 
@@ -279,41 +271,36 @@ const ReplaceForm: React.FC = () => {
       return;
     }
 
+    // Find all matching entries
+    const matchingEntries = entries.filter(entry => {
+      const entryAccount = entry.acc_name?.trim() || '';
+      const oldAccount = replaceData.oldAccountName?.trim() || '';
+      return entryAccount === oldAccount;
+    });
+
+    if (matchingEntries.length === 0) {
+      toast.error(`No records found with account name "${replaceData.oldAccountName}"`);
+      return;
+    }
+
     if (
       window.confirm(
-        `Replace "${replaceData.oldAccountName}" with "${replaceData.newAccountName}" in ${summary.affectedRecords} records?`
+        `Replace "${replaceData.oldAccountName}" with "${replaceData.newAccountName}" in ${matchingEntries.length} records?`
       )
     ) {
       setLoading(true);
       try {
-        let updatedCount = 0;
+        // Use bulk update for better performance
+        const ids = matchingEntries.map(entry => entry.id);
+        const result = await supabaseDB.bulkUpdateCashBookEntriesByIds(
+          ids,
+          { acc_name: replaceData.newAccountName.trim() },
+          user?.username || 'admin'
+        );
 
-        for (const entry of filteredEntries) {
-          // Match with trimmed values for consistency
-          const entryAccount = entry.acc_name?.trim() || '';
-          const oldAccount = replaceData.oldAccountName?.trim() || '';
-          
-          if (entryAccount === oldAccount) {
-            try {
-              const result = await supabaseDB.updateCashBookEntry(
-                entry.id,
-                { acc_name: replaceData.newAccountName.trim() },
-                user?.username || 'admin'
-              );
-              if (result) {
-                updatedCount++;
-              } else {
-                console.warn(`Failed to update entry ${entry.id}`);
-              }
-            } catch (error) {
-              console.error(`Error updating entry ${entry.id}:`, error);
-            }
-          }
-        }
-
-        if (updatedCount > 0) {
+        if (result.success && result.updatedCount > 0) {
           await loadEntries();
-          toast.success(`${updatedCount} account names replaced successfully!`);
+          toast.success(`${result.updatedCount} account names replaced successfully!`);
           setReplaceData(prev => ({
             ...prev,
             oldAccountName: '',
@@ -324,8 +311,11 @@ const ReplaceForm: React.FC = () => {
           // Trigger dashboard refresh
           localStorage.setItem('dashboard-refresh', Date.now().toString());
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+        } else {
+          toast.error(`Failed to replace account names: ${result.error?.message || 'Unknown error'}`);
         }
       } catch (error) {
+        console.error('Error replacing account names:', error);
         toast.error('Failed to replace account names');
       } finally {
         setLoading(false);
@@ -340,7 +330,7 @@ const ReplaceForm: React.FC = () => {
     }
 
     // Verify that the new sub account name exists in the listed sub accounts
-    const newSubAccountExists = subAccounts.some(
+    const newSubAccountExists = newSubAccounts.some(
       subAccount => subAccount.value.trim() === replaceData.newSubAccount.trim()
     );
 
@@ -351,42 +341,37 @@ const ReplaceForm: React.FC = () => {
       return;
     }
 
+    // Find all matching entries
+    const matchingEntries = entries.filter(entry => {
+      const entrySubAccount = entry.sub_acc_name?.trim() || '';
+      const oldSubAccount = replaceData.oldSubAccount?.trim() || '';
+      return entrySubAccount === oldSubAccount;
+    });
+
+    if (matchingEntries.length === 0) {
+      toast.error(`No records found with sub account name "${replaceData.oldSubAccount}"`);
+      return;
+    }
+
     if (
       window.confirm(
-        `Replace "${replaceData.oldSubAccount}" with "${replaceData.newSubAccount}" in ${summary.affectedRecords} records?`
+        `Replace "${replaceData.oldSubAccount}" with "${replaceData.newSubAccount}" in ${matchingEntries.length} records?`
       )
     ) {
       setLoading(true);
       try {
-        let updatedCount = 0;
+        // Use bulk update for better performance
+        const ids = matchingEntries.map(entry => entry.id);
+        const result = await supabaseDB.bulkUpdateCashBookEntriesByIds(
+          ids,
+          { sub_acc_name: replaceData.newSubAccount.trim() },
+          user?.username || 'admin'
+        );
 
-        for (const entry of filteredEntries) {
-          // Match with trimmed values for consistency
-          const entrySubAccount = entry.sub_acc_name?.trim() || '';
-          const oldSubAccount = replaceData.oldSubAccount?.trim() || '';
-          
-          if (entrySubAccount === oldSubAccount) {
-            try {
-              const result = await supabaseDB.updateCashBookEntry(
-                entry.id,
-                { sub_acc_name: replaceData.newSubAccount.trim() },
-                user?.username || 'admin'
-              );
-              if (result) {
-                updatedCount++;
-              } else {
-                console.warn(`Failed to update entry ${entry.id}`);
-              }
-            } catch (error) {
-              console.error(`Error updating entry ${entry.id}:`, error);
-            }
-          }
-        }
-
-        if (updatedCount > 0) {
+        if (result.success && result.updatedCount > 0) {
           await loadEntries();
           toast.success(
-            `${updatedCount} sub account names replaced successfully!`
+            `${result.updatedCount} sub account names replaced successfully!`
           );
           setReplaceData(prev => ({
             ...prev,
@@ -399,7 +384,7 @@ const ReplaceForm: React.FC = () => {
           localStorage.setItem('dashboard-refresh', Date.now().toString());
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
-          toast.error('No records were updated');
+          toast.error(`Failed to replace sub account names: ${result.error?.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('Error replacing sub account names:', error);
@@ -444,11 +429,35 @@ const ReplaceForm: React.FC = () => {
       return;
     }
 
-    if (
-      window.confirm(
-        `Replace "${replaceData.oldCompanyName}" with "${replaceData.newCompanyName}" in ${matchingEntries.length} records?`
-      )
-    ) {
+    // Count main accounts and sub accounts that will be affected
+    let mainAccountsCount = 0;
+    let subAccountsCount = 0;
+    
+    try {
+      const { data: mainAccountsData } = await supabase
+        .from('company_main_accounts')
+        .select('id')
+        .eq('company_name', replaceData.oldCompanyName.trim());
+      mainAccountsCount = mainAccountsData?.length || 0;
+
+      const { data: subAccountsData } = await supabase
+        .from('company_main_sub_acc')
+        .select('id')
+        .eq('company_name', replaceData.oldCompanyName.trim());
+      subAccountsCount = subAccountsData?.length || 0;
+    } catch (err) {
+      console.warn('Could not count accounts before replacement:', err);
+    }
+
+    const confirmMessage = 
+      `Replace company name "${replaceData.oldCompanyName}" with "${replaceData.newCompanyName}"?\n\n` +
+      `This will update:\n` +
+      `• ${matchingEntries.length} cash book entries\n` +
+      `• ${mainAccountsCount} main accounts\n` +
+      `• ${subAccountsCount} sub accounts\n\n` +
+      `Are you sure you want to proceed?`;
+
+    if (window.confirm(confirmMessage)) {
       setLoading(true);
       try {
         // Verify that the new company name exists in the companies table
@@ -471,43 +480,81 @@ const ReplaceForm: React.FC = () => {
           `Company "${replaceData.newCompanyName}" exists in companies table`
         );
 
-        let updatedCount = 0;
+        const oldCompanyName = replaceData.oldCompanyName.trim();
+        const newCompanyName = replaceData.newCompanyName.trim();
 
-        console.log('Starting to update records...');
+        // STEP 1: Update company_main_accounts table
+        console.log('Updating company_main_accounts table...');
+        const { data: updatedMainAccounts, error: mainAccountsError } = await supabase
+          .from('company_main_accounts')
+          .update({ company_name: newCompanyName })
+          .eq('company_name', oldCompanyName)
+          .select();
 
-        for (const entry of matchingEntries) {
-          console.log(
-            `Updating entry ${entry.id} with company name: ${entry.company_name}`
-          );
-
-          try {
-            const result = await supabaseDB.updateCashBookEntry(
-              entry.id,
-              { company_name: replaceData.newCompanyName.trim() },
-              user?.username || 'admin'
-            );
-
-            console.log(`Update result for entry ${entry.id}:`, result);
-
-            if (result) {
-              updatedCount++;
-              console.log(`Successfully updated entry ${entry.id}`);
-            } else {
-              console.warn(`Failed to update entry ${entry.id}`);
-            }
-          } catch (error) {
-            console.error(`Error updating entry ${entry.id}:`, error);
-          }
+        if (mainAccountsError) {
+          console.error('Error updating company_main_accounts:', mainAccountsError);
+          toast.error(`Failed to update main accounts: ${mainAccountsError.message}`);
+          setLoading(false);
+          return;
         }
 
-        console.log(
-          `Total updated: ${updatedCount} out of ${matchingEntries.length}`
-        );
+        const mainAccountsUpdated = updatedMainAccounts?.length || 0;
+        console.log(`✅ Updated ${mainAccountsUpdated} main accounts`);
 
-        if (updatedCount > 0) {
+        // STEP 2: Update company_main_sub_acc table
+        console.log('Updating company_main_sub_acc table...');
+        const { data: updatedSubAccounts, error: subAccountsError } = await supabase
+          .from('company_main_sub_acc')
+          .update({ company_name: newCompanyName })
+          .eq('company_name', oldCompanyName)
+          .select();
+
+        if (subAccountsError) {
+          console.error('Error updating company_main_sub_acc:', subAccountsError);
+          toast.error(`Failed to update sub accounts: ${subAccountsError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const subAccountsUpdated = updatedSubAccounts?.length || 0;
+        console.log(`✅ Updated ${subAccountsUpdated} sub accounts`);
+
+        // STEP 3: Update ALL cash_book entries with the old company name
+        // Using direct database update to ensure ALL entries are updated, not just those in memory
+        console.log(`Updating ALL cash_book entries with company_name = "${oldCompanyName}"...`);
+        const { data: updatedCashBookEntries, error: cashBookError } = await supabase
+          .from('cash_book')
+          .update({ company_name: newCompanyName })
+          .eq('company_name', oldCompanyName)
+          .select('id');
+
+        if (cashBookError) {
+          console.error('Error updating cash_book entries:', cashBookError);
+          toast.error(`Failed to update cash book entries: ${cashBookError.message}`);
+          toast.warning(
+            `However, ${mainAccountsUpdated} main accounts and ${subAccountsUpdated} sub accounts were updated. ` +
+            `You may need to manually update cash book entries.`
+          );
+          setLoading(false);
+          return;
+        }
+
+        const cashBookEntriesUpdated = updatedCashBookEntries?.length || 0;
+        console.log(`✅ Updated ${cashBookEntriesUpdated} cash book entries`);
+
+        if (cashBookEntriesUpdated > 0 || mainAccountsUpdated > 0 || subAccountsUpdated > 0) {
           await loadEntries();
-          await loadDropdownData(); // Refresh dropdown data to include new company
-          toast.success(`${updatedCount} company names replaced successfully!`);
+          await loadDropdownData(); // Refresh dropdown data
+          
+          const totalUpdated = cashBookEntriesUpdated + mainAccountsUpdated + subAccountsUpdated;
+          toast.success(
+            `Company name replaced successfully! ` +
+            `${cashBookEntriesUpdated} cash book entries, ` +
+            `${mainAccountsUpdated} main accounts, ` +
+            `${subAccountsUpdated} sub accounts updated.`,
+            { duration: 5000 }
+          );
+          
           setReplaceData(prev => ({
             ...prev,
             oldCompanyName: '',
@@ -519,9 +566,7 @@ const ReplaceForm: React.FC = () => {
           localStorage.setItem('dashboard-refresh', Date.now().toString());
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
         } else {
-          toast.error(
-            'No records were updated. Please check the console for details.'
-          );
+          toast.warning('No records were updated. Please check if the company name exists in the database.');
         }
       } catch (error) {
         console.error('Error replacing company names:', error);
