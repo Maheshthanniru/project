@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import Card from '../components/UI/Card';
 import Select from '../components/UI/Select';
+import Input from '../components/UI/Input';
+import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,16 +23,28 @@ import {
   Copy,
   X,
   Shield,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, changePassword } = useAuth();
   const location = useLocation();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
   );
   const [userCredentials, setUserCredentials] = useState<any[]>([]);
   const [showCredentials, setShowCredentials] = useState(true);
+  
+  // Password change modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // React Query hooks for data fetching
   const { data: stats, isLoading: statsLoading, isFetching: statsFetching } = useDashboardStats(selectedDate);
@@ -175,6 +189,41 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  // Handle password change
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('All fields are required');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      toast.error('New password must be at least 4 characters');
+      return;
+    }
+
+    setChangingPassword(true);
+    const result = await changePassword(currentPassword, newPassword);
+
+    if (result.success) {
+      toast.success('Password changed successfully!');
+      setShowPasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } else {
+      toast.error(result.error || 'Failed to change password');
+    }
+
+    setChangingPassword(false);
+  };
+
   const getTransactionColor = (credit: number, debit: number) => {
     if (credit > 0) return 'text-green-600';
     if (debit > 0) return 'text-red-600';
@@ -222,6 +271,14 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className='flex items-center gap-4'>
+          <button
+            onClick={() => setShowPasswordModal(true)}
+            className='flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors'
+            title='Change Password'
+          >
+            <Key className='w-4 h-4' />
+            <span className='text-sm'>Change Password</span>
+          </button>
           <button
             onClick={handleManualRefresh}
             disabled={loading || autoUpdating}
@@ -617,6 +674,121 @@ const Dashboard: React.FC = () => {
         )}
       </Card>
 
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-white rounded-lg shadow-xl max-w-md w-full mx-4'>
+            <div className='flex items-center justify-between p-6 border-b border-gray-200'>
+              <h2 className='text-xl font-bold text-gray-900 flex items-center gap-2'>
+                <Key className='w-5 h-5 text-gray-600' />
+                Change Password
+              </h2>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
+                className='text-gray-400 hover:text-gray-600'
+              >
+                <X className='w-5 h-5' />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangePassword} className='p-6 space-y-4'>
+              <div className='relative'>
+                <Input
+                  label='Current Password'
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  placeholder='Enter current password'
+                  required
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className='absolute right-3 top-8 text-gray-400 hover:text-gray-600'
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className='w-5 h-5' />
+                  ) : (
+                    <Eye className='w-5 h-5' />
+                  )}
+                </button>
+              </div>
+
+              <div className='relative'>
+                <Input
+                  label='New Password'
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  placeholder='Enter new password (min 4 characters)'
+                  required
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className='absolute right-3 top-8 text-gray-400 hover:text-gray-600'
+                >
+                  {showNewPassword ? (
+                    <EyeOff className='w-5 h-5' />
+                  ) : (
+                    <Eye className='w-5 h-5' />
+                  )}
+                </button>
+              </div>
+
+              <div className='relative'>
+                <Input
+                  label='Confirm New Password'
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  placeholder='Confirm new password'
+                  required
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className='absolute right-3 top-8 text-gray-400 hover:text-gray-600'
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className='w-5 h-5' />
+                  ) : (
+                    <Eye className='w-5 h-5' />
+                  )}
+                </button>
+              </div>
+
+              <div className='flex gap-3 pt-4'>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                  className='flex-1'
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type='submit'
+                  disabled={changingPassword}
+                  className='flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
+                >
+                  {changingPassword ? 'Changing...' : 'Change Password'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

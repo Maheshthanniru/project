@@ -1368,12 +1368,8 @@ const EditEntry: React.FC = () => {
     if (field === 'company_name') {
       setFilterCompanyName(value);
       setFilterAccountName('');
-      setSelectedEntry((prev: any) => ({
-        ...prev,
-        acc_name: '',
-        sub_acc_name: '',
-        particulars: '',
-      }));
+      // Don't clear acc_name and sub_acc_name - keep them until user manually changes them
+      // Only update the dropdown options available, but preserve the selected values
       // Load account names for the selected company
       if (value) {
         await loadAccountNamesByCompany(value);
@@ -1381,17 +1377,13 @@ const EditEntry: React.FC = () => {
         // If no company selected, load all account names
         await loadDistinctAccountNames();
       }
-      // Clear dependent dropdowns
-      setDependentSubAccounts([]);
-      setDependentParticulars([]);
+      // Note: We don't clear dependent dropdowns or particulars here
+      // They remain until user manually changes them
     }
     if (field === 'acc_name') {
       setFilterAccountName(value);
-      setSelectedEntry((prev: any) => ({ 
-        ...prev, 
-        sub_acc_name: '',
-        particulars: '',
-      }));
+      // Don't clear sub_acc_name - keep it until user manually changes it
+      // Only update the dropdown options available
       // Load sub accounts for the selected account and company
       if (value && selectedEntry.company_name) {
         await loadSubAccountsByAccountAndCompany(value, selectedEntry.company_name);
@@ -1399,17 +1391,14 @@ const EditEntry: React.FC = () => {
         // Fallback to global sub accounts if no company
         await loadDependentSubAccounts(value);
       }
-      setDependentParticulars([]);
+      // Note: We don't clear particulars here - it remains until user manually changes it
     }
     if (field === 'sub_acc_name') {
-      setSelectedEntry((prev: any) => ({ 
-        ...prev, 
-        particulars: '',
-      }));
       // Load dependent particulars
       if (selectedEntry.acc_name && value) {
         await loadDependentParticulars(selectedEntry.acc_name, value);
       }
+      // Note: We don't clear particulars here - keep it until user manually changes it
     }
   };
 

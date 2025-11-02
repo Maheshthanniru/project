@@ -552,9 +552,24 @@ class SupabaseDatabase {
         return 0;
       }
 
-      // Get unique sub account names
-      const uniqueSubAccounts = [...new Set(data?.map(item => item.sub_acc).filter(Boolean))];
-      console.log('📊 Unique sub accounts count from company_main_sub_acc:', uniqueSubAccounts.length);
+      if (!data || data.length === 0) {
+        console.log('📊 No sub accounts found in database');
+        return 0;
+      }
+
+      // Normalize and get unique sub account names
+      // Trim whitespace, convert to lowercase for case-insensitive comparison
+      const normalizedSubAccounts = data
+        .map(item => item.sub_acc?.trim())
+        .filter(Boolean) // Remove null, undefined, and empty strings
+        .map(acc => acc.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
+
+      // Get unique sub account names using Set
+      const uniqueSubAccounts = [...new Set(normalizedSubAccounts)];
+      
+      console.log('📊 Total rows in company_main_sub_acc:', data.length);
+      console.log('📊 Unique sub accounts count (normalized):', uniqueSubAccounts.length);
+      console.log('📊 Sample sub accounts:', uniqueSubAccounts.slice(0, 10));
       
       return uniqueSubAccounts.length;
     } catch (error) {

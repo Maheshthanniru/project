@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface DeletedRecord {
@@ -59,6 +61,10 @@ const DeletedRecords: React.FC = () => {
   const [users, setUsers] = useState<{ value: string; label: string }[]>([]);
   const [dates, setDates] = useState<{ value: string; label: string }[]>([]);
   
+  // Calendar state
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
@@ -71,6 +77,44 @@ const DeletedRecords: React.FC = () => {
   useEffect(() => {
     applyFilters();
   }, [deletedRecords, searchTerm, selectedDate, selectedCompany, selectedUser]);
+
+  // Handle click outside calendar to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showCalendar && !target.closest('.calendar-container') && !target.closest('button[type="button"]')) {
+        setShowCalendar(false);
+      }
+    };
+
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showCalendar]);
+
+  // Get dates that have deleted records
+  const getDatesWithDeletedRecords = useMemo(() => {
+    const datesWithDeleted = new Set<string>();
+    deletedRecords.forEach(record => {
+      if (record.deleted_at) {
+        try {
+          // Extract date from deleted_at (which is a timestamp)
+          const deletedDate = new Date(record.deleted_at);
+          if (!isNaN(deletedDate.getTime())) {
+            const dateStr = format(deletedDate, 'yyyy-MM-dd');
+            datesWithDeleted.add(dateStr);
+          }
+        } catch (error) {
+          console.warn('Invalid date format for deleted record:', record.deleted_at, error);
+        }
+      }
+    });
+    
+    console.log('Calendar: Dates with deleted records:', Array.from(datesWithDeleted).sort());
+    
+    return datesWithDeleted;
+  }, [deletedRecords]);
 
   const loadDeletedRecords = async () => {
     setLoading(true);
@@ -314,6 +358,137 @@ const DeletedRecords: React.FC = () => {
     }
   };
 
+  // Custom Calendar Component for Deleted Records
+  const CustomCalendar = ({ onDateSelect, selectedDate, onClose }: {
+    onDateSelect: (date: string) => void;
+    selectedDate: string;
+    onClose: () => void;
+  }) => {
+    const today = new Date();
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const days = [];
+    const currentDate = new Date(startDate);
+    
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+      setCurrentMonth(prev => {
+        const newDate = new Date(prev);
+        if (direction === 'prev') {
+          newDate.setMonth(newDate.getMonth() - 1);
+        } else {
+          newDate.setMonth(newDate.getMonth() + 1);
+        }
+        return newDate;
+      });
+    };
+
+    const handleDateClick = (date: Date) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      onDateSelect(dateStr);
+      onClose();
+    };
+
+    const handleClearDate = () => {
+      onDateSelect('');
+      onClose();
+    };
+
+    return (
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 p-4 min-w-[280px] calendar-container">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => navigateMonth('prev')}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <h3 className="font-semibold text-sm">
+            {monthNames[month]} {year}
+          </h3>
+          <button
+            onClick={() => navigateMonth('next')}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="p-2 text-center font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+          
+          {days.map((date, index) => {
+            const dateStr = format(date, 'yyyy-MM-dd');
+            const isCurrentMonth = date.getMonth() === month;
+            const isToday = dateStr === format(today, 'yyyy-MM-dd');
+            const isSelected = dateStr === selectedDate;
+            const hasDeletedRecords = getDatesWithDeletedRecords.has(dateStr);
+            
+            return (
+              <button
+                key={index}
+                onClick={() => handleDateClick(date)}
+                className={`
+                  relative p-2 text-xs rounded hover:bg-red-100 transition-colors
+                  ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                  ${isToday ? 'bg-red-200 font-bold' : ''}
+                  ${isSelected ? 'bg-red-500 text-white' : ''}
+                `}
+              >
+                {date.getDate()}
+                {hasDeletedRecords && (
+                  <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-red-500 rounded-full opacity-80 shadow-sm"></div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        
+        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-red-500 rounded-full opacity-80 shadow-sm"></div>
+            <span>Has deleted records</span>
+          </div>
+          <div className="flex gap-2">
+            {selectedDate && (
+              <button
+                onClick={handleClearDate}
+                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className='min-h-screen flex flex-col'>
       <div className='w-full px-4 space-y-6'>
@@ -380,14 +555,50 @@ const DeletedRecords: React.FC = () => {
                 />
               </div>
             </div>
-            <div>
-              <SearchableSelect
-                label='Date'
-                value={selectedDate}
-                onChange={setSelectedDate}
-                options={dates}
-                placeholder='Select date...'
-              />
+            <div className='relative calendar-container'>
+              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                Date
+              </label>
+              <div className='relative'>
+                <input
+                  type='text'
+                  value={selectedDate ? format(new Date(selectedDate), 'dd/MM/yyyy') : ''}
+                  placeholder='Select date...'
+                  readOnly
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className='w-full border border-gray-300 rounded-lg px-3 py-2 pr-10 cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500'
+                />
+                <button
+                  type='button'
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className='absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
+                >
+                  <Calendar className='w-4 h-4' />
+                </button>
+                {selectedDate && (
+                  <button
+                    type='button'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDate('');
+                      setShowCalendar(false);
+                    }}
+                    className='absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
+                  >
+                    <XCircle className='w-4 h-4' />
+                  </button>
+                )}
+              </div>
+              {showCalendar && (
+                <CustomCalendar
+                  onDateSelect={(date) => {
+                    setSelectedDate(date);
+                    setShowCalendar(false);
+                  }}
+                  selectedDate={selectedDate}
+                  onClose={() => setShowCalendar(false)}
+                />
+              )}
             </div>
             <div>
               <SearchableSelect
