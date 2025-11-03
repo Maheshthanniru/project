@@ -101,15 +101,34 @@ export const useDropdownData = () => {
 
   const uniqueSubAccountsCountQuery = useQuery({
     queryKey: ['subAccounts', 'uniqueCount'],
-    queryFn: () => supabaseDB.getUniqueSubAccountsCount(),
-    staleTime: 10 * 60 * 1000, // 10 minutes for sub accounts count
+    queryFn: async () => {
+      // Align with ReplaceForm dropdown: count distinct sub accounts from cash_book
+      const names = await supabaseDB.getDistinctSubAccountNames();
+      // Normalize (trim + case-insensitive) to avoid duplicate variants counting twice
+      const normalized = names
+        .map(name => (typeof name === 'string' ? name.trim() : ''))
+        .filter(Boolean)
+        .map(name => name.toLowerCase());
+      const unique = new Set(normalized);
+      return unique.size;
+    },
+    staleTime: 0, // refetch on mount so dashboard shows latest dropdown-aligned count
     gcTime: 30 * 60 * 1000,
   });
 
   const distinctMainAccountsCountQuery = useQuery({
     queryKey: ['accounts', 'distinctCount'],
-    queryFn: () => supabaseDB.getDistinctMainAccountsCount(),
-    staleTime: 10 * 60 * 1000, // 10 minutes for main accounts count
+    queryFn: async () => {
+      // Align with ReplaceForm dropdown: count distinct main accounts from cash_book
+      const names = await supabaseDB.getDistinctAccountNames();
+      const normalized = names
+        .map(name => (typeof name === 'string' ? name.trim() : ''))
+        .filter(Boolean)
+        .map(name => name.toLowerCase());
+      const unique = new Set(normalized);
+      return unique.size;
+    },
+    staleTime: 0, // refetch on mount for latest count
     gcTime: 30 * 60 * 1000,
   });
 
@@ -145,6 +164,8 @@ export const useInvalidateDashboard = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
     queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.approvals.count });
+    // Also invalidate sub accounts unique count to keep dashboard in sync
+    queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
   }, [queryClient]);
 
   const invalidateStats = React.useCallback(() => {

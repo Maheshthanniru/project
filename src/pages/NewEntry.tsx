@@ -465,9 +465,17 @@ const NewEntry: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate main entry
-    if (!entry.companyName || !entry.accountName || !entry.particulars) {
-      toast.error('Please fill in required fields');
+    // Validate main entry (all mandatory except credit/debit where either is required)
+    if (
+      !entry.date ||
+      !entry.companyName ||
+      !entry.accountName ||
+      !entry.subAccount ||
+      !entry.particulars ||
+      !entry.staff ||
+      !entry.paymentMode
+    ) {
+      toast.error('Please fill in all required fields');
       return;
     }
     const mainCredit = parseFloat(entry.credit) || 0;
@@ -481,9 +489,12 @@ const NewEntry: React.FC = () => {
       dualDebit = 0;
     if (dualEntryEnabled) {
       if (
+        !dualEntry.date ||
         !dualEntry.companyName ||
         !dualEntry.accountName ||
-        !dualEntry.particulars
+        !dualEntry.subAccount ||
+        !dualEntry.particulars ||
+        !dualEntry.paymentMode
       ) {
         toast.error('Please fill in all required fields in Dual Entry');
         return;
@@ -1773,6 +1784,7 @@ const NewEntry: React.FC = () => {
                       placeholder='Select sub account...'
                       onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, particularsRef)}
                       disabled={!entry.accountName}
+                      required
                       size='sm'
                     />
                     <div className='flex gap-1'>
@@ -1898,6 +1910,7 @@ const NewEntry: React.FC = () => {
                       { value: 'Online', label: 'Online' }
                     ]}
                     placeholder='Select payment mode...'
+                      required
                     size='sm'
                   />
                 </div>
@@ -2069,6 +2082,7 @@ const NewEntry: React.FC = () => {
                         placeholder='Select sub account...'
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, dualParticularsRef)}
                         disabled={!dualEntry.accountName}
+                      required
                         size='sm'
                       />
                       <Input
@@ -2127,6 +2141,7 @@ const NewEntry: React.FC = () => {
                           { value: 'Bank Transfer', label: 'Bank Transfer' }
                         ]}
                         placeholder='Select payment mode...'
+                        required
                         size='sm'
                       />
                     </div>

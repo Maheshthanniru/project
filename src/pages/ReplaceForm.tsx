@@ -445,6 +445,22 @@ const ReplaceForm: React.FC = () => {
         if (result.success && result.updatedCount > 0) {
           await loadEntries();
           
+          // After successful replacement, delete the old sub account from reference table
+          try {
+            const { error: subRefDeleteError } = await supabase
+              .from('company_main_sub_acc')
+              .delete()
+              .eq('sub_acc', replaceData.oldSubAccount.trim());
+
+            if (subRefDeleteError) {
+              console.warn('Warning: Could not delete old sub account from company_main_sub_acc:', subRefDeleteError);
+            } else {
+              console.log('✅ Old sub account deleted from company_main_sub_acc');
+            }
+          } catch (subRefDeleteErr) {
+            console.warn('Warning: Error while deleting old sub account reference:', subRefDeleteErr);
+          }
+
           // Invalidate and refetch React Query cache to refresh recent transactions in New Entry
           // This ensures that updated entries show up in the recent transactions section automatically
           console.log('🔄 Refreshing recent entries queries to update New Entry recent transactions...');
@@ -465,6 +481,9 @@ const ReplaceForm: React.FC = () => {
           // Invalidate and refetch sub accounts dropdown to update sub account list in New Entry
           queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
           await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          // Also invalidate related dropdowns so all forms reload fresh lists
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
           
           console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
           
