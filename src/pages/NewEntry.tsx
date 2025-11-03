@@ -281,6 +281,37 @@ const NewEntry: React.FC = () => {
     updateDailyEntryNumber();
   }, [entry.date]);
 
+  // Listen for dashboard refresh events (emitted after replacements, edits, etc.)
+  // This ensures recent transactions and dropdowns update automatically when records are replaced
+  useEffect(() => {
+    const handleDashboardRefresh = () => {
+      console.log('🔄 New Entry: Dashboard refresh event received, refreshing recent entries and dropdowns...');
+      
+      // Refetch recent entries for the current date to show updated data immediately
+      // This ensures replaced records show with new company/account names without manual refresh
+      queryClient.refetchQueries({ queryKey: ['recentEntries', entry.date] });
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+      
+      // Refetch companies dropdown to show updated company list after replacement
+      // This ensures the company dropdown automatically updates when companies are replaced/deleted
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+      
+      // Also refetch accounts and sub accounts as they may have changed
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
+      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      
+      console.log('✅ New Entry: Recent entries and dropdowns refreshed automatically');
+    };
+
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
+    return () => window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
+  }, [entry.date, queryClient]);
+
   useEffect(() => {
     const loadAccounts = async () => {
       try {

@@ -7,6 +7,8 @@ import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryClient';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 import {
@@ -28,6 +30,7 @@ interface ReplaceFormData {
 
 const ReplaceForm: React.FC = () => {
   const { user, isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   const [replaceData, setReplaceData] = useState<ReplaceFormData>({
     oldCompanyName: '',
@@ -346,6 +349,32 @@ const ReplaceForm: React.FC = () => {
           // Refresh dropdown data to reflect the changes
           await loadDropdownData();
           
+          // Invalidate and refetch React Query cache to refresh recent transactions in New Entry
+          // This ensures that updated entries show up in the recent transactions section automatically
+          console.log('🔄 Refreshing recent entries queries to update New Entry recent transactions...');
+          
+          // Invalidate all relevant queries
+          queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          
+          // Force refetch all recent entries queries to update immediately
+          // This ensures New Entry page shows updated data without manual refresh
+          await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
+          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          
+          // Invalidate and refetch accounts dropdown to update account list in New Entry
+          // This ensures the dropdown shows updated account names after replacement
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          
+          console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
+          
           setReplaceData(prev => ({
             ...prev,
             oldAccountName: '',
@@ -415,6 +444,30 @@ const ReplaceForm: React.FC = () => {
 
         if (result.success && result.updatedCount > 0) {
           await loadEntries();
+          
+          // Invalidate and refetch React Query cache to refresh recent transactions in New Entry
+          // This ensures that updated entries show up in the recent transactions section automatically
+          console.log('🔄 Refreshing recent entries queries to update New Entry recent transactions...');
+          
+          // Invalidate all relevant queries
+          queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          
+          // Force refetch all recent entries queries to update immediately
+          // This ensures New Entry page shows updated data without manual refresh
+          await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
+          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          
+          // Invalidate and refetch sub accounts dropdown to update sub account list in New Entry
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          
+          console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
+          
           toast.success(
             `${result.updatedCount} sub account names replaced successfully!`
           );
@@ -529,40 +582,207 @@ const ReplaceForm: React.FC = () => {
         const newCompanyName = replaceData.newCompanyName.trim();
 
         // STEP 1: Update company_main_accounts table
-        console.log('Updating company_main_accounts table...');
-        const { data: updatedMainAccounts, error: mainAccountsError } = await supabase
+        // Handle duplicate accounts - check which accounts would create duplicates
+        console.log('Checking for duplicate accounts before updating company_main_accounts...');
+        
+        // Get all accounts from old company
+        const { data: oldCompanyAccounts, error: fetchOldError } = await supabase
           .from('company_main_accounts')
-          .update({ company_name: newCompanyName })
-          .eq('company_name', oldCompanyName)
-          .select();
+          .select('id, acc_name')
+          .eq('company_name', oldCompanyName);
 
-        if (mainAccountsError) {
-          console.error('Error updating company_main_accounts:', mainAccountsError);
-          toast.error(`Failed to update main accounts: ${mainAccountsError.message}`);
+        if (fetchOldError) {
+          console.error('Error fetching old company accounts:', fetchOldError);
+          toast.error(`Failed to fetch old company accounts: ${fetchOldError.message}`);
           setLoading(false);
           return;
         }
 
-        const mainAccountsUpdated = updatedMainAccounts?.length || 0;
-        console.log(`✅ Updated ${mainAccountsUpdated} main accounts`);
+        // Get all accounts from new company to check for duplicates
+        const { data: newCompanyAccounts, error: fetchNewError } = await supabase
+          .from('company_main_accounts')
+          .select('acc_name')
+          .eq('company_name', newCompanyName);
+
+        if (fetchNewError) {
+          console.error('Error fetching new company accounts:', fetchNewError);
+          toast.error(`Failed to fetch new company accounts: ${fetchNewError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const newCompanyAccountNames = new Set((newCompanyAccounts || []).map(acc => acc.acc_name?.trim()).filter(Boolean));
+        const accountsToUpdate: string[] = [];
+        const accountsToDelete: string[] = [];
+        const duplicateAccountNames: string[] = [];
+
+        // Separate accounts into those that can be updated vs those that need to be deleted
+        (oldCompanyAccounts || []).forEach(account => {
+          const accName = account.acc_name?.trim();
+          if (!accName) return;
+
+          if (newCompanyAccountNames.has(accName)) {
+            // Duplicate - the new company already has this account
+            accountsToDelete.push(account.id);
+            duplicateAccountNames.push(accName);
+          } else {
+            // No duplicate - safe to update
+            accountsToUpdate.push(account.id);
+          }
+        });
+
+        console.log(`📊 Accounts to update: ${accountsToUpdate.length}, Accounts to delete (duplicates): ${accountsToDelete.length}`);
+        
+        if (duplicateAccountNames.length > 0) {
+          console.log(`⚠️ Duplicate accounts found: ${duplicateAccountNames.join(', ')}`);
+          console.log('These will be deleted from old company since new company already has them');
+        }
+
+        // Delete duplicate accounts first (accounts that new company already has)
+        let deletedCount = 0;
+        if (accountsToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('company_main_accounts')
+            .delete()
+            .in('id', accountsToDelete);
+
+          if (deleteError) {
+            console.error('Error deleting duplicate accounts:', deleteError);
+            toast.warning(`Warning: Could not delete ${accountsToDelete.length} duplicate accounts: ${deleteError.message}`);
+          } else {
+            deletedCount = accountsToDelete.length;
+            console.log(`✅ Deleted ${deletedCount} duplicate accounts`);
+          }
+        }
+
+        // Update non-duplicate accounts
+        let updatedCount = 0;
+        if (accountsToUpdate.length > 0) {
+          const { data: updatedMainAccounts, error: mainAccountsError } = await supabase
+            .from('company_main_accounts')
+            .update({ company_name: newCompanyName })
+            .in('id', accountsToUpdate)
+            .select();
+
+          if (mainAccountsError) {
+            console.error('Error updating company_main_accounts:', mainAccountsError);
+            toast.error(`Failed to update main accounts: ${mainAccountsError.message}`);
+            setLoading(false);
+            return;
+          }
+
+          updatedCount = updatedMainAccounts?.length || 0;
+          console.log(`✅ Updated ${updatedCount} main accounts`);
+        }
+
+        const mainAccountsUpdated = updatedCount + deletedCount;
+        if (duplicateAccountNames.length > 0) {
+          toast.success(
+            `${duplicateAccountNames.length} duplicate account(s) were deleted (new company already has them): ${duplicateAccountNames.slice(0, 3).join(', ')}${duplicateAccountNames.length > 3 ? '...' : ''}`,
+            { duration: 5000 }
+          );
+        }
 
         // STEP 2: Update company_main_sub_acc table
-        console.log('Updating company_main_sub_acc table...');
-        const { data: updatedSubAccounts, error: subAccountsError } = await supabase
+        // Handle duplicate sub accounts - check which sub accounts would create duplicates
+        console.log('Checking for duplicate sub accounts before updating company_main_sub_acc...');
+        
+        // Get all sub accounts from old company
+        const { data: oldCompanySubAccounts, error: fetchOldSubError } = await supabase
           .from('company_main_sub_acc')
-          .update({ company_name: newCompanyName })
-          .eq('company_name', oldCompanyName)
-          .select();
+          .select('id, acc_name, sub_acc')
+          .eq('company_name', oldCompanyName);
 
-        if (subAccountsError) {
-          console.error('Error updating company_main_sub_acc:', subAccountsError);
-          toast.error(`Failed to update sub accounts: ${subAccountsError.message}`);
+        if (fetchOldSubError) {
+          console.error('Error fetching old company sub accounts:', fetchOldSubError);
+          toast.error(`Failed to fetch old company sub accounts: ${fetchOldSubError.message}`);
           setLoading(false);
           return;
         }
 
-        const subAccountsUpdated = updatedSubAccounts?.length || 0;
-        console.log(`✅ Updated ${subAccountsUpdated} sub accounts`);
+        // Get all sub accounts from new company to check for duplicates
+        const { data: newCompanySubAccounts, error: fetchNewSubError } = await supabase
+          .from('company_main_sub_acc')
+          .select('acc_name, sub_acc')
+          .eq('company_name', newCompanyName);
+
+        if (fetchNewSubError) {
+          console.error('Error fetching new company sub accounts:', fetchNewSubError);
+          toast.error(`Failed to fetch new company sub accounts: ${fetchNewSubError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        // Create a set of (acc_name, sub_acc) combinations for the new company
+        const newCompanySubAccountKeys = new Set(
+          (newCompanySubAccounts || []).map(sub => {
+            const accName = sub.acc_name?.trim();
+            const subAcc = sub.sub_acc?.trim();
+            return accName && subAcc ? `${accName}|||${subAcc}` : null;
+          }).filter(Boolean)
+        );
+
+        const subAccountsToUpdate: string[] = [];
+        const subAccountsToDelete: string[] = [];
+        const duplicateSubAccountKeys: string[] = [];
+
+        // Separate sub accounts into those that can be updated vs those that need to be deleted
+        (oldCompanySubAccounts || []).forEach(subAccount => {
+          const accName = subAccount.acc_name?.trim();
+          const subAcc = subAccount.sub_acc?.trim();
+          if (!accName || !subAcc) return;
+
+          const key = `${accName}|||${subAcc}`;
+          if (newCompanySubAccountKeys.has(key)) {
+            // Duplicate - the new company already has this sub account
+            subAccountsToDelete.push(subAccount.id);
+            duplicateSubAccountKeys.push(`${accName} - ${subAcc}`);
+          } else {
+            // No duplicate - safe to update
+            subAccountsToUpdate.push(subAccount.id);
+          }
+        });
+
+        console.log(`📊 Sub accounts to update: ${subAccountsToUpdate.length}, Sub accounts to delete (duplicates): ${subAccountsToDelete.length}`);
+
+        // Delete duplicate sub accounts first
+        let deletedSubCount = 0;
+        if (subAccountsToDelete.length > 0) {
+          const { error: deleteSubError } = await supabase
+            .from('company_main_sub_acc')
+            .delete()
+            .in('id', subAccountsToDelete);
+
+          if (deleteSubError) {
+            console.error('Error deleting duplicate sub accounts:', deleteSubError);
+            toast.warning(`Warning: Could not delete ${subAccountsToDelete.length} duplicate sub accounts: ${deleteSubError.message}`);
+          } else {
+            deletedSubCount = subAccountsToDelete.length;
+            console.log(`✅ Deleted ${deletedSubCount} duplicate sub accounts`);
+          }
+        }
+
+        // Update non-duplicate sub accounts
+        let updatedSubCount = 0;
+        if (subAccountsToUpdate.length > 0) {
+          const { data: updatedSubAccounts, error: subAccountsError } = await supabase
+            .from('company_main_sub_acc')
+            .update({ company_name: newCompanyName })
+            .in('id', subAccountsToUpdate)
+            .select();
+
+          if (subAccountsError) {
+            console.error('Error updating company_main_sub_acc:', subAccountsError);
+            toast.error(`Failed to update sub accounts: ${subAccountsError.message}`);
+            setLoading(false);
+            return;
+          }
+
+          updatedSubCount = updatedSubAccounts?.length || 0;
+          console.log(`✅ Updated ${updatedSubCount} sub accounts`);
+        }
+
+        const subAccountsUpdated = updatedSubCount + deletedSubCount;
 
         // STEP 3: Update ALL cash_book entries with the old company name
         // Using direct database update to ensure ALL entries are updated, not just those in memory
@@ -588,17 +808,75 @@ const ReplaceForm: React.FC = () => {
         console.log(`✅ Updated ${cashBookEntriesUpdated} cash book entries`);
 
         if (cashBookEntriesUpdated > 0 || mainAccountsUpdated > 0 || subAccountsUpdated > 0) {
+          // STEP 4: Delete the old company name from companies table
+          // Since all entries have been moved to the new company name, it's safe to delete
+          console.log(`Deleting old company name "${oldCompanyName}" from companies table...`);
+          let oldCompanyDeleted = false;
+          
+          try {
+            const { error: companyDeleteError } = await supabase
+              .from('companies')
+              .delete()
+              .eq('company_name', oldCompanyName);
+
+            if (companyDeleteError) {
+              console.warn('Warning: Could not delete old company name from companies table:', companyDeleteError);
+              // Don't fail the whole operation if deletion fails - it's a cleanup step
+              toast.warning(
+                `Company name replaced successfully, but could not delete old company "${oldCompanyName}" from companies list.`,
+                { duration: 4000 }
+              );
+            } else {
+              console.log('✅ Old company name deleted from companies table');
+              oldCompanyDeleted = true;
+            }
+          } catch (deleteErr) {
+            console.error('Error deleting old company name:', deleteErr);
+            // Continue with success message even if deletion fails
+          }
+
           await loadEntries();
           await loadDropdownData(); // Refresh dropdown data
           
+          // Invalidate and refetch React Query cache to refresh recent transactions in New Entry
+          // This ensures that updated entries show up in the recent transactions section automatically
+          // WITHOUT showing them as deleted - they are UPDATED, not deleted
+          console.log('🔄 Refreshing recent entries queries to update New Entry recent transactions...');
+          
+          // Invalidate all relevant queries
+          queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          
+          // Force refetch all recent entries queries to update immediately
+          // This ensures New Entry page shows updated data without manual refresh
+          // The records are UPDATED (not deleted), so they will show with new company name
+          await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
+          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          
+          // Invalidate and refetch companies dropdown to update company list in New Entry
+          // This ensures the dropdown shows updated company names after replacement
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+          
+          console.log('✅ Recent entries and companies dropdown refreshed - New Entry will update automatically with new company names');
+          
           const totalUpdated = cashBookEntriesUpdated + mainAccountsUpdated + subAccountsUpdated;
-          toast.success(
-            `Company name replaced successfully! ` +
-            `${cashBookEntriesUpdated} cash book entries, ` +
-            `${mainAccountsUpdated} main accounts, ` +
-            `${subAccountsUpdated} sub accounts updated.`,
-            { duration: 5000 }
-          );
+          const successMessage = oldCompanyDeleted
+            ? `Company name replaced successfully! ` +
+              `${cashBookEntriesUpdated} cash book entries, ` +
+              `${mainAccountsUpdated} main accounts, ` +
+              `${subAccountsUpdated} sub accounts updated. ` +
+              `Old company "${oldCompanyName}" deleted from companies list.`
+            : `Company name replaced successfully! ` +
+              `${cashBookEntriesUpdated} cash book entries, ` +
+              `${mainAccountsUpdated} main accounts, ` +
+              `${subAccountsUpdated} sub accounts updated.`;
+          
+          toast.success(successMessage, { duration: 5000 });
           
           setReplaceData(prev => ({
             ...prev,
