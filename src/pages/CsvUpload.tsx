@@ -3,6 +3,7 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -506,7 +507,7 @@ const processBatchIndividually = async (
 
       // Insert individual entry
       const { data: result, error: insertError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .insert(entryData)
         .select()
         .single();
@@ -826,7 +827,7 @@ const CsvUpload: React.FC = () => {
     // Test database connection
     try {
       const { data: testData, error: testError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id')
         .limit(1);
 
@@ -1458,7 +1459,7 @@ const CsvUpload: React.FC = () => {
                   `📤 Attempting bulk insert method 1: Direct insert`
                 );
                 const { data: bulkResult, error: bulkError } = await supabase
-                  .from('cash_book')
+                  .from(getTableName('cash_book'))
                   .insert(batchEntries)
                   .select('id');
 
@@ -1489,7 +1490,7 @@ const CsvUpload: React.FC = () => {
                   }));
 
                   const { data: safeResult, error: safeError } = await supabase
-                    .from('cash_book')
+                    .from(getTableName('cash_book'))
                     .insert(safeEntries)
                     .select('id');
 
@@ -1535,7 +1536,7 @@ const CsvUpload: React.FC = () => {
 
                     const { data: individualResult, error: individualError } =
                       await supabase
-                        .from('cash_book')
+                        .from(getTableName('cash_book'))
                         .insert(fallbackEntry)
                         .select('id');
 
@@ -1888,7 +1889,7 @@ const CsvUpload: React.FC = () => {
       }
 
       // Test Supabase client
-      const { data, error } = await supabase.from('cash_book').select('count');
+      const { data, error } = await supabase.from(getTableName('cash_book')).select('count');
       if (error) {
         console.error('❌ Database connection failed:', error);
         toast.error('Database connection failed: ' + error.message);
@@ -1996,7 +1997,7 @@ const CsvUpload: React.FC = () => {
 
       // Try to get all records
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .limit(5);
 
@@ -2092,7 +2093,7 @@ const CsvUpload: React.FC = () => {
       toast.success(`Starting sync of ${offlineData.length} entries...`);
 
       // Test connection first
-      const { data, error } = await supabase.from('cash_book').select('count');
+      const { data, error } = await supabase.from(getTableName('cash_book')).select('count');
       if (error) {
         toast.error('Connection still unavailable. Cannot sync.');
         return;
@@ -2536,7 +2537,7 @@ const CsvUpload: React.FC = () => {
 
                         const { data: insertResult, error: insertError } =
                           await supabase
-                            .from('cash_book')
+                            .from(getTableName('cash_book'))
                             .insert(testEntry)
                             .select()
                             .single();

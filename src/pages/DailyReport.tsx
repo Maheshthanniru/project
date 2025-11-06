@@ -5,6 +5,7 @@ import Input from '../components/UI/Input';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format, addDays, subDays, startOfMonth, endOfMonth } from 'date-fns';
@@ -131,7 +132,7 @@ const DailyReport: React.FC = () => {
       
       // Get all entries for the specific date
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('company_name')
         .eq('c_date', date);
 
@@ -189,7 +190,7 @@ const DailyReport: React.FC = () => {
       
       // Use server-side filtering for much faster performance
       const { data: entries, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('c_date', selectedDate)
         .order('created_at', { ascending: false });
@@ -254,7 +255,7 @@ const DailyReport: React.FC = () => {
         // Fallback: calculate from individual entries (sum of all companies)
         try {
           const { data: previousEntries, error: prevError } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .select('credit, debit, company_name, c_date')
             .lte('c_date', prevDate);
 

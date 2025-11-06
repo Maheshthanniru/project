@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import {
   FileText,
   Users,
@@ -219,7 +220,7 @@ const ApproveRecords: React.FC = () => {
         console.log('[ApproveRecords] No deleted records from getDeletedCashBook, trying direct fetch...');
         try {
           const { data, error } = await supabase
-            .from('deleted_cash_book')
+            .from(getTableName('deleted_cash_book'))
             .select('*')
             .order('deleted_at', { ascending: false })
             .limit(1000);
@@ -454,7 +455,7 @@ const ApproveRecords: React.FC = () => {
       
       // Directly set approved to true instead of toggling
       const { error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update({
           approved: true,
           updated_at: new Date().toISOString(),
@@ -494,7 +495,7 @@ const ApproveRecords: React.FC = () => {
       console.log('🗑️ Approving deleted record:', id);
       
       const { error } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .update({ approved: true })
         .eq('id', id);
       
@@ -561,7 +562,7 @@ const ApproveRecords: React.FC = () => {
     try {
       setLoading(true);
       const { error } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .update({ approved: 'rejected' })
         .eq('id', id);
       if (error) throw error;
@@ -628,7 +629,7 @@ const ApproveRecords: React.FC = () => {
 
       for (const entryId of selectedEntries) {
         const { error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .update({
             approved: true,
             updated_at: new Date().toISOString(),
@@ -685,7 +686,7 @@ const ApproveRecords: React.FC = () => {
 
         for (const entry of companyEntries) {
           const { error } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update({
               approved: true,
               updated_at: new Date().toISOString(),
@@ -742,7 +743,7 @@ const ApproveRecords: React.FC = () => {
 
         for (const entry of staffEntries) {
           const { error } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update({
               approved: true,
               updated_at: new Date().toISOString(),
@@ -789,7 +790,7 @@ const ApproveRecords: React.FC = () => {
 
       for (const entry of pendingEntries) {
         const { error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .update({
             approved: true,
             updated_at: new Date().toISOString(),
@@ -836,7 +837,7 @@ const ApproveRecords: React.FC = () => {
 
         for (const entry of pendingEntries) {
           const { error } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update({
               approved: true,
               updated_at: new Date().toISOString(),
@@ -875,7 +876,7 @@ const ApproveRecords: React.FC = () => {
       let rejectedCount = 0;
       for (const entryId of selectedEntries) {
         const { data, error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .update({ approved: 'false', updated_at: new Date().toISOString() })
           .eq('id', entryId)
           .select()

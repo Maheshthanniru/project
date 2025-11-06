@@ -5,7 +5,9 @@ import Input from '../components/UI/Input';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
+import { useTableMode } from '../contexts/TableModeContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import {
@@ -39,6 +41,7 @@ interface EditHistory {
 
 const EditEntry: React.FC = () => {
   const { user, isAdmin } = useAuth();
+  const { mode: tableMode } = useTableMode();
   const [entries, setEntries] = useState<any[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [editMode, setEditMode] = useState(false);
@@ -250,6 +253,13 @@ const EditEntry: React.FC = () => {
     initializeData();
   }, []); // Remove dependencies to prevent re-initialization on filter changes
 
+  // Refresh entries when table mode changes
+  useEffect(() => {
+    console.log('🔄 Table mode changed in EditEntry, reloading entries... Mode:', tableMode);
+    loadEntries();
+    loadDropdownData();
+  }, [tableMode]);
+
   // Single useEffect for all filter changes - now using client-side filtering only
   useEffect(() => {
     console.log('🔄 Filters changed, reloading entries...');
@@ -402,7 +412,7 @@ const EditEntry: React.FC = () => {
       
       // Also log cash_book companies for comparison
       const { data: cashBookCompanyData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('company_name')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '')
@@ -458,7 +468,7 @@ const EditEntry: React.FC = () => {
 
       // Load unique credit and debit amounts
       const { data: amountsData, error: amountsError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('credit, debit, payment_mode')
         .not('credit', 'is', null)
         .not('debit', 'is', null);
@@ -579,7 +589,7 @@ const EditEntry: React.FC = () => {
       
       // Get all entries for the specific date
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('company_name, acc_name, sub_acc_name, particulars, credit, debit, payment_mode')
         .eq('c_date', date);
 
@@ -671,7 +681,7 @@ const EditEntry: React.FC = () => {
       }
       
       // Build query based on active filters
-      let query = supabase.from('cash_book').select('company_name, acc_name, sub_acc_name, particulars, credit, debit');
+      let query = supabase.from(getTableName('cash_book')).select('company_name, acc_name, sub_acc_name, particulars, credit, debit');
       
       // Apply active filters
       if (filterDate || selectedDateFilter) {
@@ -760,7 +770,7 @@ const EditEntry: React.FC = () => {
 
       // First, try direct Supabase query to check if RLS is blocking access
       const { data: directData, error: directError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .order('c_date', { ascending: false })
         .order('created_at', { ascending: false })
@@ -824,7 +834,7 @@ const EditEntry: React.FC = () => {
       
       // Get total count for pagination info
       const { count } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact', head: true });
       console.log('📊 Total entries in database:', count);
       
@@ -1162,7 +1172,7 @@ const EditEntry: React.FC = () => {
       console.log('🔍 Testing data access in EditEntry...');
 
       // Test direct access
-      const { data, error } = await supabase.from('cash_book').select('count');
+      const { data, error } = await supabase.from(getTableName('cash_book')).select('count');
 
       if (error) {
         console.error('❌ Data access test failed:', error);

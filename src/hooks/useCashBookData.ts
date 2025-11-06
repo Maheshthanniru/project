@@ -17,7 +17,7 @@ export const useCashBookEntries = (page: number = 0, limit: number = 1000) => {
 // Hook for all cash book entries (for exports, etc.)
 export const useAllCashBookEntries = () => {
   return useQuery({
-    queryKey: queryKeys.cashBook.all,
+    queryKey: queryKeys.cashBook.all(),
     queryFn: () => supabaseDB.getAllCashBookEntries(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes cache
@@ -54,15 +54,15 @@ export const useCreateCashBookEntry = () => {
   return useMutation({
     mutationFn: (entry: any) => supabaseDB.createCashBookEntry(entry),
     onSuccess: () => {
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+      // Invalidate relevant queries (using array format for broader invalidation)
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] });
       
       // Invalidate date-specific queries for recent entries
       queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'byDate'] });
       
       toast.success('Entry created successfully!');
     },
@@ -81,16 +81,16 @@ export const useUpdateCashBookEntry = () => {
     mutationFn: ({ id, entry }: { id: string; entry: any }) => 
       supabaseDB.updateCashBookEntry(id, entry),
     onSuccess: (_, { id }) => {
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byId(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+      // Invalidate relevant queries (using array format for broader invalidation)
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'detail'] });
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] });
       
       // Invalidate date-specific queries for recent entries
       queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'byDate'] });
       
       toast.success('Entry updated successfully!');
     },
@@ -108,16 +108,16 @@ export const useDeleteCashBookEntry = () => {
   return useMutation({
     mutationFn: (id: string) => supabaseDB.deleteCashBookEntry(id),
     onSuccess: (_, id) => {
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byId(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+      // Invalidate relevant queries (using array format for broader invalidation)
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'detail'] });
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] });
       
       // Invalidate date-specific queries for recent entries
       queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'byDate'] });
       
       toast.success('Entry deleted successfully!');
     },
@@ -135,15 +135,15 @@ export const useBulkCashBookOperations = () => {
   return useMutation({
     mutationFn: (operations: any) => supabaseDB.bulkUpdateCashBookEntries(operations),
     onSuccess: () => {
-      // Invalidate all cash book related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+      // Invalidate all cash book related queries (using array format for broader invalidation)
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] });
       
       // Invalidate date-specific queries for recent entries
       queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.byDate });
+      queryClient.invalidateQueries({ queryKey: ['cashBook', 'byDate'] });
       
       toast.success('Bulk operations completed successfully!');
     },

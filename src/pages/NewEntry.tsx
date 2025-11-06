@@ -5,7 +5,9 @@ import Input from '../components/UI/Input';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
+import { useTableMode } from '../contexts/TableModeContext';
 import { useCreateCashBookEntry, useBulkCashBookOperations } from '../hooks/useCashBookData';
 import { useDropdownData, useRecentEntriesByDate } from '../hooks/useDashboardData';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,6 +49,7 @@ interface NewEntryForm {
 
 const NewEntry: React.FC = () => {
   const { user } = useAuth();
+  const { mode: tableMode } = useTableMode();
   
   // React Query hooks
   const createEntryMutation = useCreateCashBookEntry();
@@ -291,19 +294,19 @@ const NewEntry: React.FC = () => {
       // This ensures replaced records show with new company/account names without manual refresh
       queryClient.refetchQueries({ queryKey: ['recentEntries', entry.date] });
       queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
       
       // Refetch companies dropdown to show updated company list after replacement
       // This ensures the company dropdown automatically updates when companies are replaced/deleted
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
-      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+      queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
       
       // Also refetch accounts and sub accounts as they may have changed
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
-      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
-      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
+      queryClient.refetchQueries({ queryKey: ['dropdowns', 'accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'subAccounts'] });
+      queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
       
       console.log('✅ New Entry: Recent entries and dropdowns refreshed automatically');
     };
@@ -312,11 +315,20 @@ const NewEntry: React.FC = () => {
     return () => window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
   }, [entry.date, queryClient]);
 
+  // Refresh recent entries when table mode changes
+  useEffect(() => {
+    if (entry.date) {
+      console.log('🔄 Table mode changed, refreshing recent entries for date:', entry.date, 'Mode:', tableMode);
+      queryClient.invalidateQueries({ queryKey: ['recentEntries'] });
+      queryClient.refetchQueries({ queryKey: ['recentEntries'] });
+    }
+  }, [tableMode, entry.date, queryClient]);
+
   useEffect(() => {
     const loadAccounts = async () => {
       try {
         if (entry.companyName) {
-          console.log(`🔍 [NEW ENTRY] Loading accounts for company: "${entry.companyName}"`);
+          console.log(`🔍 [NEW ENTRY] Loading accounts for company: "${entry.companyName}" (Mode: ${tableMode})`);
           const names = await supabaseDB.getDistinctAccountNamesByCompany(entry.companyName);
           console.log(`🔍 [NEW ENTRY] Found ${names.length} accounts for company "${entry.companyName}":`, names);
           setAccountOptions(names.map(name => ({ value: name, label: name })));
@@ -332,13 +344,13 @@ const NewEntry: React.FC = () => {
       }
     };
     loadAccounts();
-  }, [entry.companyName]);
+  }, [entry.companyName, tableMode]);
 
   useEffect(() => {
     const loadDualAccounts = async () => {
       try {
         if (dualEntry.companyName) {
-          console.log(`🔍 [DUAL ENTRY] Loading accounts for company: "${dualEntry.companyName}"`);
+          console.log(`🔍 [DUAL ENTRY] Loading accounts for company: "${dualEntry.companyName}" (Mode: ${tableMode})`);
           const names = await supabaseDB.getDistinctAccountNamesByCompany(dualEntry.companyName);
           console.log(`🔍 [DUAL ENTRY] Found ${names.length} accounts for company "${dualEntry.companyName}":`, names);
           setDualAccountOptions(names.map(name => ({ value: name, label: name })));
@@ -354,13 +366,13 @@ const NewEntry: React.FC = () => {
       }
     };
     loadDualAccounts();
-  }, [dualEntry.companyName]);
+  }, [dualEntry.companyName, tableMode]);
 
   useEffect(() => {
     const loadSubs = async () => {
       try {
         if (entry.companyName && entry.accountName) {
-          console.log(`🔍 [NEW ENTRY] Loading sub-accounts for company: "${entry.companyName}" and account: "${entry.accountName}"`);
+          console.log(`🔍 [NEW ENTRY] Loading sub-accounts for company: "${entry.companyName}" and account: "${entry.accountName}" (Mode: ${tableMode})`);
           const subs = await supabaseDB.getSubAccountsByAccountAndCompany(entry.accountName, entry.companyName);
           console.log(`🔍 [NEW ENTRY] Found ${subs.length} sub-accounts for account "${entry.accountName}":`, subs);
           const data = subs.map(name => ({ value: name, label: name }));
@@ -376,13 +388,13 @@ const NewEntry: React.FC = () => {
       }
     };
     loadSubs();
-  }, [entry.companyName, entry.accountName]);
+  }, [entry.companyName, entry.accountName, tableMode]);
 
   useEffect(() => {
     const loadDualSubAccounts = async () => {
       try {
         if (dualEntry.companyName && dualEntry.accountName) {
-          console.log(`🔍 [DUAL ENTRY] Loading sub-accounts for company: "${dualEntry.companyName}" and account: "${dualEntry.accountName}"`);
+          console.log(`🔍 [DUAL ENTRY] Loading sub-accounts for company: "${dualEntry.companyName}" and account: "${dualEntry.accountName}" (Mode: ${tableMode})`);
           const subs = await supabaseDB.getSubAccountsByAccountAndCompany(
             dualEntry.accountName,
             dualEntry.companyName
@@ -401,7 +413,7 @@ const NewEntry: React.FC = () => {
       }
     };
     loadDualSubAccounts();
-  }, [dualEntry.companyName, dualEntry.accountName]);
+  }, [dualEntry.companyName, dualEntry.accountName, tableMode]);
 
   useEffect(() => {
     // Recent entries are now managed by React Query
@@ -690,8 +702,8 @@ const NewEntry: React.FC = () => {
       // Invalidate React Query cache to refresh recent entries
       console.log('🔄 Invalidating cache for date:', entry.date);
       queryClient.invalidateQueries({ queryKey: ['recentEntries', entry.date] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['cashBook'] });
       
       // Force refetch the recent entries for the current date
       console.log('🔄 Force refetching recent entries for date:', entry.date);
@@ -727,8 +739,8 @@ const NewEntry: React.FC = () => {
       console.log('Company created successfully:', company);
       
       // Invalidate and immediately refetch companies query to refresh the dropdown
-      await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
-      await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+      await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+      await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
       
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
@@ -760,7 +772,7 @@ const NewEntry: React.FC = () => {
       setAccountOptions(names.map(name => ({ value: name, label: name })));
       
       // Invalidate companies query to refresh the dropdown (in case account creation affects company data)
-      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
       
       // Set the newly created account as selected
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
@@ -793,9 +805,9 @@ const NewEntry: React.FC = () => {
       setSubAccounts(data);
       
       // Invalidate sub accounts dropdown and unique count for dashboard
-      await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'subAccounts'] });
       await queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
-      await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+      await queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
       await queryClient.refetchQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
       
       // Set the newly created sub-account as selected
@@ -850,8 +862,8 @@ const NewEntry: React.FC = () => {
             success = result.success;
             if (success) {
               // Invalidate and refetch companies query
-              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
-              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+              await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+              await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
               // Companies are now managed by React Query - will be refetched automatically
               setEntry(prev => ({
                 ...prev,
@@ -871,8 +883,8 @@ const NewEntry: React.FC = () => {
             success = result.success;
             if (success) {
               // Invalidate and refetch accounts query
-              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
-              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
+              await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
+              await queryClient.refetchQueries({ queryKey: ['dropdowns', 'accounts'] });
               // Accounts are now managed by React Query - will be refetched automatically
               setEntry(prev => ({ ...prev, accountName: '', subAccount: '' }));
               message = 'Account deleted successfully!';
@@ -887,9 +899,9 @@ const NewEntry: React.FC = () => {
             success = result.success;
             if (success) {
               // Invalidate and refetch sub accounts query and unique count for dashboard
-              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+              await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'subAccounts'] });
               await queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
-              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+              await queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
               await queryClient.refetchQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
               setSubAccounts(prev =>
                 prev.filter(s => s.value !== entry.subAccount)
@@ -1376,7 +1388,7 @@ const NewEntry: React.FC = () => {
                 try {
                   // Use bulk insert for better performance
                   const { data: bulkResult, error: bulkError } = await supabase
-                    .from('cash_book')
+                    .from(getTableName('cash_book'))
                     .insert(batchEntries)
                     .select('id');
 
@@ -1478,7 +1490,7 @@ const NewEntry: React.FC = () => {
       if (result.success) {
         toast.success(`Successfully deleted ${result.deleted.length} empty companies: ${result.deleted.join(', ')}`);
         // Refresh dropdown data
-        queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+        queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
       } else {
         toast.error(`Failed to delete companies: ${result.error}`);
       }

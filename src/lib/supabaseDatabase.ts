@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { FinancialCalculator } from './financialCalculations';
+import { getTableName } from './tableNames';
 
 // Types
 export interface Company {
@@ -129,7 +130,7 @@ class SupabaseDatabase {
     try {
       // Try to query the column to see if it exists
       const { error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('payment_mode')
         .limit(1);
       
@@ -142,7 +143,7 @@ class SupabaseDatabase {
       // Column doesn't exist - user needs to add it manually
       console.error('❌ payment_mode column does not exist!');
       console.error('🔧 Please run this SQL in Supabase SQL Editor:');
-      console.error('   ALTER TABLE cash_book ADD COLUMN IF NOT EXISTS payment_mode TEXT;');
+      console.error(`   ALTER TABLE ${getTableName('cash_book')} ADD COLUMN IF NOT EXISTS payment_mode TEXT;`);
       return false;
     } catch (error) {
       console.error('Error checking payment_mode column:', error);
@@ -227,7 +228,7 @@ class SupabaseDatabase {
       
       // Get unique company names from cash_book table
       const { data: cashBookData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('company_name')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '')
@@ -275,7 +276,7 @@ class SupabaseDatabase {
       // First verify these companies have no data in cash_book
       for (const companyName of companyNames) {
         const { data: cashBookData, error: cashBookError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('id')
           .eq('company_name', companyName)
           .limit(1);
@@ -335,7 +336,7 @@ class SupabaseDatabase {
   async hasCompanyEntries(companyName: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id')
         .eq('company_name', companyName)
         .limit(1);
@@ -366,7 +367,7 @@ class SupabaseDatabase {
     // If no entries, cascade delete dependent rows (sub accounts → accounts) then company
     // 1) Delete sub accounts for this company
     const { error: subDelErr } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .delete()
       .eq('company_name', companyName);
     if (subDelErr) {
@@ -376,7 +377,7 @@ class SupabaseDatabase {
 
     // 2) Delete main accounts for this company
     const { error: accDelErr } = await supabase
-      .from('company_main_accounts')
+      .from(getTableName('company_main_accounts'))
       .delete()
       .eq('company_name', companyName);
     if (accDelErr) {
@@ -411,7 +412,7 @@ class SupabaseDatabase {
   // Account operations
   async getAccounts(): Promise<Account[]> {
     const { data, error } = await supabase
-      .from('company_main_accounts')
+      .from(getTableName('company_main_accounts'))
       .select('*')
       .order('acc_name');
 
@@ -425,7 +426,7 @@ class SupabaseDatabase {
 
   async getAccountsByCompany(companyName: string): Promise<Account[]> {
     const { data, error } = await supabase
-      .from('company_main_accounts')
+      .from(getTableName('company_main_accounts'))
       .select('*')
       .eq('company_name', companyName)
       .order('acc_name');
@@ -440,7 +441,7 @@ class SupabaseDatabase {
 
   async addAccount(companyName: string, accountName: string): Promise<Account> {
     const { data, error } = await supabase
-      .from('company_main_accounts')
+      .from(getTableName('company_main_accounts'))
       .insert({
         company_name: companyName,
         acc_name: accountName,
@@ -459,7 +460,7 @@ class SupabaseDatabase {
   async hasAccountEntries(accountName: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id')
         .eq('acc_name', accountName)
         .limit(1);
@@ -489,7 +490,7 @@ class SupabaseDatabase {
 
     // If no entries, cascade delete dependent sub accounts then account
     const { error: subDelErr } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .delete()
       .eq('acc_name', accountName);
     if (subDelErr) {
@@ -498,7 +499,7 @@ class SupabaseDatabase {
     }
 
     const { error } = await supabase
-      .from('company_main_accounts')
+      .from(getTableName('company_main_accounts'))
       .delete()
       .eq('acc_name', accountName);
 
@@ -523,7 +524,7 @@ class SupabaseDatabase {
   // Sub Account operations
   async getSubAccounts(): Promise<SubAccount[]> {
     const { data, error } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .select('*')
       .order('sub_acc');
 
@@ -542,7 +543,7 @@ class SupabaseDatabase {
       
       // Get all distinct sub accounts from company_main_sub_acc reference table
       const { data, error } = await supabase
-        .from('company_main_sub_acc')
+        .from(getTableName('company_main_sub_acc'))
         .select('sub_acc')
         .not('sub_acc', 'is', null)
         .not('sub_acc', 'eq', '');
@@ -585,7 +586,7 @@ class SupabaseDatabase {
       
       // Get all distinct main accounts from company_main_accounts reference table
       const { data, error } = await supabase
-        .from('company_main_accounts')
+        .from(getTableName('company_main_accounts'))
         .select('acc_name')
         .not('acc_name', 'is', null)
         .not('acc_name', 'eq', '');
@@ -611,7 +612,7 @@ class SupabaseDatabase {
     accountName: string
   ): Promise<SubAccount[]> {
     const { data, error } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .select('*')
       .eq('company_name', companyName)
       .eq('acc_name', accountName)
@@ -631,7 +632,7 @@ class SupabaseDatabase {
     subAccountName: string
   ): Promise<SubAccount> {
     const { data, error } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .insert({
         company_name: companyName,
         acc_name: accountName,
@@ -651,7 +652,7 @@ class SupabaseDatabase {
   async hasSubAccountEntries(subAccountName: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id')
         .eq('sub_acc_name', subAccountName)
         .limit(1);
@@ -681,7 +682,7 @@ class SupabaseDatabase {
 
     // If no entries, proceed with deletion
     const { error } = await supabase
-      .from('company_main_sub_acc')
+      .from(getTableName('company_main_sub_acc'))
       .delete()
       .eq('sub_acc', subAccountName);
 
@@ -714,7 +715,7 @@ class SupabaseDatabase {
       
       // Select all fields including payment_mode
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*') // Select all columns including payment_mode
         .order('c_date', { ascending: false }) // Most recent dates first
         .order('created_at', { ascending: false }) // LIFO - newest first
@@ -799,7 +800,7 @@ class SupabaseDatabase {
   async getCashBookEntriesCount(): Promise<number> {
     try {
       const { count, error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('*', { count: 'exact', head: true });
 
       if (error) {
@@ -824,7 +825,7 @@ class SupabaseDatabase {
       console.log(`📅 Filtering for today's entries: ${today}`);
       
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('c_date', today) // Filter for today's entries only
         .order('created_at', { ascending: false }) // LIFO - newest first
@@ -966,7 +967,7 @@ class SupabaseDatabase {
       console.log('🔍 Filters:', filters);
       
       let query = supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact' });
 
       // Apply filters at database level for better performance
@@ -1027,7 +1028,7 @@ class SupabaseDatabase {
       console.log('🔍 About to query ALL 67k records with filters...');
       
       let query = supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact' });
 
       // Apply filters at database level for better performance
@@ -1082,7 +1083,7 @@ class SupabaseDatabase {
       console.log(`🔍 Searching entries with: "${searchTerm}", date: "${dateFilter}" (limit: ${limit}, offset: ${offset})`);
       
       let query = supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact' });
 
       // Apply search filter
@@ -1136,7 +1137,7 @@ class SupabaseDatabase {
       console.log(`📅 Fetching entries from ${startDate} to ${endDate} (limit: ${limit}, offset: ${offset})`);
       
       const { data, error, count } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact' })
         .gte('c_date', startDate)
         .lte('c_date', endDate)
@@ -1184,7 +1185,7 @@ class SupabaseDatabase {
 
     // Get next serial number
     const { data: lastEntry } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('sno')
       .order('sno', { ascending: false })
       .limit(1);
@@ -1262,7 +1263,7 @@ class SupabaseDatabase {
     }
     
     const result = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .insert(insertData)
       .select('*') // Select all columns including payment_mode in response
       .single();
@@ -1307,7 +1308,7 @@ class SupabaseDatabase {
         // Remove payment_mode and retry
         const { payment_mode, ...entryWithoutPaymentMode } = insertData;
         const retryResult = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .insert(entryWithoutPaymentMode)
           .select('*')
           .single();
@@ -1348,7 +1349,7 @@ class SupabaseDatabase {
   // Fetch single cash book entry by id (used by hooks)
   async getCashBookEntry(id: string): Promise<CashBookEntry | null> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('*') // Select all columns including payment_mode
       .eq('id', id)
       .single();
@@ -1387,7 +1388,7 @@ class SupabaseDatabase {
   // Fetch entries by exact date (YYYY-MM-DD) (used by hooks)
   async getCashBookEntriesByDate(date: string): Promise<CashBookEntry[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('*') // Select all columns including payment_mode
       .eq('c_date', date)
       .order('created_at', { ascending: false });
@@ -1490,7 +1491,7 @@ class SupabaseDatabase {
       });
 
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .insert(sanitized)
         .select('*');
 
@@ -1537,7 +1538,7 @@ class SupabaseDatabase {
 
     // Fetch the old entry for audit logging
     const { data: oldEntry, error: fetchError } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('*')
       .eq('id', id)
       .single();
@@ -1549,7 +1550,7 @@ class SupabaseDatabase {
     }
 
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .update(filteredUpdates)
       .eq('id', id)
       .select()
@@ -1570,7 +1571,7 @@ class SupabaseDatabase {
         edited_at: new Date().toISOString(),
       };
       const { error: auditError } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .insert(auditLog);
       if (auditError) {
         console.error(
@@ -1631,7 +1632,7 @@ class SupabaseDatabase {
 
       // Fetch old entries for audit logging (before update)
       const { data: oldEntries, error: fetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .in('id', ids);
 
@@ -1641,7 +1642,7 @@ class SupabaseDatabase {
 
       // Perform bulk update using .in() to update multiple IDs at once
       const { data: updatedEntries, error: updateError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update(filteredUpdates)
         .in('id', ids)
         .select();
@@ -1675,7 +1676,7 @@ class SupabaseDatabase {
           for (let i = 0; i < auditLogs.length; i += batchSize) {
             const batch = auditLogs.slice(i, i + batchSize);
             const { error: auditError } = await supabase
-              .from('edit_cash_book')
+              .from(getTableName('edit_cash_book'))
               .insert(batch);
             
             if (auditError) {
@@ -1696,7 +1697,7 @@ class SupabaseDatabase {
   async lockEntry(id: string, lockedBy: string): Promise<CashBookEntry | null> {
     // Fetch the old entry for audit logging
     const { data: oldEntry, error: fetchError } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('*')
       .eq('id', id)
       .single();
@@ -1705,7 +1706,7 @@ class SupabaseDatabase {
     }
 
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .update({ lock_record: true, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
@@ -1727,7 +1728,7 @@ class SupabaseDatabase {
         action: 'LOCK',
       };
       const { error: auditError } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .insert(auditLog);
       if (auditError) {
         console.error(
@@ -1747,7 +1748,7 @@ class SupabaseDatabase {
   ): Promise<CashBookEntry | null> {
     // Fetch the old entry for audit logging
     const { data: oldEntry, error: fetchError } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('*')
       .eq('id', id)
       .single();
@@ -1759,7 +1760,7 @@ class SupabaseDatabase {
     }
 
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .update({ lock_record: false, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
@@ -1781,7 +1782,7 @@ class SupabaseDatabase {
         action: 'UNLOCK',
       };
       const { error: auditError } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .insert(auditLog);
       if (auditError) {
         console.error(
@@ -1804,7 +1805,7 @@ class SupabaseDatabase {
       // Step 1: Fetch the entry to delete
       console.log('📋 Step 1: Fetching entry to delete...');
       const { data: oldEntry, error: fetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('id', id)
         .single();
@@ -1844,7 +1845,7 @@ class SupabaseDatabase {
       console.log('📝 DELETED ENTRY DATA:', deletedEntry);
 
       const { error: insertError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .insert(deletedEntry);
 
       if (insertError) {
@@ -1903,7 +1904,7 @@ class SupabaseDatabase {
       console.log('📝 Step 4: Deleting from cash_book table...');
       
       const { error: deleteError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .delete()
         .eq('id', id);
 
@@ -1946,7 +1947,7 @@ class SupabaseDatabase {
       
       // Test 1: Check if we can update cash_book table
       const { data: testEntry } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, acc_name')
         .limit(1)
         .single();
@@ -1957,7 +1958,7 @@ class SupabaseDatabase {
       
       // Test update with simple fields
       const { error: updateError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update({ acc_name: `[TEST] ${testEntry.acc_name}` })
         .eq('id', testEntry.id);
         
@@ -1968,13 +1969,13 @@ class SupabaseDatabase {
       
       // Revert the test
       await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update({ acc_name: testEntry.acc_name })
         .eq('id', testEntry.id);
         
       // Test 2: Check if deleted_cash_book table exists
       const { error: insertError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('id')
         .limit(1);
         
@@ -2008,14 +2009,14 @@ class SupabaseDatabase {
       };
 
       const { error: testError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .insert(testRecord);
 
       if (!testError) {
         console.log('✅ deleted_cash_book table already exists and is accessible');
         // Clean up test record
         await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .delete()
           .eq('id', testRecord.id);
         return;
@@ -2065,7 +2066,7 @@ class SupabaseDatabase {
       
       // First check if entry exists
       const { data: entry, error: fetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, sno, acc_name')
         .eq('id', entryId)
         .single();
@@ -2116,7 +2117,7 @@ class SupabaseDatabase {
       // Test 1: Can we read from cash_book?
       console.log('🔍 Test 1: Checking cash_book read access...');
       const { data: readData, error: readError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, sno, acc_name')
         .limit(1);
         
@@ -2134,7 +2135,7 @@ class SupabaseDatabase {
         // Test 2: Can we update cash_book?
         console.log('🔍 Test 2: Checking cash_book update access...');
         const { error: updateError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .update({ acc_name: `[TEST] ${testEntry.acc_name}` })
           .eq('id', testEntry.id);
           
@@ -2147,7 +2148,7 @@ class SupabaseDatabase {
           
           // Revert the test change
           await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update({ acc_name: testEntry.acc_name })
             .eq('id', testEntry.id);
         }
@@ -2167,7 +2168,7 @@ class SupabaseDatabase {
         };
         
         const { error: insertError } = await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .insert(testDeletedEntry);
           
         if (insertError) {
@@ -2178,14 +2179,14 @@ class SupabaseDatabase {
           console.log('✅ Can insert into deleted_cash_book');
           
           // Clean up test record
-          await supabase.from('deleted_cash_book').delete().eq('id', testDeletedEntry.id);
+          await supabase.from(getTableName('deleted_cash_book')).delete().eq('id', testDeletedEntry.id);
         }
 
         // Test 4: Can we delete from cash_book?
         console.log('🔍 Test 4: Checking cash_book delete access...');
         // We'll just test if we can run a delete query (not actually delete)
         const { error: deleteError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .delete()
           .eq('id', 'non-existent-id');
           
@@ -2252,7 +2253,7 @@ class SupabaseDatabase {
   async getDistinctStaffNames(): Promise<{ value: string; label: string }[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('staff')
         .not('staff', 'is', null)
         .neq('staff', '')
@@ -2420,7 +2421,7 @@ class SupabaseDatabase {
   // Bank Guarantee operations
   async getBankGuarantees(): Promise<BankGuarantee[]> {
     const { data, error } = await supabase
-      .from('bank_guarantees')
+      .from(getTableName('bank_guarantees'))
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -2436,7 +2437,7 @@ class SupabaseDatabase {
     bg: Omit<BankGuarantee, 'id' | 'sno' | 'created_at' | 'updated_at'>
   ): Promise<BankGuarantee> {
     const { data, error } = await supabase
-      .from('bank_guarantees')
+      .from(getTableName('bank_guarantees'))
       .insert(bg)
       .select()
       .single();
@@ -2453,7 +2454,7 @@ class SupabaseDatabase {
     updates: Partial<BankGuarantee>
   ): Promise<BankGuarantee | null> {
     const { data, error } = await supabase
-      .from('bank_guarantees')
+      .from(getTableName('bank_guarantees'))
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
@@ -2472,7 +2473,7 @@ class SupabaseDatabase {
 
   async deleteBankGuarantee(id: string): Promise<boolean> {
     const { error } = await supabase
-      .from('bank_guarantees')
+      .from(getTableName('bank_guarantees'))
       .delete()
       .eq('id', id);
 
@@ -2487,7 +2488,7 @@ class SupabaseDatabase {
   // Vehicle operations
   async getVehicles(): Promise<Vehicle[]> {
     const { data, error } = await supabase
-      .from('vehicles')
+      .from(getTableName('vehicles'))
       .select('*')
       .order('v_no');
 
@@ -2503,7 +2504,7 @@ class SupabaseDatabase {
     vehicle: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>
   ): Promise<Vehicle> {
     const { data, error } = await supabase
-      .from('vehicles')
+      .from(getTableName('vehicles'))
       .insert(vehicle)
       .select()
       .single();
@@ -2520,7 +2521,7 @@ class SupabaseDatabase {
     updates: Partial<Vehicle>
   ): Promise<Vehicle | null> {
     const { data, error } = await supabase
-      .from('vehicles')
+      .from(getTableName('vehicles'))
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
@@ -2538,7 +2539,7 @@ class SupabaseDatabase {
   }
 
   async deleteVehicle(id: string): Promise<boolean> {
-    const { error } = await supabase.from('vehicles').delete().eq('id', id);
+    const { error } = await supabase.from(getTableName('vehicles')).delete().eq('id', id);
 
     if (error) {
       console.error('Error deleting vehicle:', error);
@@ -2551,7 +2552,7 @@ class SupabaseDatabase {
   // Driver operations
   async getDrivers(): Promise<Driver[]> {
     const { data, error } = await supabase
-      .from('drivers')
+      .from(getTableName('drivers'))
       .select('*')
       .order('driver_name');
 
@@ -2567,7 +2568,7 @@ class SupabaseDatabase {
     driver: Omit<Driver, 'id' | 'created_at' | 'updated_at'>
   ): Promise<Driver> {
     const { data, error } = await supabase
-      .from('drivers')
+      .from(getTableName('drivers'))
       .insert(driver)
       .select()
       .single();
@@ -2584,7 +2585,7 @@ class SupabaseDatabase {
     updates: Partial<Driver>
   ): Promise<Driver | null> {
     const { data, error } = await supabase
-      .from('drivers')
+      .from(getTableName('drivers'))
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
@@ -2602,7 +2603,7 @@ class SupabaseDatabase {
   }
 
   async deleteDriver(id: string): Promise<boolean> {
-    const { error } = await supabase.from('drivers').delete().eq('id', id);
+    const { error } = await supabase.from(getTableName('drivers')).delete().eq('id', id);
 
     if (error) {
       console.error('Error deleting driver:', error);
@@ -2626,7 +2627,7 @@ class SupabaseDatabase {
 
       // Get total count first
       const { count: totalCount, error: countError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact', head: true });
 
       if (countError) {
@@ -2642,7 +2643,7 @@ class SupabaseDatabase {
         // First try deleted_cash_book table using direct data fetch (same as ApproveRecords)
         console.log('🔍 Attempting to fetch deleted records from deleted_cash_book table...');
         const { data: deletedData, error: deletedError } = await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .select('id')
           .order('deleted_at', { ascending: false });
         
@@ -2663,7 +2664,7 @@ class SupabaseDatabase {
           
           // Fallback: check cash_book for deleted records
           const { count: cashBookDeletedCount, error: cashBookError } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .select('*', { count: 'exact', head: true })
             .eq('deleted', true);
           
@@ -2702,7 +2703,7 @@ class SupabaseDatabase {
       console.log('📊 Using SQL aggregation for accurate calculations...');
       
       const { data: sumData, error: sumError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('credit, debit');
 
       if (sumError) {
@@ -2765,7 +2766,7 @@ class SupabaseDatabase {
       
       try {
         const { count: todayCount } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('*', { count: 'exact', head: true })
           .eq('c_date', today);
         todayEntries = todayCount || 0;
@@ -2814,7 +2815,7 @@ class SupabaseDatabase {
     try {
       // Check for null/undefined values in critical fields
       const { data: nullCheck, error: nullError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, credit, debit, company_name')
         .or('credit.is.null,debit.is.null,company_name.is.null');
       
@@ -2824,7 +2825,7 @@ class SupabaseDatabase {
       
       // Check for negative values in credit/debit
       const { data: negativeCheck, error: negativeError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, credit, debit')
         .or('credit.lt.0,debit.lt.0');
       
@@ -2834,7 +2835,7 @@ class SupabaseDatabase {
       
       // Check for non-numeric values
       const { data: allData, error: allError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, credit, debit')
         .limit(1000);
       
@@ -2879,7 +2880,7 @@ class SupabaseDatabase {
       
       // Fix null values in critical fields
       const { data: nullRecords, error: nullError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, credit, debit, company_name')
         .or('credit.is.null,debit.is.null,company_name.is.null');
       
@@ -2892,7 +2893,7 @@ class SupabaseDatabase {
           if (!record.company_name) updates.company_name = 'Unknown';
           
           const { error: updateError } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update(updates)
             .eq('id', record.id);
           
@@ -2906,7 +2907,7 @@ class SupabaseDatabase {
       
       // Fix negative values (convert to positive)
       const { data: negativeRecords, error: negativeError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, credit, debit')
         .or('credit.lt.0,debit.lt.0');
       
@@ -2918,7 +2919,7 @@ class SupabaseDatabase {
           if (record.debit < 0) updates.debit = Math.abs(record.debit);
           
           const { error: updateError } = await supabase
-            .from('cash_book')
+            .from(getTableName('cash_book'))
             .update(updates)
             .eq('id', record.id);
           
@@ -2974,7 +2975,7 @@ class SupabaseDatabase {
       
       while (hasMore) {
         let query = supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('company_name, credit, debit, c_date')
           .not('company_name', 'is', null)
           .not('company_name', 'eq', '');
@@ -3070,7 +3071,7 @@ class SupabaseDatabase {
   // Dashboard stats for specific date (if needed for date filtering)
   async getDashboardStatsForDate(date: string) {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('credit, debit, c_date')
       .eq('c_date', date);
 
@@ -3186,7 +3187,7 @@ class SupabaseDatabase {
     try {
       // First get the current entry
       const { data: currentEntry, error: fetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('approved')
         .eq('id', id)
         .single();
@@ -3198,7 +3199,7 @@ class SupabaseDatabase {
 
       // Toggle the approval status
       const { error: updateError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update({
           approved: !currentEntry.approved,
           updated_at: new Date().toISOString(),
@@ -3262,7 +3263,7 @@ class SupabaseDatabase {
   async getPendingApprovalsCount(): Promise<number> {
     try {
       const { count, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact', head: true })
         .eq('approved', false);
 
@@ -3284,7 +3285,7 @@ class SupabaseDatabase {
   ): Promise<CashBookEntry[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('approved', approved)
         .order('c_date', { ascending: false });
@@ -3305,7 +3306,7 @@ class SupabaseDatabase {
   async getEditedEntries(): Promise<CashBookEntry[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('edited', true)
         .order('updated_at', { ascending: false });
@@ -3329,7 +3330,7 @@ class SupabaseDatabase {
       // First, let's see what tables exist and what data is available
       console.log('📋 Checking what data is available in cash_book...');
       const { data: cashBookData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, sno, company_name, acc_name, updated_at, created_at, edited')
         .limit(10);
 
@@ -3354,7 +3355,7 @@ class SupabaseDatabase {
       // Step 1: Try to fetch from edit_cash_book table
       console.log('📋 Step 1: Trying edit_cash_book table...');
       const { data, error } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .select('*')
         .order('edited_at', { ascending: false });
 
@@ -3373,7 +3374,7 @@ class SupabaseDatabase {
       // Step 2: Try to fetch from cash_book with edited flag
       console.log('📋 Step 2: Trying cash_book with edited flag...');
       const { data: editedData, error: editedError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('edited', true)
         .order('updated_at', { ascending: false });
@@ -3430,7 +3431,7 @@ class SupabaseDatabase {
 
       // Step 3: Try without ordering
       const { data: noOrderData, error: noOrderError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('edited', true);
 
@@ -3478,7 +3479,7 @@ class SupabaseDatabase {
 
       // Step 4: Try with updated_at different from created_at
       const { data: updatedData, error: updatedError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .not('updated_at', 'eq', 'created_at')
         .order('updated_at', { ascending: false });
@@ -3535,7 +3536,7 @@ class SupabaseDatabase {
 
       // Step 5: Try without ordering
       const { data: noOrderUpdatedData, error: noOrderUpdatedError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .not('updated_at', 'eq', 'created_at');
 
@@ -3584,7 +3585,7 @@ class SupabaseDatabase {
       // Final fallback: Try to get recent records from cash_book
       console.log('📋 Final fallback: Getting recent records from cash_book...');
       const { data: anyData, error: anyError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .order('updated_at', { ascending: false })
         .limit(10);
@@ -3635,7 +3636,7 @@ class SupabaseDatabase {
       // Ultra minimal fallback: Try to get any records from cash_book and show them as edit history
       console.log('📋 Ultra minimal fallback: Getting any records from cash_book...');
       const { data: fallbackData, error: fallbackError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .order('updated_at', { ascending: false })
         .limit(5);
@@ -3683,7 +3684,7 @@ class SupabaseDatabase {
       // If even that fails, show recent records from cash_book as "recent entries"
       console.log('📋 No edit audit log found, showing recent cash_book entries...');
       const { data: recentData, error: recentError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
@@ -3739,7 +3740,7 @@ class SupabaseDatabase {
       console.log('📋 Exception fallback: Trying to get recent cash_book entries...');
       try {
         const { data: recentData, error: recentError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('*')
           .order('created_at', { ascending: false })
           .limit(5);
@@ -3798,7 +3799,7 @@ class SupabaseDatabase {
       
       // Try to fetch from edit_cash_book table first
       const { data: editCashBookData, error: editCashBookError } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .select('edited_at')
         .not('edited_at', 'is', null);
       
@@ -3836,7 +3837,7 @@ class SupabaseDatabase {
       
       // Fallback: try to get dates from cash_book records that have been edited
       const { data: cashBookData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('updated_at')
         .eq('edited', true)
         .not('updated_at', 'is', null);
@@ -3868,7 +3869,7 @@ class SupabaseDatabase {
       
       // Just try to get any records from cash_book
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .limit(5);
 
@@ -3988,7 +3989,7 @@ class SupabaseDatabase {
       // First, try to fetch from deleted_cash_book table
       try {
         const { data: tableData, error: tableError } = await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .select('*')
           .order('deleted_at', { ascending: false });
 
@@ -4046,7 +4047,7 @@ class SupabaseDatabase {
       // Step 1: Try to fetch from deleted_cash_book table first
       console.log('📋 Step 1: Trying deleted_cash_book table...');
       const { data: deletedEntry, error: fetchError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('*')
         .eq('id', deletedId)
         .single();
@@ -4072,7 +4073,7 @@ class SupabaseDatabase {
         // Step 3: Insert back into cash_book
         console.log('📝 Step 3: Inserting back into cash_book...');
         const { error: insertError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .insert(restoredEntry);
 
         if (insertError) {
@@ -4085,7 +4086,7 @@ class SupabaseDatabase {
         // Step 4: Remove from deleted_cash_book
         console.log('📝 Step 4: Removing from deleted_cash_book...');
         const { error: deleteError } = await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .delete()
           .eq('id', deletedId);
 
@@ -4101,7 +4102,7 @@ class SupabaseDatabase {
       // Step 2: Fallback - try to restore from cash_book with [DELETED] prefix
       console.log('📋 Step 2: Fallback - trying cash_book with [DELETED] prefix...');
       const { data: prefixDeletedEntry, error: prefixFetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('id', deletedId)
         .single();
@@ -4128,7 +4129,7 @@ class SupabaseDatabase {
       console.log('📝 Restored data:', restoredData);
 
       const { error: updateError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .update(restoredData)
         .eq('id', deletedId);
 
@@ -4154,7 +4155,7 @@ class SupabaseDatabase {
       // Step 1: Try to delete from deleted_cash_book table first
       console.log('📋 Step 1: Trying deleted_cash_book table...');
       const { data: deletedEntry, error: fetchError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('*')
         .eq('id', deletedId)
         .single();
@@ -4165,7 +4166,7 @@ class SupabaseDatabase {
         // Step 2: Permanently delete from deleted_cash_book
         console.log('📝 Step 2: Permanently deleting from deleted_cash_book...');
         const { error: deleteError } = await supabase
-          .from('deleted_cash_book')
+          .from(getTableName('deleted_cash_book'))
           .delete()
           .eq('id', deletedId);
 
@@ -4181,7 +4182,7 @@ class SupabaseDatabase {
       // Step 2: Fallback - try to permanently delete from cash_book with [DELETED] prefix
       console.log('📋 Step 2: Fallback - trying cash_book with [DELETED] prefix...');
       const { data: prefixDeletedEntry, error: prefixFetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('id', deletedId)
         .single();
@@ -4201,7 +4202,7 @@ class SupabaseDatabase {
       // Step 3: Permanently delete from cash_book
       console.log('📝 Step 3: Permanently deleting from cash_book...');
       const { error: deleteError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .delete()
         .eq('id', deletedId);
 
@@ -4226,7 +4227,7 @@ class SupabaseDatabase {
       
       // Try to get count from deleted_cash_book table first
       const { count: deletedCount, error: deletedError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('*', { count: 'exact', head: true });
 
       if (!deletedError && deletedCount !== null) {
@@ -4237,7 +4238,7 @@ class SupabaseDatabase {
       // Fallback: check cash_book for deleted records
       console.log('📋 Checking cash_book for deleted records...');
       const { count: cashBookCount, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact', head: true })
         .eq('deleted', true);
 
@@ -4263,7 +4264,7 @@ class SupabaseDatabase {
       // Check deleted_cash_book table
       console.log('📋 Checking deleted_cash_book table...');
       const { data: deletedData, error: deletedError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('*')
         .limit(5);
 
@@ -4279,7 +4280,7 @@ class SupabaseDatabase {
       // Check cash_book for deleted records (fallback)
       console.log('📋 Checking cash_book for deleted records...');
       const { data: cashBookDeletedData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('deleted', true)
         .limit(5);
@@ -4296,7 +4297,7 @@ class SupabaseDatabase {
       // Check total cash_book records
       console.log('📋 Checking total cash_book records...');
       const { count: totalCount, error: totalError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*', { count: 'exact', head: true });
 
       if (totalError) {
@@ -4318,7 +4319,7 @@ class SupabaseDatabase {
       // Check edit_cash_book table
       console.log('📋 Checking edit_cash_book table...');
       const { data: editData, error: editError } = await supabase
-        .from('edit_cash_book')
+        .from(getTableName('edit_cash_book'))
         .select('*')
         .limit(5);
 
@@ -4334,7 +4335,7 @@ class SupabaseDatabase {
       // Check cash_book with edited flag
       console.log('📋 Checking cash_book with edited flag...');
       const { data: editedData, error: editedError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .eq('edited', true)
         .limit(5);
@@ -4351,7 +4352,7 @@ class SupabaseDatabase {
       // Check cash_book with updated_at different from created_at
       console.log('📋 Checking cash_book with updated_at different from created_at...');
       const { data: updatedData, error: updatedError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('*')
         .not('updated_at', 'eq', 'created_at')
         .limit(5);
@@ -4375,7 +4376,7 @@ class SupabaseDatabase {
       console.log('🔌 [TEST] Testing database connection...');
       
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id')
         .limit(1);
 
@@ -4407,7 +4408,7 @@ class SupabaseDatabase {
       // Method 1: Simple select query
       try {
         const { data, error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('id')
           .limit(1);
 
@@ -4423,7 +4424,7 @@ class SupabaseDatabase {
       // Method 2: Count query
       try {
         const { count, error } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .select('*', { count: 'exact', head: true });
 
         if (!error && count !== null) {
@@ -4459,7 +4460,7 @@ class SupabaseDatabase {
   // Get unique values for dropdowns in Edit Entry page
   async getUniqueParticulars(): Promise<string[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('particulars')
       .not('particulars', 'is', null)
       .not('particulars', 'eq', '');
@@ -4477,7 +4478,7 @@ class SupabaseDatabase {
 
   async getUniqueSaleQuantities(): Promise<number[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('sale_qty')
       .not('sale_qty', 'is', null)
       .gt('sale_qty', 0);
@@ -4495,7 +4496,7 @@ class SupabaseDatabase {
 
   async getUniquePurchaseQuantities(): Promise<number[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('purchase_qty')
       .not('purchase_qty', 'is', null)
       .gt('purchase_qty', 0);
@@ -4513,7 +4514,7 @@ class SupabaseDatabase {
 
   async getUniqueCreditAmounts(): Promise<number[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('credit')
       .not('credit', 'is', null)
       .gt('credit', 0);
@@ -4531,7 +4532,7 @@ class SupabaseDatabase {
 
   async getUniqueDebitAmounts(): Promise<number[]> {
     const { data, error } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('debit')
       .not('debit', 'is', null)
       .gt('debit', 0);
@@ -4551,7 +4552,7 @@ class SupabaseDatabase {
   async getDistinctAccountNames(): Promise<string[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('acc_name')
         .not('acc_name', 'is', null)
         .order('acc_name');
@@ -4576,7 +4577,7 @@ class SupabaseDatabase {
       
       // Get accounts from cash_book table (existing entries)
       const { data: cashBookData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('acc_name, company_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
@@ -4588,7 +4589,7 @@ class SupabaseDatabase {
 
       // Get accounts from company_main_accounts table (newly created accounts)
       const { data: mainAccountsData, error: mainAccountsError } = await supabase
-        .from('company_main_accounts')
+        .from(getTableName('company_main_accounts'))
         .select('acc_name, company_name')
         .eq('company_name', companyName)
         .not('acc_name', 'is', null)
@@ -4624,7 +4625,7 @@ class SupabaseDatabase {
   async getSubAccountsByAccountName(accountName: string): Promise<string[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('sub_acc_name')
         .eq('acc_name', accountName)
         .not('sub_acc_name', 'is', null)
@@ -4649,7 +4650,7 @@ class SupabaseDatabase {
       
       // Get sub-accounts from cash_book table (existing entries)
       const { data: cashBookData, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('sub_acc_name, acc_name, company_name')
         .eq('acc_name', accountName)
         .eq('company_name', companyName)
@@ -4662,7 +4663,7 @@ class SupabaseDatabase {
 
       // Get sub-accounts from company_main_sub_acc table (newly created sub-accounts)
       const { data: subAccountsData, error: subAccountsError } = await supabase
-        .from('company_main_sub_acc')
+        .from(getTableName('company_main_sub_acc'))
         .select('sub_acc, acc_name, company_name')
         .eq('acc_name', accountName)
         .eq('company_name', companyName)
@@ -4699,7 +4700,7 @@ class SupabaseDatabase {
   async getParticularsBySubAccount(accountName: string, subAccountName: string): Promise<string[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('particulars')
         .eq('acc_name', accountName)
         .eq('sub_acc_name', subAccountName)
@@ -4723,7 +4724,7 @@ class SupabaseDatabase {
   async getDistinctSubAccountNames(): Promise<string[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('sub_acc_name')
         .not('sub_acc_name', 'is', null)
         .not('sub_acc_name', 'eq', '')
@@ -4746,7 +4747,7 @@ class SupabaseDatabase {
   async getDistinctSubAccountNamesByCompany(companyName: string): Promise<string[]> {
     try {
       const { data, error } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('sub_acc_name')
         .eq('company_name', companyName)
         .not('sub_acc_name', 'is', null)
@@ -4773,7 +4774,7 @@ class SupabaseDatabase {
       
       // Get all unique company names
       const { data: companyData, error: companyError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('company_name')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '');
@@ -4826,7 +4827,7 @@ class SupabaseDatabase {
       
       // Check cash_book table
       const { data: cashBookEntries, error: cashBookError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, acc_name, sub_acc_name, particulars, company_name')
         .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
       
@@ -4837,7 +4838,7 @@ class SupabaseDatabase {
       
       // Check deleted_cash_book table
       const { data: deletedEntries, error: deletedError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('id, acc_name, sub_acc_name, particulars, company_name')
         .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
       
@@ -4888,7 +4889,7 @@ class SupabaseDatabase {
       // 1. Clean up cash_book table
       console.log('📋 Step 1: Cleaning cash_book table...');
       const { data: cashBookEntries, error: fetchError } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, acc_name, sub_acc_name, particulars, company_name')
         .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
       
@@ -4930,7 +4931,7 @@ class SupabaseDatabase {
           
           if (hasChanges) {
             const { error: updateError } = await supabase
-              .from('cash_book')
+              .from(getTableName('cash_book'))
               .update(updates)
               .eq('id', entry.id);
             
@@ -4947,7 +4948,7 @@ class SupabaseDatabase {
       // 2. Clean up deleted_cash_book table
       console.log('📋 Step 2: Cleaning deleted_cash_book table...');
       const { data: deletedEntries, error: deletedFetchError } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('id, acc_name, sub_acc_name, particulars, company_name')
         .or('acc_name.ilike.%[DELETED]%,sub_acc_name.ilike.%[DELETED]%,particulars.ilike.%[DELETED]%,company_name.ilike.%[DELETED]%');
       
@@ -4986,7 +4987,7 @@ class SupabaseDatabase {
           
           if (hasChanges) {
             const { error: updateError } = await supabase
-              .from('deleted_cash_book')
+              .from(getTableName('deleted_cash_book'))
               .update(updates)
               .eq('id', entry.id);
             
@@ -5102,7 +5103,7 @@ if (typeof window !== 'undefined') {
     // Get a sample entry ID for testing
     getSampleEntry: async () => {
       const { data } = await supabase
-        .from('cash_book')
+        .from(getTableName('cash_book'))
         .select('id, sno, acc_name')
         .limit(1)
         .single();

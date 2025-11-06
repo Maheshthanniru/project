@@ -6,6 +6,7 @@ import Select from '../components/UI/Select';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../lib/queryClient';
@@ -310,7 +311,7 @@ const ReplaceForm: React.FC = () => {
             // Delete all entries with the old account name from company_main_accounts table
             // Since we've already replaced all cash_book entries, it's safe to delete
             const { error: deleteError } = await supabase
-              .from('company_main_accounts')
+              .from(getTableName('company_main_accounts'))
               .delete()
               .eq('acc_name', replaceData.oldAccountName.trim());
 
@@ -325,7 +326,7 @@ const ReplaceForm: React.FC = () => {
               console.log('✅ Old account name deleted from company_main_accounts');
               // Also delete related sub accounts if any
               const { error: subDeleteError } = await supabase
-                .from('company_main_sub_acc')
+                .from(getTableName('company_main_sub_acc'))
                 .delete()
                 .eq('acc_name', replaceData.oldAccountName.trim());
 
@@ -355,23 +356,23 @@ const ReplaceForm: React.FC = () => {
           
           // Invalidate all relevant queries
           queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: ['cashBook'] }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] }); // Invalidate company balances
           
           // Force refetch all recent entries queries to update immediately
           // This ensures New Entry page shows updated data without manual refresh
           await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
-          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          await queryClient.refetchQueries({ queryKey: ['dashboard', 'recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: ['cashBook'] });
           
           // Invalidate and refetch accounts dropdown to update account list in New Entry
           // This ensures the dropdown shows updated account names after replacement
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.accounts });
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
+          await queryClient.refetchQueries({ queryKey: ['dropdowns', 'accounts'] });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'subAccounts'] });
+          await queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
           
           console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
           
@@ -448,7 +449,7 @@ const ReplaceForm: React.FC = () => {
           // After successful replacement, delete the old sub account from reference table
           try {
             const { error: subRefDeleteError } = await supabase
-              .from('company_main_sub_acc')
+              .from(getTableName('company_main_sub_acc'))
               .delete()
               .eq('sub_acc', replaceData.oldSubAccount.trim());
 
@@ -467,23 +468,23 @@ const ReplaceForm: React.FC = () => {
           
           // Invalidate all relevant queries
           queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: ['cashBook'] }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] }); // Invalidate company balances
           
           // Force refetch all recent entries queries to update immediately
           // This ensures New Entry page shows updated data without manual refresh
           await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
-          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          await queryClient.refetchQueries({ queryKey: ['dashboard', 'recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: ['cashBook'] });
           
           // Invalidate and refetch sub accounts dropdown to update sub account list in New Entry
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.subAccounts });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.subAccounts });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'subAccounts'] });
+          await queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
           // Also invalidate related dropdowns so all forms reload fresh lists
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.accounts });
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
           
           console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
           
@@ -552,13 +553,13 @@ const ReplaceForm: React.FC = () => {
     
     try {
       const { data: mainAccountsData } = await supabase
-        .from('company_main_accounts')
+        .from(getTableName('company_main_accounts'))
         .select('id')
         .eq('company_name', replaceData.oldCompanyName.trim());
       mainAccountsCount = mainAccountsData?.length || 0;
 
       const { data: subAccountsData } = await supabase
-        .from('company_main_sub_acc')
+        .from(getTableName('company_main_sub_acc'))
         .select('id')
         .eq('company_name', replaceData.oldCompanyName.trim());
       subAccountsCount = subAccountsData?.length || 0;
@@ -606,7 +607,7 @@ const ReplaceForm: React.FC = () => {
         
         // Get all accounts from old company
         const { data: oldCompanyAccounts, error: fetchOldError } = await supabase
-          .from('company_main_accounts')
+          .from(getTableName('company_main_accounts'))
           .select('id, acc_name')
           .eq('company_name', oldCompanyName);
 
@@ -619,7 +620,7 @@ const ReplaceForm: React.FC = () => {
 
         // Get all accounts from new company to check for duplicates
         const { data: newCompanyAccounts, error: fetchNewError } = await supabase
-          .from('company_main_accounts')
+          .from(getTableName('company_main_accounts'))
           .select('acc_name')
           .eq('company_name', newCompanyName);
 
@@ -661,7 +662,7 @@ const ReplaceForm: React.FC = () => {
         let deletedCount = 0;
         if (accountsToDelete.length > 0) {
           const { error: deleteError } = await supabase
-            .from('company_main_accounts')
+            .from(getTableName('company_main_accounts'))
             .delete()
             .in('id', accountsToDelete);
 
@@ -678,7 +679,7 @@ const ReplaceForm: React.FC = () => {
         let updatedCount = 0;
         if (accountsToUpdate.length > 0) {
           const { data: updatedMainAccounts, error: mainAccountsError } = await supabase
-            .from('company_main_accounts')
+            .from(getTableName('company_main_accounts'))
             .update({ company_name: newCompanyName })
             .in('id', accountsToUpdate)
             .select();
@@ -708,7 +709,7 @@ const ReplaceForm: React.FC = () => {
         
         // Get all sub accounts from old company
         const { data: oldCompanySubAccounts, error: fetchOldSubError } = await supabase
-          .from('company_main_sub_acc')
+          .from(getTableName('company_main_sub_acc'))
           .select('id, acc_name, sub_acc')
           .eq('company_name', oldCompanyName);
 
@@ -721,7 +722,7 @@ const ReplaceForm: React.FC = () => {
 
         // Get all sub accounts from new company to check for duplicates
         const { data: newCompanySubAccounts, error: fetchNewSubError } = await supabase
-          .from('company_main_sub_acc')
+          .from(getTableName('company_main_sub_acc'))
           .select('acc_name, sub_acc')
           .eq('company_name', newCompanyName);
 
@@ -768,7 +769,7 @@ const ReplaceForm: React.FC = () => {
         let deletedSubCount = 0;
         if (subAccountsToDelete.length > 0) {
           const { error: deleteSubError } = await supabase
-            .from('company_main_sub_acc')
+            .from(getTableName('company_main_sub_acc'))
             .delete()
             .in('id', subAccountsToDelete);
 
@@ -785,7 +786,7 @@ const ReplaceForm: React.FC = () => {
         let updatedSubCount = 0;
         if (subAccountsToUpdate.length > 0) {
           const { data: updatedSubAccounts, error: subAccountsError } = await supabase
-            .from('company_main_sub_acc')
+            .from(getTableName('company_main_sub_acc'))
             .update({ company_name: newCompanyName })
             .in('id', subAccountsToUpdate)
             .select();
@@ -807,7 +808,7 @@ const ReplaceForm: React.FC = () => {
         // Using direct database update to ensure ALL entries are updated, not just those in memory
         console.log(`Updating ALL cash_book entries with company_name = "${oldCompanyName}"...`);
         const { data: updatedCashBookEntries, error: cashBookError } = await supabase
-          .from('cash_book')
+          .from(getTableName('cash_book'))
           .update({ company_name: newCompanyName })
           .eq('company_name', oldCompanyName)
           .select('id');
@@ -864,22 +865,22 @@ const ReplaceForm: React.FC = () => {
           
           // Invalidate all relevant queries
           queryClient.invalidateQueries({ queryKey: ['recentEntries'] }); // Invalidate all date-specific recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries }); // Invalidate general recent entries
-          queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all }); // Invalidate all cash book queries
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats }); // Invalidate dashboard stats
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances }); // Invalidate company balances
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] }); // Invalidate general recent entries
+          queryClient.invalidateQueries({ queryKey: ['cashBook'] }); // Invalidate all cash book queries
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] }); // Invalidate dashboard stats
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] }); // Invalidate company balances
           
           // Force refetch all recent entries queries to update immediately
           // This ensures New Entry page shows updated data without manual refresh
           // The records are UPDATED (not deleted), so they will show with new company name
           await queryClient.refetchQueries({ queryKey: ['recentEntries'] });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dashboard.recentEntries });
-          await queryClient.refetchQueries({ queryKey: queryKeys.cashBook.all });
+          await queryClient.refetchQueries({ queryKey: ['dashboard', 'recentEntries'] });
+          await queryClient.refetchQueries({ queryKey: ['cashBook'] });
           
           // Invalidate and refetch companies dropdown to update company list in New Entry
           // This ensures the dropdown shows updated company names after replacement
-          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies });
-          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies });
+          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+          await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
           
           console.log('✅ Recent entries and companies dropdown refreshed - New Entry will update automatically with new company names');
           

@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 
 /**
  * Check if payment_mode column exists in cash_book table
@@ -17,7 +18,7 @@ export async function checkPaymentModeColumnExists(): Promise<{
   try {
     // Try to select payment_mode from cash_book - if it fails, column doesn't exist
     const { error, data } = await supabase
-      .from('cash_book')
+      .from(getTableName('cash_book'))
       .select('payment_mode')
       .limit(1);
 

@@ -4,6 +4,7 @@ import Button from '../components/UI/Button';
 import SearchableSelect from '../components/UI/SearchableSelect';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
+import { getTableName } from '../lib/tableNames';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -179,7 +180,7 @@ const DeletedRecords: React.FC = () => {
 
       // Load unique dates from deleted records
       const { data: dateData } = await supabase
-        .from('deleted_cash_book')
+        .from(getTableName('deleted_cash_book'))
         .select('deleted_at')
         .order('deleted_at', { ascending: false });
       

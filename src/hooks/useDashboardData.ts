@@ -2,11 +2,13 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { queryKeys } from '../lib/queryClient';
+import { getTableMode } from '../lib/tableNames';
+import { useTableMode } from '../contexts/TableModeContext';
 
 // Hook for dashboard stats
 export const useDashboardStats = (selectedDate?: string) => {
   return useQuery({
-    queryKey: [...queryKeys.dashboard.stats, selectedDate],
+    queryKey: queryKeys.dashboard.stats(selectedDate),
     queryFn: () => supabaseDB.getDashboardStats(selectedDate),
     staleTime: 2 * 60 * 1000, // 2 minutes for stats
     gcTime: 5 * 60 * 1000, // 5 minutes cache
@@ -16,7 +18,7 @@ export const useDashboardStats = (selectedDate?: string) => {
 // Hook for recent entries (today's entries only for LIFO display)
 export const useRecentEntries = () => {
   return useQuery({
-    queryKey: queryKeys.dashboard.recentEntries,
+    queryKey: queryKeys.dashboard.recentEntries(),
     queryFn: () => supabaseDB.getTodaysCashBookEntries(),
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -26,10 +28,13 @@ export const useRecentEntries = () => {
 
 // Hook for recent entries by specific date (for NewEntry form)
 export const useRecentEntriesByDate = (date: string) => {
+  // Use React context to get current mode (reacts to changes)
+  const { mode: tableMode } = useTableMode();
+  
   return useQuery({
-    queryKey: ['recentEntries', date],
+    queryKey: ['recentEntries', tableMode, date],
     queryFn: () => {
-      console.log('🔍 Fetching recent entries for date:', date);
+      console.log('🔍 Fetching recent entries for date:', date, 'Mode:', tableMode);
       return supabaseDB.getCashBookEntriesByDate(date);
     },
     staleTime: 2 * 60 * 1000,
@@ -37,7 +42,7 @@ export const useRecentEntriesByDate = (date: string) => {
     keepPreviousData: true,
     enabled: !!date, // Only fetch if date is provided
     onSuccess: (data) => {
-      console.log('✅ Recent entries fetched successfully:', data?.length || 0, 'entries for date:', date);
+      console.log('✅ Recent entries fetched successfully:', data?.length || 0, 'entries for date:', date, 'Mode:', tableMode);
     },
     onError: (error) => {
       console.error('❌ Error fetching recent entries for date:', date, error);
@@ -48,7 +53,7 @@ export const useRecentEntriesByDate = (date: string) => {
 // Hook for company balances
 export const useCompanyBalances = () => {
   return useQuery({
-    queryKey: queryKeys.dashboard.companyBalances,
+    queryKey: queryKeys.dashboard.companyBalances(),
     queryFn: () => supabaseDB.getCompanyClosingBalances(),
     staleTime: 3 * 60 * 1000, // 3 minutes for company balances
     gcTime: 10 * 60 * 1000, // 10 minutes cache
@@ -58,7 +63,7 @@ export const useCompanyBalances = () => {
 // Hook for dropdown data (companies, accounts, sub accounts, users)
 export const useDropdownData = () => {
   const companiesQuery = useQuery({
-    queryKey: queryKeys.dropdowns.companies,
+    queryKey: queryKeys.dropdowns.companies(),
     queryFn: () => supabaseDB.getCompanies(), // getCompanies() now filters duplicates internally
     staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
     gcTime: 30 * 60 * 1000, // 30 minutes cache
@@ -72,52 +77,50 @@ export const useDropdownData = () => {
   });
 
   const accountsQuery = useQuery({
-    queryKey: queryKeys.dropdowns.accounts,
+    queryKey: queryKeys.dropdowns.accounts(),
     queryFn: () => supabaseDB.getAccounts(),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
 
   const subAccountsQuery = useQuery({
-    queryKey: queryKeys.dropdowns.subAccounts,
+    queryKey: queryKeys.dropdowns.subAccounts(),
     queryFn: () => supabaseDB.getSubAccounts(),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
 
   const usersQuery = useQuery({
-    queryKey: queryKeys.dropdowns.users,
+    queryKey: queryKeys.dropdowns.users(),
     queryFn: () => supabaseDB.getUsers(),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
 
   const pendingApprovalsQuery = useQuery({
-    queryKey: queryKeys.approvals.count,
+    queryKey: queryKeys.approvals.count(),
     queryFn: () => supabaseDB.getPendingApprovalsCount(),
     staleTime: 1 * 60 * 1000, // 1 minute for pending approvals
     gcTime: 3 * 60 * 1000,
   });
 
+  // Use React context to get current mode (reacts to changes)
+  const { mode: tableMode } = useTableMode();
+  
   const uniqueSubAccountsCountQuery = useQuery({
-    queryKey: ['subAccounts', 'uniqueCount'],
+    queryKey: ['subAccounts', 'uniqueCount', tableMode],
     queryFn: async () => {
-      // Align with ReplaceForm dropdown: count distinct sub accounts from cash_book
-      const names = await supabaseDB.getDistinctSubAccountNames();
-      // Normalize (trim + case-insensitive) to avoid duplicate variants counting twice
-      const normalized = names
-        .map(name => (typeof name === 'string' ? name.trim() : ''))
-        .filter(Boolean)
-        .map(name => name.toLowerCase());
-      const unique = new Set(normalized);
-      return unique.size;
+      // Use the reference table method which correctly uses getTableName for ITR mode
+      const count = await supabaseDB.getUniqueSubAccountsCount();
+      console.log('📊 Sub Accounts count (Mode:', tableMode, '):', count);
+      return count;
     },
     staleTime: 0, // refetch on mount so dashboard shows latest dropdown-aligned count
     gcTime: 30 * 60 * 1000,
   });
 
   const distinctMainAccountsCountQuery = useQuery({
-    queryKey: ['accounts', 'distinctCount'],
+    queryKey: ['accounts', 'distinctCount', tableMode],
     queryFn: async () => {
       // Align with ReplaceForm dropdown: count distinct main accounts from cash_book
       const names = await supabaseDB.getDistinctAccountNames();
@@ -126,6 +129,7 @@ export const useDropdownData = () => {
         .filter(Boolean)
         .map(name => name.toLowerCase());
       const unique = new Set(normalized);
+      console.log('📊 Distinct main accounts count (Mode:', tableMode, '):', unique.size);
       return unique.size;
     },
     staleTime: 0, // refetch on mount for latest count
@@ -159,23 +163,22 @@ export const useInvalidateDashboard = () => {
   const queryClient = useQueryClient();
 
   const invalidateAll = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
-    queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.count });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['cashBook'] });
+    queryClient.invalidateQueries({ queryKey: ['approvals'] });
+    queryClient.invalidateQueries({ queryKey: ['dropdowns'] });
     // Also invalidate sub accounts unique count to keep dashboard in sync
     queryClient.invalidateQueries({ queryKey: ['subAccounts', 'uniqueCount'] });
   }, [queryClient]);
 
   const invalidateStats = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.companyBalances });
+    queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard', 'companyBalances'] });
   }, [queryClient]);
 
   const invalidateRecentEntries = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.recentEntries });
-    queryClient.invalidateQueries({ queryKey: queryKeys.cashBook.all });
+    queryClient.invalidateQueries({ queryKey: ['dashboard', 'recentEntries'] });
+    queryClient.invalidateQueries({ queryKey: ['cashBook'] });
   }, [queryClient]);
 
   return {

@@ -8,6 +8,7 @@ import Button from '../components/UI/Button';
 import { supabaseDB } from '../lib/supabaseDatabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useTableMode } from '../contexts/TableModeContext';
 import { useDashboardStats, useCompanyBalances, useDropdownData, useInvalidateDashboard } from '../hooks/useDashboardData';
 import toast from 'react-hot-toast';
 import {
@@ -29,6 +30,7 @@ import {
 
 const Dashboard: React.FC = () => {
   const { user, changePassword } = useAuth();
+  const { mode: tableMode, isITRMode } = useTableMode();
   const location = useLocation();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), 'yyyy-MM-dd')
@@ -86,6 +88,12 @@ const Dashboard: React.FC = () => {
     const credentials = JSON.parse(localStorage.getItem('user_credentials') || '[]');
     setUserCredentials(credentials.reverse()); // Show newest first
   }, []); // Only run on mount
+
+  // Listen for table mode changes and refresh all data
+  useEffect(() => {
+    console.log('🔄 Table mode changed to:', tableMode, isITRMode ? 'ITR' : 'Regular');
+    invalidateAll();
+  }, [tableMode, invalidateAll]);
 
   // Listen for custom events to refresh dashboard
   useEffect(() => {
