@@ -38,6 +38,7 @@ interface CompanySummary {
 interface SubAccountSummary {
   subAccount: string;
   mainAccount: string;
+  companyName?: string;
   credit: number;
   debit: number;
   balance: number;
@@ -108,19 +109,17 @@ const LedgerSummary: React.FC = () => {
 
   useEffect(() => {
     loadDropdownData();
+    loadAccountsByCompany();
+    loadSubAccountsByAccount();
     generateSummary();
   }, []);
 
   useEffect(() => {
-    if (filters.companyName) {
-      loadAccountsByCompany();
-    }
+    loadAccountsByCompany();
   }, [filters.companyName]);
 
   useEffect(() => {
-    if (filters.companyName && filters.mainAccount) {
-      loadSubAccountsByAccount();
-    }
+    loadSubAccountsByAccount();
   }, [filters.companyName, filters.mainAccount]);
 
   // Implement live filtering: call generateSummary automatically when filters change
@@ -155,15 +154,19 @@ const LedgerSummary: React.FC = () => {
   };
 
   const loadAccountsByCompany = async () => {
-    if (!filters.companyName) {
-      setAccounts([{ value: '', label: 'All Accounts' }]);
-      return;
-    }
-
     try {
-      const accounts = await supabaseDB.getDistinctAccountNamesByCompany(
-        filters.companyName
-      );
+      let accounts: string[] = [];
+      
+      if (filters.companyName) {
+        // Load accounts for specific company
+        accounts = await supabaseDB.getDistinctAccountNamesByCompany(
+          filters.companyName
+        );
+      } else {
+        // Load all accounts when no company is selected
+        accounts = await supabaseDB.getDistinctAccountNames();
+      }
+      
       const accountsData = accounts.map(account => ({
         value: account,
         label: account,
@@ -176,16 +179,20 @@ const LedgerSummary: React.FC = () => {
   };
 
   const loadSubAccountsByAccount = async () => {
-    if (!filters.companyName || !filters.mainAccount) {
-      setSubAccounts([{ value: '', label: 'All Sub Accounts' }]);
-      return;
-    }
-
     try {
-      const subAccounts = await supabaseDB.getSubAccountsByAccountAndCompany(
-        filters.mainAccount,
-        filters.companyName
-      );
+      let subAccounts: string[] = [];
+      
+      if (filters.companyName && filters.mainAccount) {
+        // Load sub accounts for specific company and main account
+        subAccounts = await supabaseDB.getSubAccountsByAccountAndCompany(
+          filters.mainAccount,
+          filters.companyName
+        );
+      } else {
+        // Load all sub accounts when no company/main account is selected
+        subAccounts = await supabaseDB.getDistinctSubAccountNames();
+      }
+      
       const subAccountsData = subAccounts.map(subAcc => ({
         value: subAcc,
         label: subAcc,
@@ -322,6 +329,7 @@ const LedgerSummary: React.FC = () => {
             subAccountMap.set(subAccountKey, {
               subAccount: entry.sub_acc_name,
               mainAccount: entry.acc_name,
+              companyName: entry.company_name,
               credit: 0,
               debit: 0,
               balance: 0,
@@ -378,6 +386,7 @@ const LedgerSummary: React.FC = () => {
                 companySubAccountMap.set(subAccountKey, {
                   subAccount: entry.sub_acc_name,
                   mainAccount: entry.acc_name,
+                  companyName: entry.company_name,
                   credit: 0,
                   debit: 0,
                   balance: 0,
@@ -511,14 +520,26 @@ const LedgerSummary: React.FC = () => {
         filename = 'main-account-summary';
         break;
       case 'subAccount':
-        exportData = subAccountSummaries.map(subAccount => ({
-          'Main Account': subAccount.mainAccount || '-',
-          'Sub Account': subAccount.subAccount,
-          Credit: subAccount.credit,
-          Debit: subAccount.debit,
-          Balance: subAccount.balance,
-          'Transaction Count': subAccount.transactionCount,
-        }));
+        exportData = subAccountSummaries.map(subAccount => {
+          const baseData = {
+            'Main Account': subAccount.mainAccount || '-',
+            'Sub Account': subAccount.subAccount,
+            Credit: subAccount.credit,
+            Debit: subAccount.debit,
+            Balance: subAccount.balance,
+            'Transaction Count': subAccount.transactionCount,
+          };
+          
+          // Add company name column if no company filter is applied
+          if (!filters.companyName && subAccount.companyName) {
+            return {
+              'Company Name': subAccount.companyName,
+              ...baseData,
+            };
+          }
+          
+          return baseData;
+        });
         filename = 'sub-account-summary';
         break;
     }
@@ -646,7 +667,9 @@ const LedgerSummary: React.FC = () => {
             <thead>
               <tr>
                 ${activeTab === 'subAccount' ? 
-                  '<th>Main Account</th><th>Sub Account</th>' : 
+                  (!filters.companyName ? 
+                    '<th>Company Name</th><th>Main Account</th><th>Sub Account</th>' :
+                    '<th>Main Account</th><th>Sub Account</th>') : 
                   activeTab === 'company' ? 
                     '<th>Company Name</th>' :
                     !filters.companyName ? 
@@ -670,8 +693,11 @@ const LedgerSummary: React.FC = () => {
                     
                     if (activeTab === 'subAccount') {
                       const subAccount = item as SubAccountSummary;
+                      const companyCell = !filters.companyName && subAccount.companyName ? 
+                        `<td>${subAccount.companyName}</td>` : '';
                       return `
                 <tr>
+                  ${companyCell}
                   <td>${subAccount.mainAccount || '-'}</td>
                   <td>${subAccount.subAccount}</td>
                   <td class="text-right text-green">₹${credit.toLocaleString()}</td>
@@ -890,6 +916,11 @@ const LedgerSummary: React.FC = () => {
           <table className='w-full text-sm'>
             <thead className='bg-gray-50 border-b border-gray-200'>
               <tr>
+                {!filters.companyName && (
+                  <th className='px-4 py-3 text-left font-medium text-gray-700'>
+                    Company Name
+                  </th>
+                )}
                 <th className='px-4 py-3 text-left font-medium text-gray-700'>
                   Main Account
                 </th>
@@ -910,11 +941,16 @@ const LedgerSummary: React.FC = () => {
             <tbody>
               {subAccountSummaries.map((subAccount, index) => (
                 <tr
-                  key={subAccount.subAccount}
+                  key={`${subAccount.companyName || ''}-${subAccount.subAccount}-${index}`}
                   className={`border-b hover:bg-gray-50 ${
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                   }`}
                 >
+                  {!filters.companyName && (
+                    <td className='px-4 py-3 font-medium text-gray-700'>
+                      {subAccount.companyName || '-'}
+                    </td>
+                  )}
                   <td className='px-4 py-3'>
                     {subAccount.mainAccount || '-'}
                   </td>
