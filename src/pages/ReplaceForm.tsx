@@ -484,7 +484,7 @@ const ReplaceForm: React.FC = () => {
           await queryClient.refetchQueries({ queryKey: ['dropdowns', 'subAccounts'] });
           // Also invalidate related dropdowns so all forms reload fresh lists
           queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
-          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
           
           console.log('✅ Recent entries and dropdowns refreshed - New Entry will update automatically');
           
@@ -835,7 +835,7 @@ const ReplaceForm: React.FC = () => {
           
           try {
             const { error: companyDeleteError } = await supabase
-              .from('companies')
+              .from(getTableName('companies'))
               .delete()
               .eq('company_name', oldCompanyName);
 
@@ -879,8 +879,8 @@ const ReplaceForm: React.FC = () => {
           
           // Invalidate and refetch companies dropdown to update company list in New Entry
           // This ensures the dropdown shows updated company names after replacement
-          queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
-          await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
+          await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies() });
           
           console.log('✅ Recent entries and companies dropdown refreshed - New Entry will update automatically with new company names');
           

@@ -48,9 +48,9 @@ export const queryKeys = {
     byId: (id: string) => ['cashBook', 'detail', getTableModeForQuery(), id] as const,
     byDate: (date: string) => ['cashBook', 'byDate', getTableModeForQuery(), date] as const,
   },
-  // Dropdown data queries (accounts/subaccounts change with mode, companies/users don't)
+  // Dropdown data queries (accounts/subaccounts/companies change with mode, users don't)
   dropdowns: {
-    companies: () => ['dropdowns', 'companies'] as const, // Shared between modes
+    companies: () => ['dropdowns', 'companies', getTableModeForQuery()] as const, // Now ITR-aware
     accounts: () => ['dropdowns', 'accounts', getTableModeForQuery()] as const,
     subAccounts: () => ['dropdowns', 'subAccounts', getTableModeForQuery()] as const,
     users: () => ['dropdowns', 'users'] as const, // Shared between modes

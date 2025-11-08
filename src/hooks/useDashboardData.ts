@@ -62,15 +62,22 @@ export const useCompanyBalances = () => {
 
 // Hook for dropdown data (companies, accounts, sub accounts, users)
 export const useDropdownData = () => {
+  // Use React context to get current mode (reacts to changes)
+  const { mode: tableMode } = useTableMode();
+  
   const companiesQuery = useQuery({
-    queryKey: queryKeys.dropdowns.companies(),
-    queryFn: () => supabaseDB.getCompanies(), // getCompanies() now filters duplicates internally
-    staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
+    queryKey: queryKeys.dropdowns.companies(), // This includes table mode
+    queryFn: () => {
+      console.log('🔄 [useDropdownData] Fetching companies, mode:', tableMode);
+      return supabaseDB.getCompanies(); // getCompanies() now uses getTableName('companies')
+    },
+    staleTime: 0, // Refetch immediately when mode changes
     gcTime: 30 * 60 * 1000, // 30 minutes cache
+    enabled: true, // Always enabled
   });
 
   const distinctCompaniesCountQuery = useQuery({
-    queryKey: ['companies', 'distinctCount'],
+    queryKey: ['companies', 'distinctCount', tableMode], // Include table mode
     queryFn: () => supabaseDB.getDistinctCompaniesCount(),
     staleTime: 10 * 60 * 1000, // 10 minutes for companies count
     gcTime: 30 * 60 * 1000,
@@ -104,9 +111,6 @@ export const useDropdownData = () => {
     gcTime: 3 * 60 * 1000,
   });
 
-  // Use React context to get current mode (reacts to changes)
-  const { mode: tableMode } = useTableMode();
-  
   const uniqueSubAccountsCountQuery = useQuery({
     queryKey: ['subAccounts', 'uniqueCount', tableMode],
     queryFn: async () => {

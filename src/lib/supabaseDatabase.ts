@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { FinancialCalculator } from './financialCalculations';
-import { getTableName } from './tableNames';
+import { getTableName, getTableMode } from './tableNames';
 
 // Types
 export interface Company {
@@ -154,11 +154,14 @@ class SupabaseDatabase {
   // Company operations
   async getCompanies(): Promise<Company[]> {
     try {
-      console.log('🔄 Fetching all companies from companies table...');
+      // Use getTableName to switch between companies and companies_itr based on mode
+      const tableName = getTableName('companies');
+      console.log('🔄 Fetching all companies from', tableName, 'table...');
+      console.log('📊 Current mode:', getTableMode(), '→ Using table:', tableName);
       
       // Load all companies with explicit high limit
       const { data, error } = await supabase
-        .from('companies')
+        .from(tableName)
         .select('*')
         .order('company_name')
         .limit(10000); // Explicit high limit to get all companies
@@ -195,7 +198,7 @@ class SupabaseDatabase {
     try {
       // Get distinct company names to avoid counting duplicates
       const { data, error } = await supabase
-        .from('companies')
+        .from(getTableName('companies'))
         .select('company_name')
         .not('company_name', 'is', null)
         .not('company_name', 'eq', '');
@@ -250,7 +253,7 @@ class SupabaseDatabase {
 
       // Get company details from companies table for companies that have data
       const { data: companiesData, error: companiesError } = await supabase
-        .from('companies')
+        .from(getTableName('companies'))
         .select('*')
         .in('company_name', uniqueCompanyNames)
         .order('company_name');
@@ -294,7 +297,7 @@ class SupabaseDatabase {
 
       // Delete companies from companies table
       const { data: deletedCompanies, error: deleteError } = await supabase
-        .from('companies')
+        .from(getTableName('companies'))
         .delete()
         .in('company_name', companyNames)
         .select();
@@ -317,7 +320,7 @@ class SupabaseDatabase {
 
   async addCompany(companyName: string, address: string): Promise<Company> {
     const { data, error } = await supabase
-      .from('companies')
+      .from(getTableName('companies'))
       .insert({
         company_name: companyName,
         address: address,
@@ -387,7 +390,7 @@ class SupabaseDatabase {
 
     // 3) Delete company
     const { error } = await supabase
-      .from('companies')
+      .from(getTableName('companies'))
       .delete()
       .eq('company_name', companyName);
 

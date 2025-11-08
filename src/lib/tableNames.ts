@@ -30,6 +30,7 @@ export const getTableName = (baseName: string, mode?: TableMode): string => {
     'deleted_cash_book',
     'company_main_accounts',
     'company_main_sub_acc',
+    'companies',  // Added: companies now has ITR version
     'balance_sheet',
     'ledger',
     'bank_guarantees',

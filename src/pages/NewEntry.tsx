@@ -144,7 +144,7 @@ const NewEntry: React.FC = () => {
       console.log('🔍 Testing database connection...');
 
       // Test basic connectivity
-      const { error } = await supabase.from('companies').select('count');
+      const { error } = await supabase.from(getTableName('companies')).select('count');
       if (error) {
         console.error('❌ Database connection failed:', error);
         toast.error('Database connection failed: ' + error.message);
@@ -268,6 +268,11 @@ const NewEntry: React.FC = () => {
     updateTotalEntryCount();
   }, []);
 
+  // Refresh staff dropdown when table mode changes
+  useEffect(() => {
+    loadUsersData();
+  }, [tableMode]);
+
   // keep visible date inputs synced to ISO values
   useEffect(() => {
     try {
@@ -299,8 +304,8 @@ const NewEntry: React.FC = () => {
       
       // Refetch companies dropdown to show updated company list after replacement
       // This ensures the company dropdown automatically updates when companies are replaced/deleted
-      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
-      queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
+      queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies() });
       
       // Also refetch accounts and sub accounts as they may have changed
       queryClient.invalidateQueries({ queryKey: ['dropdowns', 'accounts'] });
@@ -739,8 +744,8 @@ const NewEntry: React.FC = () => {
       console.log('Company created successfully:', company);
       
       // Invalidate and immediately refetch companies query to refresh the dropdown
-      await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
-      await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
+      await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies() });
       
       setEntry(prev => ({ ...prev, companyName: company.company_name }));
       setNewCompanyName('');
@@ -772,7 +777,7 @@ const NewEntry: React.FC = () => {
       setAccountOptions(names.map(name => ({ value: name, label: name })));
       
       // Invalidate companies query to refresh the dropdown (in case account creation affects company data)
-      queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
       
       // Set the newly created account as selected
       setEntry(prev => ({ ...prev, accountName: account.acc_name }));
@@ -862,8 +867,8 @@ const NewEntry: React.FC = () => {
             success = result.success;
             if (success) {
               // Invalidate and refetch companies query
-              await queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
-              await queryClient.refetchQueries({ queryKey: ['dropdowns', 'companies'] });
+              await queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
+              await queryClient.refetchQueries({ queryKey: queryKeys.dropdowns.companies() });
               // Companies are now managed by React Query - will be refetched automatically
               setEntry(prev => ({
                 ...prev,
@@ -1490,7 +1495,7 @@ const NewEntry: React.FC = () => {
       if (result.success) {
         toast.success(`Successfully deleted ${result.deleted.length} empty companies: ${result.deleted.join(', ')}`);
         // Refresh dropdown data
-        queryClient.invalidateQueries({ queryKey: ['dropdowns', 'companies'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dropdowns.companies() });
       } else {
         toast.error(`Failed to delete companies: ${result.error}`);
       }
