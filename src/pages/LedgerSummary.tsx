@@ -303,8 +303,9 @@ const LedgerSummary: React.FC = () => {
         accountSummary.transactionCount++;
 
         // Main account with company name (for when no company filter is applied)
+        // Use composite key to track each company's account separately
         if (!filters.companyName) {
-          const mainAccountKey = entry.acc_name;
+          const mainAccountKey = `${entry.company_name}-${entry.acc_name}`;
           if (!mainAccountWithCompanyMap.has(mainAccountKey)) {
             mainAccountWithCompanyMap.set(mainAccountKey, {
               accountName: entry.acc_name,
@@ -875,7 +876,9 @@ const LedgerSummary: React.FC = () => {
             <tbody>
               {mainAccountSummaries.map((account, index) => (
                 <tr
-                  key={account.accountName}
+                  key={!filters.companyName && (account as any).companyName 
+                    ? `${(account as any).companyName}-${account.accountName}-${index}`
+                    : `${account.accountName}-${index}`}
                   className={`border-b hover:bg-gray-50 ${
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
                   }`}

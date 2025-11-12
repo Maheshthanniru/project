@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTableMode } from '../contexts/TableModeContext';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import toast, { Toaster } from 'react-hot-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, FileCheck } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -13,6 +14,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { user, login } = useAuth();
+  const { toggleMode, isITRMode } = useTableMode();
 
   if (user) {
     return <Navigate to='/' replace />;
@@ -59,6 +61,41 @@ const Login: React.FC = () => {
           <p className='text-gray-500 text-sm mt-1 text-center'>
             श्री तिरुमला कॉटन मिल्स
           </p>
+        </div>
+
+        {/* ITR/Regular Mode Toggle */}
+        <div className='px-8 pt-4 pb-2'>
+          <div className='mb-4'>
+            <label className='block text-sm font-medium text-gray-700 mb-2 text-center'>
+              Select Mode
+            </label>
+            <button
+              type='button'
+              onClick={toggleMode}
+              className={`flex items-center justify-center gap-3 w-full px-4 py-3 text-sm font-semibold rounded-lg transition-all shadow-md ${
+                isITRMode
+                  ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 border-2 border-orange-400'
+                  : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 border-2 border-blue-400'
+              }`}
+            >
+              <FileCheck className='w-5 h-5' />
+              <span className='flex-1 text-center'>
+                {isITRMode ? 'ITR Mode' : 'Regular Mode'}
+              </span>
+              <span className={`text-xs px-3 py-1 rounded font-bold ${
+                isITRMode 
+                  ? 'bg-orange-700 text-white' 
+                  : 'bg-blue-700 text-white'
+              }`}>
+                {isITRMode ? 'ON' : 'OFF'}
+              </span>
+            </button>
+            <p className='text-xs text-gray-500 mt-2 text-center'>
+              {isITRMode 
+                ? 'Income Tax Return mode - Using ITR tables' 
+                : 'Regular mode - Using standard tables'}
+            </p>
+          </div>
         </div>
 
         {/* Login Form */}

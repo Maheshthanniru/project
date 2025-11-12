@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useTableMode } from '../../contexts/TableModeContext';
 import {
   Home,
   Edit,
@@ -20,7 +19,6 @@ import {
   Download,
   Calculator,
   Users,
-  FileCheck,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -34,7 +32,6 @@ interface MenuItem {
 
 const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
-  const { mode, toggleMode, isITRMode } = useTableMode();
 
   // Debug: Log user features to help diagnose issues
   React.useEffect(() => {
@@ -222,25 +219,6 @@ const Sidebar: React.FC = () => {
             ))}
         </ul>
       </nav>
-      {/* ITR Mode Toggle */}
-      <div className='p-4 border-t border-blue-100 bg-gradient-to-b from-blue-50 to-transparent'>
-        <button
-          onClick={toggleMode}
-          className={`flex items-center gap-3 w-full px-3 py-2 text-sm font-semibold rounded-lg transition-all shadow-sm ${
-            isITRMode
-              ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 border-2 border-orange-400'
-              : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border-2 border-blue-300'
-          }`}
-        >
-          <FileCheck className='w-5 h-5' />
-          <span className='flex-1 text-left'>{isITRMode ? 'ITR Mode' : 'Regular Mode'}</span>
-          <span className={`text-xs px-2 py-1 rounded ${
-            isITRMode ? 'bg-orange-200 text-orange-800' : 'bg-blue-200 text-blue-800'
-          }`}>
-            {isITRMode ? 'ON' : 'OFF'}
-          </span>
-        </button>
-      </div>
       {/* Sticky Logout at Bottom */}
       <div className='p-4 bg-gradient-to-t from-blue-50 to-transparent border-t border-blue-100'>
         <button
