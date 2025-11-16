@@ -75,14 +75,59 @@ const UserManagement: React.FC = () => {
   }, [newUser]);
 
   const loadUsers = async () => {
-    const { data: userRows } = await supabase.from('users').select(`
+    // Try to select mode column - if it doesn't exist, we'll handle it
+    let userRows: any[] = [];
+    let hasModeColumn = true;
+    
+    // First try with mode column
+    const { data: dataWithMode, error: errorWithMode } = await supabase
+      .from('users')
+      .select(`
         id, 
         username, 
         mode,
         created_at,
         user_types!inner(user_type)
-      `).order('created_at', { ascending: false });
-    if (!userRows) return;
+      `)
+      .order('created_at', { ascending: false });
+    
+    // Check if error is specifically about mode column
+    const isModeColumnError = errorWithMode && (
+      errorWithMode.message?.includes('mode') || 
+      errorWithMode.message?.includes('column "mode"') ||
+      errorWithMode.code === '42703' ||
+      errorWithMode.message?.toLowerCase().includes('does not exist')
+    );
+    
+    if (isModeColumnError) {
+      // Mode column doesn't exist, try without it
+      console.log('Mode column does not exist, loading users without mode...');
+      hasModeColumn = false;
+      const { data: dataWithoutMode, error: errorWithoutMode } = await supabase
+        .from('users')
+        .select(`
+          id, 
+          username, 
+          created_at,
+          user_types!inner(user_type)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (errorWithoutMode) {
+        console.error('Error loading users:', errorWithoutMode);
+        toast.error('Error loading users');
+        return;
+      }
+      userRows = dataWithoutMode || [];
+    } else if (errorWithMode) {
+      console.error('Error loading users:', errorWithMode);
+      toast.error('Error loading users');
+      return;
+    } else {
+      userRows = dataWithMode || [];
+    }
+    
+    if (!userRows || userRows.length === 0) return;
 
     // Load features for each user from user_access table
     const usersWithFeatures = await Promise.all(
@@ -105,7 +150,7 @@ const UserManagement: React.FC = () => {
           ...u,
           is_admin: isAdmin,
           features,
-          mode: u.mode || null,
+          mode: hasModeColumn ? (u.mode || null) : null,
           created_at: u.created_at || null,
         };
       })
@@ -177,18 +222,62 @@ const UserManagement: React.FC = () => {
         throw new Error('User type not found');
       }
 
-      const { data: createdUser, error } = await supabase
+      // Try to insert with mode first
+      let insertData: any = {
+        username: newUser.username,
+        password_hash,
+        user_type_id: userTypeData.id,
+        email: `${newUser.username}@thirumala.com`,
+        mode: newUser.mode,
+      };
+
+      let createdUser: any = null;
+      let modeColumnExists = true;
+
+      const { data: userData, error } = await supabase
         .from('users')
-        .insert({
-          username: newUser.username,
-          password_hash,
-          user_type_id: userTypeData.id,
-          email: `${newUser.username}@thirumala.com`, // Generate email
-          mode: newUser.mode, // Add mode
-        })
+        .insert(insertData)
         .select()
         .single();
-      if (error) throw error;
+      
+      if (error) {
+        // Check if error is specifically about the mode column
+        const isModeError = error.message?.includes('mode') || 
+                           error.message?.includes('column "mode"') ||
+                           error.code === '42703' || 
+                           error.code === 'PGRST116' ||
+                           error.message?.toLowerCase().includes('does not exist');
+        
+        if (isModeError) {
+          console.log('Mode column does not exist, creating user without mode...');
+          modeColumnExists = false;
+          delete insertData.mode;
+          
+          const { data: retryUser, error: retryError } = await supabase
+            .from('users')
+            .insert(insertData)
+            .select()
+            .single();
+          
+          if (retryError) throw retryError;
+          
+          createdUser = retryUser;
+          
+          // Only show error if mode column truly doesn't exist
+          if (!modeColumnExists) {
+            toast.error('User created, but mode column does not exist. Please add it to the database using: ALTER TABLE users ADD COLUMN mode TEXT CHECK (mode IN (\'regular\', \'itr\'));', { duration: 10000 });
+          }
+          
+          setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
+          loadUsers();
+          setLoading(false);
+          return;
+        }
+        throw error;
+      } else {
+        createdUser = userData;
+        modeColumnExists = true;
+      }
 
       // For now, skip feature access since we're using a simplified approach
       toast.success('User created!');
@@ -263,27 +352,77 @@ const UserManagement: React.FC = () => {
         throw new Error('User type not found');
       }
 
-      const { data: createdUser, error } = await supabase
+      // Try to insert with mode first
+      let insertData: any = {
+        username: newUser.username,
+        password_hash,
+        user_type_id: userTypeData.id,
+        email: `${newUser.username}@thirumala.com`,
+        mode: newUser.mode,
+      };
+
+      let createdUser: any = null;
+      let finalUser: any = null;
+      let modeColumnExists = true;
+      
+      // First, try to insert with mode
+      const { data: userData, error } = await supabase
         .from('users')
-        .insert({
-          username: newUser.username,
-          password_hash,
-          user_type_id: userTypeData.id,
-          email: `${newUser.username}@thirumala.com`, // Generate email
-          mode: newUser.mode, // Add mode
-        })
+        .insert(insertData)
         .select()
         .single();
+      
       if (error) {
-        console.error('❌ Error creating user:', error);
-        throw error;
+        // Check if error is specifically about the mode column
+        const isModeError = error.message?.includes('mode') || 
+                           error.message?.includes('column "mode"') ||
+                           error.code === '42703' || 
+                           error.code === 'PGRST116' ||
+                           error.message?.toLowerCase().includes('does not exist');
+        
+        if (isModeError) {
+          console.log('Mode column does not exist, creating user without mode...');
+          modeColumnExists = false;
+          delete insertData.mode;
+          
+          const { data: retryUser, error: retryError } = await supabase
+            .from('users')
+            .insert(insertData)
+            .select()
+            .single();
+          
+          if (retryError) {
+            console.error('❌ Error creating user:', retryError);
+            throw retryError;
+          }
+          
+          if (!retryUser || !retryUser.id) {
+            throw new Error('User was created but no ID was returned. Please try again.');
+          }
+          
+          finalUser = retryUser;
+          createdUser = retryUser;
+          
+          // Only show error if mode column truly doesn't exist
+          if (!modeColumnExists) {
+            toast.error('User created, but mode column does not exist. Please add it to the database using: ALTER TABLE users ADD COLUMN mode TEXT CHECK (mode IN (\'regular\', \'itr\'));', { duration: 10000 });
+          }
+        } else {
+          console.error('❌ Error creating user:', error);
+          throw error;
+        }
+      } else {
+        createdUser = userData;
+        finalUser = userData;
+        // User created successfully with mode - column exists!
+        modeColumnExists = true;
       }
 
-      if (!createdUser || !createdUser.id) {
+      if (!createdUser || !createdUser.id || !finalUser || !finalUser.id) {
         throw new Error('User was created but no ID was returned. Please try again.');
       }
 
-      console.log('✅ User created with ID:', createdUser.id);
+      console.log('✅ User created with ID:', finalUser.id);
 
       // CRITICAL: Verify user exists in database with aggressive retry logic
       // This is essential because foreign key constraints require the user to exist
@@ -300,7 +439,7 @@ const UserManagement: React.FC = () => {
         const { data, error: checkError } = await supabase
           .from('users')
           .select('id, username')
-          .eq('id', createdUser.id)
+          .eq('id', finalUser.id)
           .single();
         
         if (data && !checkError) {
@@ -315,7 +454,7 @@ const UserManagement: React.FC = () => {
 
       if (!verifyUser) {
         console.error('❌ User verification failed after', maxRetries, 'attempts:', verifyError);
-        throw new Error(`User was created but cannot be verified in database after ${maxRetries} attempts. The user ID is ${createdUser.id}. This might be a database issue. Please check the database and try again.`);
+        throw new Error(`User was created but cannot be verified in database after ${maxRetries} attempts. The user ID is ${finalUser.id}. This might be a database issue. Please check the database and try again.`);
       }
 
       // Additional wait to ensure database has fully committed the user
@@ -332,8 +471,8 @@ const UserManagement: React.FC = () => {
           toast.error('User created but no valid features to save.');
         } else {
           console.log('🔧 Saving features for user:', {
-            userId: createdUser.id,
-            username: createdUser.username,
+            userId: finalUser.id,
+            username: finalUser.username,
             features: uniqueFeatures
           });
           
@@ -368,13 +507,13 @@ const UserManagement: React.FC = () => {
           const { data: finalUserCheck, error: finalCheckError } = await supabase
             .from('users')
             .select('id')
-            .eq('id', createdUser.id)
+            .eq('id', finalUser.id)
             .single();
           
           if (!finalUserCheck || finalCheckError) {
             console.error('❌ Final user check failed before inserting features:', {
               error: finalCheckError,
-              userId: createdUser.id
+              userId: finalUser.id
             });
             
             // Try one more time after waiting longer
@@ -382,7 +521,7 @@ const UserManagement: React.FC = () => {
             const { data: retryCheck } = await supabase
               .from('users')
               .select('id')
-              .eq('id', createdUser.id)
+              .eq('id', finalUser.id)
               .single();
             
             if (!retryCheck) {
@@ -416,11 +555,11 @@ const UserManagement: React.FC = () => {
                 const { data: userCheck } = await supabase
                   .from('users')
                   .select('id')
-                  .eq('id', createdUser.id)
+                  .eq('id', finalUser.id)
                   .single();
                 
                 if (!userCheck) {
-                  console.error(`❌ User ${createdUser.id} not found before retry ${retry + 1} for feature "${trimmedKey}"`);
+                  console.error(`❌ User ${finalUser.id} not found before retry ${retry + 1} for feature "${trimmedKey}"`);
                   lastError = new Error('User not found in database');
                   continue;
                 }
@@ -430,7 +569,7 @@ const UserManagement: React.FC = () => {
                 const { error: singleError, data: singleData } = await supabase
                   .from('user_access')
                   .upsert({
-                    user_id: createdUser.id,
+                    user_id: finalUser.id,
                     feature_key: trimmedKey,
                   }, {
                     onConflict: 'user_id,feature_key'
@@ -474,7 +613,7 @@ const UserManagement: React.FC = () => {
                     const { data: verify } = await supabase
                       .from('user_access')
                       .select('id')
-                      .eq('user_id', createdUser.id)
+                      .eq('user_id', finalUser.id)
                       .eq('feature_key', trimmedKey)
                       .maybeSingle();
                     
@@ -526,7 +665,7 @@ const UserManagement: React.FC = () => {
           const { data: verifyData, error: verifyError } = await supabase
             .from('user_access')
             .select('feature_key')
-            .eq('user_id', createdUser.id);
+            .eq('user_id', finalUser.id);
           
           if (!verifyError && verifyData) {
             const savedFeatures = verifyData.map(d => d.feature_key).filter(Boolean);
