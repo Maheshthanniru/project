@@ -13,6 +13,7 @@ import { TableModeProvider } from './contexts/TableModeContext';
 import { queryClient } from './lib/queryClient';
 import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
+import ModeSelection from './pages/ModeSelection';
 import Dashboard from './pages/Dashboard';
 import NewEntry from './pages/NewEntry';
 import EditEntry from './pages/EditEntry';
@@ -92,7 +93,7 @@ class ErrorBoundary extends React.Component<
 const AppContent: React.FC = () => {
   // Protected Route Component - Must be inside AuthProvider and Router
   // Defined here to ensure it's always within the AuthProvider context
-  const ProtectedRouteWrapper: React.FC = () => {
+  const ProtectedRouteWrapper: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAuth();
 
     if (loading) {
@@ -106,7 +107,17 @@ const AppContent: React.FC = () => {
       );
     }
 
-    return user ? <Layout /> : <Navigate to='/login' replace />;
+    if (!user) {
+      return <Navigate to='/login' replace />;
+    }
+
+    // If children provided, render them (for mode-selection page)
+    if (children) {
+      return <>{children}</>;
+    }
+
+    // Otherwise render Layout (for other protected routes)
+    return <Layout />;
   };
 
   return (
@@ -138,6 +149,14 @@ const AppContent: React.FC = () => {
 
       <Routes>
         <Route path='/login' element={<Login />} />
+        <Route
+          path='/mode-selection'
+          element={
+            <ProtectedRouteWrapper>
+              <ModeSelection />
+            </ProtectedRouteWrapper>
+          }
+        />
         <Route
           path='/*'
           element={<ProtectedRouteWrapper />}

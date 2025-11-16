@@ -5,6 +5,7 @@ type TableMode = 'regular' | 'itr';
 interface TableModeContextType {
   mode: TableMode;
   toggleMode: () => void;
+  setMode: (mode: TableMode) => void;
   isITRMode: boolean;
 }
 
@@ -36,9 +37,14 @@ export const TableModeProvider: React.FC<{ children: React.ReactNode }> = ({
     setMode(prev => (prev === 'regular' ? 'itr' : 'regular'));
   };
 
+  const setModeDirect = (newMode: TableMode) => {
+    setMode(newMode);
+  };
+
   const value: TableModeContextType = {
     mode,
     toggleMode,
+    setMode: setModeDirect,
     isITRMode: mode === 'itr',
   };
 

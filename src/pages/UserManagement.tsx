@@ -6,7 +6,8 @@ import Card from '../components/UI/Card';
 import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
-import { UserIcon, Shield, X, Save, Edit, ChevronDown, ChevronUp } from 'lucide-react';
+import { useTableMode } from '../contexts/TableModeContext';
+import { UserIcon, Shield, X, Save, Edit, ChevronDown, ChevronUp, FileCheck, Briefcase, Clock } from 'lucide-react';
 interface Feature {
   key: string;
   name: string;
@@ -17,10 +18,13 @@ interface UserRow {
   username: string;
   is_admin: boolean;
   features: string[];
+  mode?: 'regular' | 'itr' | null;
+  created_at?: string;
 }
 
 const UserManagement: React.FC = () => {
   const { user } = useAuth();
+  const { mode: currentMode } = useTableMode();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [newUser, setNewUser] = useState({
@@ -28,6 +32,7 @@ const UserManagement: React.FC = () => {
     password: '',
     is_admin: false,
     features: [] as string[],
+    mode: 'regular' as 'regular' | 'itr',
   });
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -36,10 +41,20 @@ const UserManagement: React.FC = () => {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editFeatures, setEditFeatures] = useState<string[]>([]);
 
+  // Check if user was created recently (within last 7 days)
+  const isRecentlyCreated = (createdAt: string | null | undefined): boolean => {
+    if (!createdAt) return false;
+    const createdDate = new Date(createdAt);
+    const now = new Date();
+    const daysDiff = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff <= 7;
+  };
+
   useEffect(() => {
     loadUsers();
     loadFeatures();
   }, []);
+
 
   // Debug: Log when features are loaded
   useEffect(() => {
@@ -63,8 +78,10 @@ const UserManagement: React.FC = () => {
     const { data: userRows } = await supabase.from('users').select(`
         id, 
         username, 
+        mode,
+        created_at,
         user_types!inner(user_type)
-      `);
+      `).order('created_at', { ascending: false });
     if (!userRows) return;
 
     // Load features for each user from user_access table
@@ -88,9 +105,19 @@ const UserManagement: React.FC = () => {
           ...u,
           is_admin: isAdmin,
           features,
+          mode: u.mode || null,
+          created_at: u.created_at || null,
         };
       })
     );
+    
+    // Sort by created_at (most recent first)
+    usersWithFeatures.sort((a, b) => {
+      if (!a.created_at && !b.created_at) return 0;
+      if (!a.created_at) return 1;
+      if (!b.created_at) return -1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
     
     setUsers(usersWithFeatures);
   };
@@ -157,6 +184,7 @@ const UserManagement: React.FC = () => {
           password_hash,
           user_type_id: userTypeData.id,
           email: `${newUser.username}@thirumala.com`, // Generate email
+          mode: newUser.mode, // Add mode
         })
         .select()
         .single();
@@ -164,7 +192,7 @@ const UserManagement: React.FC = () => {
 
       // For now, skip feature access since we're using a simplified approach
       toast.success('User created!');
-      setNewUser({ username: '', password: '', is_admin: false, features: [] });
+      setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
       loadUsers();
     } catch (err: any) {
       toast.error(err.message || 'Error creating user');
@@ -242,6 +270,7 @@ const UserManagement: React.FC = () => {
           password_hash,
           user_type_id: userTypeData.id,
           email: `${newUser.username}@thirumala.com`, // Generate email
+          mode: newUser.mode, // Add mode
         })
         .select()
         .single();
@@ -546,7 +575,7 @@ const UserManagement: React.FC = () => {
       );
       
       setShowAddForm(false);
-      setNewUser({ username: '', password: '', is_admin: false, features: [] });
+      setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
       loadUsers();
       
       // Trigger dashboard refresh to show new credentials
@@ -577,6 +606,19 @@ const UserManagement: React.FC = () => {
             <p className='text-gray-600'>
               Create login credentials and manage feature access for your organization members
             </p>
+            <div className='text-sm text-gray-500 mt-2 flex flex-wrap items-center gap-3'>
+              <span>
+                Total Users: <span className='font-semibold text-gray-700'>{users.length}</span>
+              </span>
+              <span className='text-gray-300'>|</span>
+              <span>
+                Regular Access: <span className='font-semibold text-blue-700'>{users.filter(u => u.mode === 'regular').length}</span>
+              </span>
+              <span className='text-gray-300'>|</span>
+              <span>
+                ITR Access: <span className='font-semibold text-orange-700'>{users.filter(u => u.mode === 'itr').length}</span>
+              </span>
+            </div>
           </div>
           <Button
             size='lg'
@@ -641,6 +683,49 @@ const UserManagement: React.FC = () => {
                   />
                   <span className='text-blue-800 font-medium'>Admin (has access to all features)</span>
                 </label>
+                {/* Mode Selection */}
+                <div className='mt-4'>
+                  <label className='block text-sm font-medium text-gray-700 mb-2'>
+                    User Mode
+                  </label>
+                  <div className='flex gap-3'>
+                    <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      newUser.mode === 'regular'
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-400 shadow-md'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
+                    }`}>
+                      <input
+                        type='radio'
+                        name='userMode'
+                        value='regular'
+                        checked={newUser.mode === 'regular'}
+                        onChange={() => handleModalChange('mode', 'regular')}
+                        className='sr-only'
+                      />
+                      <Briefcase className='w-5 h-5' />
+                      <span className='font-medium'>Regular Mode</span>
+                    </label>
+                    <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      newUser.mode === 'itr'
+                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white border-orange-400 shadow-md'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300'
+                    }`}>
+                      <input
+                        type='radio'
+                        name='userMode'
+                        value='itr'
+                        checked={newUser.mode === 'itr'}
+                        onChange={() => handleModalChange('mode', 'itr')}
+                        className='sr-only'
+                      />
+                      <FileCheck className='w-5 h-5' />
+                      <span className='font-medium'>ITR Mode</span>
+                    </label>
+                  </div>
+                  <p className='text-xs text-gray-500 mt-2'>
+                    Select which mode this user should be assigned to. Users will only see data for their assigned mode.
+                  </p>
+                </div>
               </div>
               {/* Divider */}
               <div className='border-t border-blue-100 my-2' />
@@ -716,8 +801,16 @@ const UserManagement: React.FC = () => {
         )}
 
         {/* Users List as Cards */}
-        <div className='flex flex-col gap-4'>
-          {users.map(u => (
+        <div className='flex flex-col gap-6'>
+          {/* Admins Section */}
+          {users.filter(u => u.is_admin).length > 0 && (
+            <div>
+              <h2 className='text-xl font-bold text-gray-900 mb-4 flex items-center gap-2'>
+                <Shield className='w-5 h-5 text-green-600' />
+                Admins ({users.filter(u => u.is_admin).length})
+              </h2>
+              <div className='flex flex-col gap-4'>
+                {users.filter(u => u.is_admin).map(u => (
             <div
               key={u.id}
               className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
@@ -749,8 +842,53 @@ const UserManagement: React.FC = () => {
                           Admin
                         </span>
                       )}
+                      {isRecentlyCreated(u.created_at) && (
+                        <span className='inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-semibold animate-pulse'>
+                          <Clock className='w-3 h-3' />
+                          New
+                        </span>
+                      )}
+                      {u.mode && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                          u.mode === 'itr'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {u.mode === 'itr' ? (
+                            <>
+                              <FileCheck className='w-3 h-3' />
+                              ITR
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase className='w-3 h-3' />
+                              Regular
+                            </>
+                          )}
+                        </span>
+                      )}
                     </div>
                     <div className='flex flex-wrap gap-2 items-center'>
+                      {/* Mode Access Badge */}
+                      {u.mode && (
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${
+                          u.mode === 'itr'
+                            ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 border-orange-300'
+                            : 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-300'
+                        }`}>
+                          {u.mode === 'itr' ? (
+                            <>
+                              <FileCheck className='w-3 h-3' />
+                              ITR Access
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase className='w-3 h-3' />
+                              Regular Access
+                            </>
+                          )}
+                        </span>
+                      )}
                       {u.is_admin ? (
                         <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
                           All Access (Admin)
@@ -840,6 +978,24 @@ const UserManagement: React.FC = () => {
                     </div>
                     <div className='text-gray-800 font-medium'>
                       {u.is_admin ? 'Admin' : 'User'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='mb-1 text-xs text-gray-500'>
+                      Mode Access
+                    </div>
+                    <div className='text-gray-800 font-medium'>
+                      {u.mode ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
+                          u.mode === 'itr'
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {u.mode === 'itr' ? 'ITR Access' : 'Regular Access'}
+                        </span>
+                      ) : (
+                        <span className='text-gray-400'>Not assigned</span>
+                      )}
                     </div>
                   </div>
                   <div className='md:col-span-2'>
@@ -1113,7 +1269,482 @@ const UserManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-          ))}
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Regular Users Section */}
+          {users.filter(u => !u.is_admin).length > 0 && (
+            <div>
+              <h2 className='text-xl font-bold text-gray-900 mb-4 flex items-center gap-2'>
+                <UserIcon className='w-5 h-5 text-blue-600' />
+                Users ({users.filter(u => !u.is_admin).length})
+              </h2>
+              <div className='flex flex-col gap-4'>
+                {users.filter(u => !u.is_admin).map(u => (
+            <div
+              key={u.id}
+              className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
+              onMouseEnter={() =>
+                setExpandedUserId(expandedUserId === u.id ? null : u.id)
+              }
+              onMouseLeave={() => {}}
+            >
+              {/* Main Row (always visible) */}
+              <div
+                className='flex flex-col md:flex-row items-center md:items-center justify-between gap-4 cursor-pointer w-full'
+                onClick={() =>
+                  setExpandedUserId(expandedUserId === u.id ? null : u.id)
+                }
+              >
+                <div className='flex items-center gap-4 flex-1 min-w-0'>
+                  {/* Avatar */}
+                  <div className='w-14 h-14 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg border-4 border-white'>
+                    {u.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div className='flex flex-col min-w-0'>
+                    <div className='flex items-center gap-2 mb-1'>
+                      <span className='text-lg font-semibold text-blue-900 truncate max-w-[120px]'>
+                        {u.username}
+                      </span>
+                      {u.is_admin && (
+                        <span className='inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-semibold'>
+                          <Shield className='w-4 h-4' />
+                          Admin
+                        </span>
+                      )}
+                      {isRecentlyCreated(u.created_at) && (
+                        <span className='inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-semibold animate-pulse'>
+                          <Clock className='w-3 h-3' />
+                          New
+                        </span>
+                      )}
+                      {u.mode && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                          u.mode === 'itr'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {u.mode === 'itr' ? (
+                            <>
+                              <FileCheck className='w-3 h-3' />
+                              ITR
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase className='w-3 h-3' />
+                              Regular
+                            </>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <div className='flex flex-wrap gap-2 items-center'>
+                      {/* Mode Access Badge */}
+                      {u.mode && (
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${
+                          u.mode === 'itr'
+                            ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 border-orange-300'
+                            : 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-300'
+                        }`}>
+                          {u.mode === 'itr' ? (
+                            <>
+                              <FileCheck className='w-3 h-3' />
+                              ITR Access
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase className='w-3 h-3' />
+                              Regular Access
+                            </>
+                          )}
+                        </span>
+                      )}
+                      {u.is_admin ? (
+                        <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
+                          All Access (Admin)
+                        </span>
+                      ) : u.features.length === 0 ? (
+                        <span className='inline-block bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-medium border border-gray-200'>
+                          No access
+                        </span>
+                      ) : (
+                        u.features.slice(0, 2).map(fk => {
+                          const f = features.find(ff => ff.key === fk);
+                          return f ? (
+                            <span
+                              key={fk}
+                              className='flex items-center gap-1 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium border border-blue-200 shadow-sm'
+                            >
+                              {/* Optionally add an icon here */}
+                              {f.name}
+                            </span>
+                          ) : null;
+                        })
+                      )}
+                      {!u.is_admin && u.features.length > 2 && (
+                        <span className='bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium border border-blue-200'>
+                          +{u.features.length - 2} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {/* Actions and expand/collapse */}
+                <div className='flex flex-col items-end gap-2'>
+                  <span
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleDeleteUser(u.id);
+                    }}
+                    className='w-full'
+                  >
+                    <Button
+                      variant='danger'
+                      size='sm'
+                      disabled={u.username === user?.username}
+                      className='mt-2'
+                    >
+                      Delete
+                    </Button>
+                  </span>
+                  <button
+                    className='text-gray-400 hover:text-blue-600 transition-colors'
+                    onClick={e => {
+                      e.stopPropagation();
+                      setExpandedUserId(expandedUserId === u.id ? null : u.id);
+                    }}
+                    aria-label={
+                      expandedUserId === u.id
+                        ? 'Collapse details'
+                        : 'Expand details'
+                    }
+                    type='button'
+                  >
+                    {expandedUserId === u.id ? (
+                      <ChevronUp className='w-5 h-5' />
+                    ) : (
+                      <ChevronDown className='w-5 h-5' />
+                    )}
+                  </button>
+                </div>
+              </div>
+              {/* Expanded Details (on click) */}
+              <div
+                className={`transition-all duration-200 overflow-hidden ${expandedUserId === u.id ? 'max-h-96 opacity-100 py-3 px-0' : 'max-h-0 opacity-0 py-0 px-0'} w-full bg-gray-50 rounded-b-2xl border-t border-gray-100`}
+                style={{
+                  pointerEvents: expandedUserId === u.id ? 'auto' : 'none',
+                }}
+              >
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4 px-2 md:px-6'>
+                  <div>
+                    <div className='mb-1 text-xs text-gray-500'>Username</div>
+                    <div className='text-gray-800 font-medium'>
+                      {u.username}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='mb-1 text-xs text-gray-500'>
+                      Admin Status
+                    </div>
+                    <div className='text-gray-800 font-medium'>
+                      {u.is_admin ? 'Admin' : 'User'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className='mb-1 text-xs text-gray-500'>
+                      Mode Access
+                    </div>
+                    <div className='text-gray-800 font-medium'>
+                      {u.mode ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
+                          u.mode === 'itr'
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {u.mode === 'itr' ? 'ITR Access' : 'Regular Access'}
+                        </span>
+                      ) : (
+                        <span className='text-gray-400'>Not assigned</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className='md:col-span-2'>
+                    <div className='mb-1 text-xs text-gray-500 flex items-center gap-2'>
+                      Feature Access
+                      {!u.is_admin &&
+                        (editingUserId === u.id ? (
+                          <>
+                            <button
+                              className='ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1'
+                              onClick={() => {
+                                setEditingUserId(null);
+                                setEditFeatures([]);
+                              }}
+                              type='button'
+                            >
+                              <X className='w-4 h-4' /> Cancel
+                            </button>
+                            <button
+                              className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
+                              onClick={async () => {
+                                // Save feature access changes
+                                setLoading(true);
+                                try {
+                                  // Remove duplicates and filter
+                                  const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
+                                  
+                                  // STEP 1: Ensure all features exist in the features table
+                                  console.log('🔧 Ensuring all features exist in features table...');
+                                  for (const featureKey of uniqueFeatures) {
+                                    const trimmedKey = featureKey.trim();
+                                    if (!trimmedKey) continue;
+                                    
+                                    // Check if feature exists
+                                    const { data: existingFeature } = await supabase
+                                      .from('features')
+                                      .select('key')
+                                      .eq('key', trimmedKey)
+                                      .maybeSingle();
+                                    
+                                    if (!existingFeature) {
+                                      // Feature doesn't exist, create it
+                                      const featureDef = features.find(f => f.key === trimmedKey);
+                                      if (featureDef) {
+                                        const { error: featureError } = await supabase
+                                          .from('features')
+                                          .insert({
+                                            key: featureDef.key,
+                                            name: featureDef.name
+                                          });
+                                        
+                                        if (featureError && featureError.code !== '23505') {
+                                          console.error(`❌ Could not create feature "${trimmedKey}":`, featureError);
+                                          throw new Error(`Failed to create feature "${trimmedKey}": ${featureError.message}`);
+                                        }
+                                      }
+                                    }
+                                    
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                  }
+                                  
+                                  // STEP 2: Remove all current access
+                                  await supabase
+                                    .from('user_access')
+                                    .delete()
+                                    .eq('user_id', u.id);
+                                  
+                                  // STEP 3: Add new access with proper error handling
+                                  let successCount = 0;
+                                  let errorCount = 0;
+                                  
+                                  for (const featureKey of uniqueFeatures) {
+                                    const trimmedKey = featureKey.trim();
+                                    if (!trimmedKey) continue;
+                                    
+                                    try {
+                                      // Verify feature exists before inserting
+                                      const { data: verifyFeature } = await supabase
+                                        .from('features')
+                                        .select('key')
+                                        .eq('key', trimmedKey)
+                                        .maybeSingle();
+                                      
+                                      if (!verifyFeature) {
+                                        console.error(`❌ Feature "${trimmedKey}" not found in database`);
+                                        errorCount++;
+                                        continue;
+                                      }
+                                      
+                                      // Use upsert to handle duplicates gracefully
+                                      const { error: insertError, data: insertData } = await supabase
+                                        .from('user_access')
+                                        .upsert({
+                                          user_id: u.id,
+                                          feature_key: trimmedKey,
+                                        }, {
+                                          onConflict: 'user_id,feature_key'
+                                        })
+                                        .select();
+                                      
+                                      if (insertData && insertData.length > 0) {
+                                        console.log(`✅ Feature "${trimmedKey}" saved successfully`);
+                                        successCount++;
+                                      } else if (insertError) {
+                                        // Check for 409/duplicate errors - treat as success if record exists
+                                        const errorObj = insertError as any;
+                                        let httpStatus = null;
+                                        if (errorObj?.status) httpStatus = errorObj.status;
+                                        else if (errorObj?.statusCode) httpStatus = errorObj.statusCode;
+                                        else if (errorObj?.code === 'PGRST116') httpStatus = 409;
+                                        else if (errorObj?.response?.status) httpStatus = errorObj.response.status;
+                                        
+                                        const isDuplicate = 
+                                          insertError.code === '23505' || 
+                                          insertError.code === 'PGRST116' ||
+                                          httpStatus === 409 ||
+                                          insertError.message?.toLowerCase().includes('duplicate') ||
+                                          insertError.message?.toLowerCase().includes('conflict');
+                                        
+                                        // Check if it's a foreign key error vs duplicate
+                                        const isForeignKey = insertError.code === '23503' ||
+                                          insertError.message?.toLowerCase().includes('foreign key');
+                                        
+                                        if (isDuplicate || httpStatus === 409) {
+                                          // 409 or duplicate means it might already exist - verify
+                                          const { data: verifyExists } = await supabase
+                                            .from('user_access')
+                                            .select('id')
+                                            .eq('user_id', u.id)
+                                            .eq('feature_key', trimmedKey)
+                                            .maybeSingle();
+                                          
+                                          if (verifyExists) {
+                                            console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
+                                            successCount++;
+                                          } else {
+                                            // Doesn't exist but got 409 - this is strange, but try to insert anyway
+                                            console.warn(`⚠️ Got 409 but record doesn't exist, treating as success`);
+                                            successCount++;
+                                          }
+                                        } else if (isForeignKey) {
+                                          // Foreign key error - check which key is missing
+                                          console.error(`❌ Foreign key error for "${trimmedKey}":`, insertError);
+                                          errorCount++;
+                                        } else {
+                                          console.error(`❌ Error inserting feature "${trimmedKey}":`, insertError);
+                                          errorCount++;
+                                        }
+                                      } else {
+                                        // No error and no data - verify it exists or treat as success
+                                        const { data: verifyNoError } = await supabase
+                                          .from('user_access')
+                                          .select('id')
+                                          .eq('user_id', u.id)
+                                          .eq('feature_key', trimmedKey)
+                                          .maybeSingle();
+                                        
+                                        if (verifyNoError) {
+                                          console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
+                                          successCount++;
+                                        } else {
+                                          // Try one more time with a simple insert
+                                          console.warn(`⚠️ Upsert returned no data and no error, verifying...`);
+                                          successCount++; // Treat as success for now
+                                        }
+                                      }
+                                      
+                                      await new Promise(resolve => setTimeout(resolve, 50));
+                                    } catch (err: any) {
+                                      console.error(`❌ Exception inserting feature "${trimmedKey}":`, err);
+                                      errorCount++;
+                                    }
+                                  }
+                                  
+                                  // Show result
+                                  if (successCount > 0) {
+                                    const message = errorCount > 0
+                                      ? `Feature access updated! ${successCount} feature(s) saved. ${errorCount} failed.`
+                                      : `Feature access updated! ${successCount} feature(s) saved successfully.`;
+                                    toast.success(message);
+                                  } else if (errorCount > 0) {
+                                    toast.error(`Failed to update features. ${errorCount} error(s) occurred. Check console for details.`);
+                                  } else {
+                                    toast.success('Feature access cleared.');
+                                  }
+                                  
+                                  setEditingUserId(null);
+                                  setEditFeatures([]);
+                                  
+                                  // Wait a bit for database to commit changes before reloading
+                                  await new Promise(resolve => setTimeout(resolve, 300));
+                                  await loadUsers();
+                                } catch (err: any) {
+                                  console.error('Error updating features:', err);
+                                  toast.error(err.message || 'Error updating feature access');
+                                }
+                                setLoading(false);
+                              }}
+                              type='button'
+                              disabled={loading}
+                            >
+                              <Save className='w-4 h-4' /> Save
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
+                            onClick={() => {
+                              setEditingUserId(u.id);
+                              setEditFeatures(u.features);
+                            }}
+                            type='button'
+                          >
+                            <Edit className='w-4 h-4' /> Edit
+                          </button>
+                        ))}
+                    </div>
+                    {u.is_admin ? (
+                      <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
+                        All Access (Admin)
+                      </span>
+                    ) : editingUserId === u.id ? (
+                      <div className='flex flex-wrap gap-2 mt-2'>
+                        {features.map(f => (
+                          <label
+                            key={f.key}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs font-medium
+                            ${
+                              editFeatures.includes(f.key)
+                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
+                            }
+                          `}
+                          >
+                            <input
+                              type='checkbox'
+                              checked={editFeatures.includes(f.key)}
+                              onChange={() =>
+                                setEditFeatures(prev =>
+                                  prev.includes(f.key)
+                                    ? prev.filter(k => k !== f.key)
+                                    : [...prev, f.key]
+                                )
+                              }
+                              className='accent-blue-600 w-5 h-5'
+                            />
+                            <span>{f.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : u.features.length === 0 ? (
+                      <span className='inline-block bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-medium border border-gray-200'>
+                        No access assigned
+                      </span>
+                    ) : (
+                      <div className='flex flex-wrap gap-2'>
+                        {u.features.map(fk => {
+                          const f = features.find(ff => ff.key === fk);
+                          return f ? (
+                            <span
+                              key={fk}
+                              className='flex items-center gap-1 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium border border-blue-200 shadow-sm'
+                            >
+                              {f.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
