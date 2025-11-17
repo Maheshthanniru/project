@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTableMode } from '../contexts/TableModeContext';
 import Button from '../components/UI/Button';
-import { FileCheck, Briefcase } from 'lucide-react';
+import { FileCheck, Briefcase, Wallet } from 'lucide-react';
 
 const ModeSelection: React.FC = () => {
   const navigate = useNavigate();
@@ -41,22 +41,37 @@ const ModeSelection: React.FC = () => {
 
         {/* Mode Selection Buttons */}
         <div className='px-8 py-6'>
-          <div className='space-y-4'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
             <Button
               onClick={handleRegularMode}
-              className='w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 text-lg font-semibold shadow-lg flex items-center justify-center gap-3'
+              className='w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-6 text-lg font-semibold shadow-lg flex flex-col gap-2'
             >
-              <Briefcase className='w-6 h-6' />
+              <Briefcase className='w-8 h-8' />
               Regular Mode
             </Button>
 
             <Button
               onClick={handleITRMode}
-              className='w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white py-4 text-lg font-semibold shadow-lg flex items-center justify-center gap-3'
+              className='w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white py-6 text-lg font-semibold shadow-lg flex flex-col gap-2'
             >
-              <FileCheck className='w-6 h-6' />
+              <FileCheck className='w-8 h-8' />
               ITR Mode
             </Button>
+
+            <Button
+              disabled
+              className='w-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 text-white py-6 text-lg font-semibold shadow-lg flex flex-col gap-2'
+            >
+              <Wallet className='w-8 h-8' />
+              Finance
+            </Button>
+
+            <button
+              type='button'
+              disabled
+              aria-hidden='true'
+              className='h-full w-full rounded-2xl bg-gradient-to-r from-black to-gray-900 shadow-inner shadow-black opacity-80'
+            />
           </div>
         </div>
       </div>

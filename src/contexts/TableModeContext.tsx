@@ -31,6 +31,11 @@ export const TableModeProvider: React.FC<{ children: React.ReactNode }> = ({
   // Save to localStorage whenever mode changes
   useEffect(() => {
     localStorage.setItem('table_mode', mode);
+    window.dispatchEvent(
+      new CustomEvent<'regular' | 'itr'>('table-mode-changed', {
+        detail: mode,
+      })
+    );
   }, [mode]);
 
   const toggleMode = () => {

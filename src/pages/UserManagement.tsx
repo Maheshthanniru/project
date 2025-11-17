@@ -7,7 +7,99 @@ import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import { useTableMode } from '../contexts/TableModeContext';
-import { UserIcon, Shield, X, Save, Edit, ChevronDown, ChevronUp, FileCheck, Briefcase, Clock } from 'lucide-react';
+import {
+  UserIcon,
+  Shield,
+  X,
+  Save,
+  Edit,
+  ChevronDown,
+  ChevronUp,
+  FileCheck,
+  Briefcase,
+  Clock,
+} from 'lucide-react';
+
+type ModeKey = 'regular' | 'itr';
+const MODE_VALUES: ModeKey[] = ['regular', 'itr'];
+const MODE_LABELS: Record<ModeKey, string> = {
+  regular: 'Regular Mode',
+  itr: 'ITR Mode',
+};
+const MODE_BADGES: Record<
+  ModeKey,
+  { badge: string; text: string; gradient: string }
+> = {
+  regular: {
+    badge: 'bg-blue-100 text-blue-800 border-blue-300',
+    text: 'text-blue-700',
+    gradient: 'from-blue-500 to-blue-600',
+  },
+  itr: {
+    badge: 'bg-orange-100 text-orange-800 border-orange-300',
+    text: 'text-orange-700',
+    gradient: 'from-orange-500 to-red-600',
+  },
+};
+const USER_ACCESS_MODE_SQL =
+  "ALTER TABLE user_access ADD COLUMN mode TEXT CHECK (mode IN ('regular','itr')) DEFAULT 'regular';";
+const isUserAccessModeError = (error?: { message?: string; code?: string }) => {
+  if (!error) return false;
+  const msg = error.message?.toLowerCase() ?? '';
+  return (
+    msg.includes('column "mode"') ||
+    msg.includes('mode') ||
+    msg.includes('does not exist') ||
+    error.code === '42703'
+  );
+};
+
+const emptyModeFeatures = (): Record<ModeKey, string[]> => ({
+  regular: [],
+  itr: [],
+});
+const normalizeFeatures = (items?: string[]) =>
+  [...new Set((items || []).map(item => item?.trim()).filter(Boolean))] as string[];
+const mapFeaturesByMode = (featuresByMode: Record<ModeKey, string[]>) =>
+  MODE_VALUES.map(mode => ({
+    mode,
+    features: normalizeFeatures(featuresByMode?.[mode] || []),
+  }));
+type ModeBadgeVariant = 'summary' | 'detail';
+const renderModeBadge = (
+  modeKey: ModeKey,
+  count: number,
+  variant: ModeBadgeVariant
+) => {
+  const Icon = modeKey === 'itr' ? FileCheck : Briefcase;
+  const label =
+    variant === 'summary'
+      ? modeKey === 'itr'
+        ? 'ITR'
+        : 'Regular'
+      : modeKey === 'itr'
+      ? 'ITR Access'
+      : 'Regular Access';
+  const hasAccess = count > 0;
+  const colorClasses = hasAccess
+    ? MODE_BADGES[modeKey].badge
+    : 'bg-gray-50 text-gray-400 border-gray-200';
+  const padding =
+    variant === 'summary' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1.5 text-xs';
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border font-semibold ${padding} ${colorClasses}`}
+    >
+      <Icon className='w-3 h-3' />
+      {label}
+      {hasAccess && (
+        <span className='text-[10px] font-bold ml-1'>{count}</span>
+      )}
+    </span>
+  );
+};
+
 interface Feature {
   key: string;
   name: string;
@@ -18,8 +110,17 @@ interface UserRow {
   username: string;
   is_admin: boolean;
   features: string[];
+  featuresByMode?: Record<ModeKey, string[]>;
   mode?: 'regular' | 'itr' | null;
   created_at?: string;
+}
+
+interface NewUserFormState {
+  username: string;
+  password: string;
+  is_admin: boolean;
+  mode: ModeKey;
+  featuresByMode: Record<ModeKey, string[]>;
 }
 
 const UserManagement: React.FC = () => {
@@ -27,19 +128,21 @@ const UserManagement: React.FC = () => {
   const { mode: currentMode } = useTableMode();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
-  const [newUser, setNewUser] = useState({
+  const [newUser, setNewUser] = useState<NewUserFormState>(() => ({
     username: '',
     password: '',
     is_admin: false,
-    features: [] as string[],
-    mode: 'regular' as 'regular' | 'itr',
-  });
+    featuresByMode: emptyModeFeatures(),
+    mode: currentMode,
+  }));
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editFeatures, setEditFeatures] = useState<string[]>([]);
+  const [userAccessModeSupported, setUserAccessModeSupported] = useState<boolean | null>(null);
+  const [modeWarningShown, setModeWarningShown] = useState(false);
 
   // Check if user was created recently (within last 7 days)
   const isRecentlyCreated = (createdAt: string | null | undefined): boolean => {
@@ -55,6 +158,15 @@ const UserManagement: React.FC = () => {
     loadFeatures();
   }, []);
 
+  useEffect(() => {
+    loadUsers();
+  }, [currentMode]);
+
+useEffect(() => {
+  setEditFeatures([]);
+  setNewUser(prev => ({ ...prev, mode: currentMode }));
+}, [currentMode]);
+
 
   // Debug: Log when features are loaded
   useEffect(() => {
@@ -69,8 +181,7 @@ const UserManagement: React.FC = () => {
     console.log('👤 New user state:', {
       username: newUser.username,
       is_admin: newUser.is_admin,
-      features: newUser.features,
-      featuresCount: newUser.features?.length || 0
+      featuresByMode: newUser.featuresByMode,
     });
   }, [newUser]);
 
@@ -137,19 +248,45 @@ const UserManagement: React.FC = () => {
         // If admin, they have all features (handled in AuthContext)
         // If not admin, load their features from user_access table
         let features: string[] = [];
+        let featuresByMode = emptyModeFeatures();
         if (!isAdmin) {
-          const { data: accessData } = await supabase
+          const { data: accessData, error: accessError } = await supabase
             .from('user_access')
-            .select('feature_key')
+            .select('feature_key, mode')
             .eq('user_id', u.id);
-          
-          features = accessData?.map(a => a.feature_key) || [];
+
+          let rows = accessData || [];
+          if (accessError && isUserAccessModeError(accessError)) {
+            const { data: fallbackData } = await supabase
+              .from('user_access')
+              .select('feature_key')
+              .eq('user_id', u.id);
+            rows =
+              fallbackData?.map(item => ({
+                feature_key: item.feature_key,
+                mode: 'regular',
+              })) || [];
+          }
+
+          const grouped = emptyModeFeatures();
+          rows.forEach(item => {
+            const key = item?.feature_key;
+            if (!key) return;
+            const modeKey: ModeKey = item?.mode === 'itr' ? 'itr' : 'regular';
+            if (!grouped[modeKey].includes(key)) {
+              grouped[modeKey].push(key);
+            }
+          });
+          featuresByMode = grouped;
+          features = grouped[currentMode] || [];
         }
+
 
         return {
           ...u,
           is_admin: isAdmin,
           features,
+          featuresByMode,
           mode: hasModeColumn ? (u.mode || null) : null,
           created_at: u.created_at || null,
         };
@@ -165,6 +302,50 @@ const UserManagement: React.FC = () => {
     });
     
     setUsers(usersWithFeatures);
+  };
+
+  const ensureUserAccessModeSupport = async () => {
+    if (userAccessModeSupported !== null) return userAccessModeSupported;
+    const { error } = await supabase.from('user_access').select('mode').limit(1);
+    if (error && isUserAccessModeError(error)) {
+      if (!modeWarningShown) {
+        toast.error(
+          `User access table is missing the mode column. Please run:\n${USER_ACCESS_MODE_SQL}`,
+          { duration: 12000 }
+        );
+        setModeWarningShown(true);
+      }
+      setUserAccessModeSupported(false);
+      return false;
+    }
+    setUserAccessModeSupported(true);
+    return true;
+  };
+const upsertUserAccess = async (
+  payload: Record<string, any>,
+  supportsMode: boolean
+) => {
+  const result = await supabase
+    .from('user_access')
+    .upsert(payload, {
+      onConflict: supportsMode ? 'user_id,feature_key,mode' : 'user_id,feature_key',
+    })
+    .select();
+
+  if (
+    result.error &&
+    result.error.message?.toLowerCase().includes('no unique or exclusion constraint')
+  ) {
+    return await supabase.from('user_access').insert(payload).select();
+  }
+
+  return result;
+};
+  const applyModeFilter = <T,>(builder: any, supportsMode: boolean, modeOverride?: ModeKey) => {
+    if (supportsMode) {
+      return builder.eq('mode', modeOverride ?? currentMode);
+    }
+    return builder;
   };
 
   const loadFeatures = async () => {
@@ -189,15 +370,6 @@ const UserManagement: React.FC = () => {
     ];
     console.log('📋 Loading features:', defaultFeatures);
     setFeatures(defaultFeatures);
-  };
-
-  const handleFeatureToggle = (featureKey: string) => {
-    setNewUser(prev => ({
-      ...prev,
-      features: prev.features.includes(featureKey)
-        ? prev.features.filter(f => f !== featureKey)
-        : [...prev.features, featureKey],
-    }));
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -268,7 +440,13 @@ const UserManagement: React.FC = () => {
             toast.error('User created, but mode column does not exist. Please add it to the database using: ALTER TABLE users ADD COLUMN mode TEXT CHECK (mode IN (\'regular\', \'itr\'));', { duration: 10000 });
           }
           
-          setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
+          setNewUser({
+            username: '',
+            password: '',
+            is_admin: false,
+            featuresByMode: emptyModeFeatures(),
+            mode: currentMode,
+          });
           loadUsers();
           setLoading(false);
           return;
@@ -281,7 +459,13 @@ const UserManagement: React.FC = () => {
 
       // For now, skip feature access since we're using a simplified approach
       toast.success('User created!');
-      setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
+      setNewUser({
+        username: '',
+        password: '',
+        is_admin: false,
+        featuresByMode: emptyModeFeatures(),
+        mode: currentMode,
+      });
       loadUsers();
     } catch (err: any) {
       toast.error(err.message || 'Error creating user');
@@ -309,23 +493,23 @@ const UserManagement: React.FC = () => {
     setNewUser(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleModalFeatureToggle = (featureKey: string) => {
-    console.log('🔄 Toggling feature:', featureKey);
+  const handleModalFeatureToggle = (modeKey: ModeKey, featureKey: string) => {
+    console.log('🔄 Toggling feature:', featureKey, 'for mode:', modeKey);
     setNewUser(prev => {
-      const currentFeatures = prev.features || [];
-      const newFeatures = currentFeatures.includes(featureKey)
+      const currentFeaturesByMode = prev.featuresByMode || emptyModeFeatures();
+      const currentFeatures = currentFeaturesByMode?.[modeKey] || [];
+      const updatedFeatures = currentFeatures.includes(featureKey)
         ? currentFeatures.filter(f => f !== featureKey)
         : [...currentFeatures, featureKey];
-      
-      console.log('📝 Updated features:', {
-        old: currentFeatures,
-        new: newFeatures,
-        toggled: featureKey
-      });
-      
+
+      const updatedFeaturesByMode = {
+        ...currentFeaturesByMode,
+        [modeKey]: updatedFeatures,
+      };
+
       return {
         ...prev,
-        features: newFeatures,
+        featuresByMode: updatedFeaturesByMode,
       };
     });
   };
@@ -461,36 +645,64 @@ const UserManagement: React.FC = () => {
       console.log('⏳ Waiting for database to fully commit user...');
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      const supportsUserAccessMode = await ensureUserAccessModeSupport();
+
+      const newUserFeatureSets = mapFeaturesByMode(newUser.featuresByMode);
+      const totalSelectedFeatures = newUserFeatureSets.reduce(
+        (sum, set) => sum + set.features.length,
+        0
+      );
+
       // Save feature access for non-admin users
-      if (!newUser.is_admin && newUser.features.length > 0) {
-        // Remove duplicates and filter
-        const uniqueFeatures = [...new Set(newUser.features.filter(f => f && f.trim()))];
-        
-        if (uniqueFeatures.length === 0) {
+      if (!newUser.is_admin && totalSelectedFeatures > 0) {
+        const supportsUserAccessMode = await ensureUserAccessModeSupport();
+        const featureBatches = supportsUserAccessMode
+          ? newUserFeatureSets.filter(batch => batch.features.length > 0)
+          : [
+              {
+                mode: 'regular' as ModeKey,
+                features: normalizeFeatures(
+                  newUserFeatureSets.flatMap(batch => batch.features)
+                ),
+              },
+            ];
+
+        const allFeatureKeys = normalizeFeatures(
+          featureBatches.flatMap(batch => batch.features)
+        );
+
+        if (allFeatureKeys.length === 0) {
           console.warn('⚠️ No valid features to save');
           toast.error('User created but no valid features to save.');
         } else {
           console.log('🔧 Saving features for user:', {
             userId: finalUser.id,
             username: finalUser.username,
-            features: uniqueFeatures
+            featuresByMode: featureBatches,
           });
-          
+
           // STEP 1: Ensure all features exist in the features table
-          const featureDefinitions = features.filter(f => uniqueFeatures.includes(f.key));
-          
+          const featureDefinitions = features.filter(f => allFeatureKeys.includes(f.key));
+
           for (const featureDef of featureDefinitions) {
             try {
               const { error: featureError } = await supabase
                 .from('features')
-                .upsert({
-                  key: featureDef.key,
-                  name: featureDef.name
-                }, {
-                  onConflict: 'key'
-                });
-              
-              if (featureError && featureError.code !== '23505' && featureError.code !== 'PGRST116') {
+                .upsert(
+                  {
+                    key: featureDef.key,
+                    name: featureDef.name,
+                  },
+                  {
+                    onConflict: 'key',
+                  }
+                );
+
+              if (
+                featureError &&
+                featureError.code !== '23505' &&
+                featureError.code !== 'PGRST116'
+              ) {
                 console.warn(`⚠️ Could not ensure feature "${featureDef.key}" exists:`, featureError);
               } else {
                 console.log(`✅ Feature "${featureDef.key}" ensured in database`);
@@ -499,23 +711,23 @@ const UserManagement: React.FC = () => {
               console.warn(`⚠️ Exception ensuring feature "${featureDef.key}":`, err);
             }
           }
-          
+
           // STEP 2: Wait for features to be committed
           await new Promise(resolve => setTimeout(resolve, 400));
-          
+
           // STEP 3: Final user verification before inserting features
           const { data: finalUserCheck, error: finalCheckError } = await supabase
             .from('users')
             .select('id')
             .eq('id', finalUser.id)
             .single();
-          
+
           if (!finalUserCheck || finalCheckError) {
             console.error('❌ Final user check failed before inserting features:', {
               error: finalCheckError,
-              userId: finalUser.id
+              userId: finalUser.id,
             });
-            
+
             // Try one more time after waiting longer
             await new Promise(resolve => setTimeout(resolve, 1000));
             const { data: retryCheck } = await supabase
@@ -523,22 +735,24 @@ const UserManagement: React.FC = () => {
               .select('id')
               .eq('id', finalUser.id)
               .single();
-            
+
             if (!retryCheck) {
-              toast.error('User created but database is not ready. Features cannot be saved. Please edit the user to add features manually.');
+              toast.error(
+                'User created but database is not ready. Features cannot be saved. Please edit the user to add features manually.'
+              );
               console.error('❌ User still not found after extended wait. Foreign key constraint may be broken.');
               console.error('💡 SOLUTION: Run the SQL fix in fix-foreign-key-immediate.sql file to fix the database constraint.');
             }
           }
-          
-          // STEP 4: Insert user_access records one by one with retry logic
-          // Using one-by-one instead of batch to handle foreign key issues better
-          console.log('💾 Inserting user_access records one by one...');
+
+          // STEP 4: Insert user_access records per mode with retry logic
+          console.log('💾 Inserting user_access records per mode...');
           let successCount = 0;
           let errorCount = 0;
           const errors: string[] = [];
-          
-          for (const featureKey of uniqueFeatures) {
+
+          for (const batch of featureBatches) {
+            for (const featureKey of batch.features) {
             const trimmedKey = featureKey.trim();
             if (!trimmedKey) continue;
             
@@ -566,15 +780,17 @@ const UserManagement: React.FC = () => {
               }
               
               try {
-                const { error: singleError, data: singleData } = await supabase
-                  .from('user_access')
-                  .upsert({
-                    user_id: finalUser.id,
-                    feature_key: trimmedKey,
-                  }, {
-                    onConflict: 'user_id,feature_key'
-                  })
-                  .select();
+                const accessPayload: Record<string, any> = {
+                  user_id: finalUser.id,
+                  feature_key: trimmedKey,
+                };
+                if (supportsUserAccessMode) {
+                  accessPayload.mode = batch.mode;
+                }
+                const { error: singleError, data: singleData } = await upsertUserAccess(
+                  accessPayload,
+                  supportsUserAccessMode
+                );
                 
                 if (singleError) {
                   lastError = singleError;
@@ -610,12 +826,13 @@ const UserManagement: React.FC = () => {
                   } else {
                     // No error but no data - might still be saved, verify
                     await new Promise(resolve => setTimeout(resolve, 200));
-                    const { data: verify } = await supabase
+                    let verifyQuery = supabase
                       .from('user_access')
                       .select('id')
                       .eq('user_id', finalUser.id)
-                      .eq('feature_key', trimmedKey)
-                      .maybeSingle();
+                      .eq('feature_key', trimmedKey);
+                    verifyQuery = applyModeFilter(verifyQuery, supportsUserAccessMode, batch.mode);
+                    const { data: verify } = await verifyQuery.maybeSingle();
                     
                     if (verify) {
                       console.log(`✅ Feature "${trimmedKey}" verified as saved`);
@@ -661,33 +878,44 @@ const UserManagement: React.FC = () => {
           }
           
           // Always verify what was actually saved
-          await new Promise(resolve => setTimeout(resolve, 300));
-          const { data: verifyData, error: verifyError } = await supabase
-            .from('user_access')
-            .select('feature_key')
-            .eq('user_id', finalUser.id);
-          
-          if (!verifyError && verifyData) {
-            const savedFeatures = verifyData.map(d => d.feature_key).filter(Boolean);
-            console.log('✅ Final verification - Saved features:', savedFeatures);
+          for (const batch of featureBatches) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            let verifySavedQuery = supabase
+              .from('user_access')
+              .select('feature_key')
+              .eq('user_id', finalUser.id);
+            verifySavedQuery = applyModeFilter(verifySavedQuery, supportsUserAccessMode, batch.mode);
+            const { data: verifyData, error: verifyError } = await verifySavedQuery;
             
-            if (savedFeatures.length < uniqueFeatures.length) {
-              const missing = uniqueFeatures.filter(f => !savedFeatures.includes(f));
-              console.warn('⚠️ Missing features:', missing);
+            if (!verifyError && verifyData) {
+              const savedFeatures = verifyData.map(d => d.feature_key).filter(Boolean);
+              console.log(`✅ Final verification (${batch.mode}) - Saved features:`, savedFeatures);
+              
+              if (savedFeatures.length < batch.features.length) {
+                const missing = batch.features.filter(f => !savedFeatures.includes(f));
+                if (missing.length > 0) {
+                  console.warn(`⚠️ Missing features for ${batch.mode}:`, missing);
+                }
+              }
             }
           }
         }
-      } else if (!newUser.is_admin && newUser.features.length === 0) {
+      }
+    } else if (!newUser.is_admin && totalSelectedFeatures === 0) {
         console.warn('⚠️ User created without any feature access assigned');
         toast.error('User created but no features were selected. User will only see Dashboard.');
       }
 
       // Save credentials to localStorage for Dashboard display
+      const combinedFeatureList = normalizeFeatures(
+        MODE_VALUES.flatMap(modeKey => newUser.featuresByMode[modeKey] || [])
+      );
       const credentialsData = {
         username: newUser.username,
         password: newUser.password,
         is_admin: newUser.is_admin,
-        features: newUser.features,
+        features: combinedFeatureList,
+        featuresByMode: newUser.featuresByMode,
         created_at: new Date().toISOString(),
       };
       
@@ -699,14 +927,19 @@ const UserManagement: React.FC = () => {
       localStorage.setItem('user_credentials', JSON.stringify(recentCredentials));
       
       // Show detailed success message with credentials
-      const featuresList = newUser.is_admin 
-        ? 'All Features (Admin)' 
-        : newUser.features.length > 0
-        ? newUser.features.map(f => {
-            const featureName = features.find(fe => fe.key === f)?.name || f;
-            return featureName;
-          }).join(', ')
-        : 'None (Dashboard only)';
+      const featuresList = newUser.is_admin
+        ? 'All Features (Admin)'
+        : (() => {
+            const parts = MODE_VALUES.map(modeKey => {
+              const modeFeatures = normalizeFeatures(newUser.featuresByMode[modeKey]);
+              if (!modeFeatures.length) return null;
+              const named = modeFeatures
+                .map(f => features.find(fe => fe.key === f)?.name || f)
+                .join(', ');
+              return `${MODE_LABELS[modeKey]}: ${named}`;
+            }).filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : 'None (Dashboard only)';
+          })();
       
       toast.success(
         `✅ Login Credentials Created!\n\nUsername: ${newUser.username}\nPassword: ${newUser.password}\n\nAccess Features: ${featuresList}`,
@@ -714,7 +947,13 @@ const UserManagement: React.FC = () => {
       );
       
       setShowAddForm(false);
-      setNewUser({ username: '', password: '', is_admin: false, features: [], mode: currentMode });
+      setNewUser({
+        username: '',
+        password: '',
+        is_admin: false,
+        featuresByMode: emptyModeFeatures(),
+        mode: currentMode,
+      });
       loadUsers();
       
       // Trigger dashboard refresh to show new credentials
@@ -745,6 +984,20 @@ const UserManagement: React.FC = () => {
             <p className='text-gray-600'>
               Create login credentials and manage feature access for your organization members
             </p>
+            <div className='mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-semibold'
+              data-current-mode={currentMode}
+              style={{ borderColor: currentMode === 'itr' ? '#fb923c' : '#3b82f6' }}
+            >
+              <span
+                className={`inline-flex items-center gap-2 px-2 py-0.5 rounded-full border text-xs font-semibold ${MODE_BADGES[currentMode].badge}`}
+              >
+                {currentMode === 'itr' ? <FileCheck className='w-3 h-3' /> : <Briefcase className='w-3 h-3' />}
+                {MODE_LABELS[currentMode]}
+              </span>
+              <span className='text-gray-500 text-xs'>
+                Feature access settings update when you switch modes.
+              </span>
+            </div>
             <div className='text-sm text-gray-500 mt-2 flex flex-wrap items-center gap-3'>
               <span>
                 Total Users: <span className='font-semibold text-gray-700'>{users.length}</span>
@@ -814,7 +1067,10 @@ const UserManagement: React.FC = () => {
                       handleModalChange('is_admin', isAdmin);
                       // If admin is checked, clear features (admin has all access)
                       if (isAdmin) {
-                        setNewUser(prev => ({ ...prev, features: [] }));
+                        setNewUser(prev => ({
+                          ...prev,
+                          featuresByMode: emptyModeFeatures(),
+                        }));
                         console.log('🔐 Admin mode enabled - clearing features');
                       }
                     }}
@@ -822,61 +1078,13 @@ const UserManagement: React.FC = () => {
                   />
                   <span className='text-blue-800 font-medium'>Admin (has access to all features)</span>
                 </label>
-                {/* Mode Selection */}
-                <div className='mt-4'>
-                  <label className='block text-sm font-medium text-gray-700 mb-2'>
-                    User Mode
-                  </label>
-                  <div className='flex gap-3'>
-                    <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      newUser.mode === 'regular'
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-400 shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-                    }`}>
-                      <input
-                        type='radio'
-                        name='userMode'
-                        value='regular'
-                        checked={newUser.mode === 'regular'}
-                        onChange={() => handleModalChange('mode', 'regular')}
-                        className='sr-only'
-                      />
-                      <Briefcase className='w-5 h-5' />
-                      <span className='font-medium'>Regular Mode</span>
-                    </label>
-                    <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      newUser.mode === 'itr'
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white border-orange-400 shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300'
-                    }`}>
-                      <input
-                        type='radio'
-                        name='userMode'
-                        value='itr'
-                        checked={newUser.mode === 'itr'}
-                        onChange={() => handleModalChange('mode', 'itr')}
-                        className='sr-only'
-                      />
-                      <FileCheck className='w-5 h-5' />
-                      <span className='font-medium'>ITR Mode</span>
-                    </label>
-                  </div>
-                  <p className='text-xs text-gray-500 mt-2'>
-                    Select which mode this user should be assigned to. Users will only see data for their assigned mode.
-                  </p>
-                </div>
               </div>
               {/* Divider */}
               <div className='border-t border-blue-100 my-2' />
               {/* Feature Access Section */}
               <div className={newUser?.is_admin ? 'opacity-50 pointer-events-none' : ''}>
-                <div className='font-semibold mb-2 text-blue-800 flex items-center justify-between'>
-                  <span>Feature Access</span>
-                  {newUser?.features && newUser.features.length > 0 && (
-                    <span className='text-xs font-normal text-blue-600 bg-blue-100 px-2 py-1 rounded'>
-                      {newUser.features.length} feature(s) selected
-                    </span>
-                  )}
+                <div className='font-semibold mb-4 text-blue-800'>
+                  Feature Access by Mode
                 </div>
                 {newUser?.is_admin ? (
                   <div className='text-blue-600 text-sm p-4 bg-blue-50 rounded border border-blue-200'>
@@ -887,45 +1095,67 @@ const UserManagement: React.FC = () => {
                     No features available. Please refresh the page.
                   </div>
                 ) : (
-                  <>
-                    <div className='flex flex-wrap gap-2 sm:gap-3'>
-                      {features.length > 0 ? features.map(f => {
-                        const isSelected = (newUser?.features || []).includes(f.key);
-                        return (
-                          <label
-                            key={f.key}
-                            htmlFor={`feature-${f.key}`}
-                            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
-                            ${
-                              isSelected
-                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
-                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
-                            }
-                          `}
+                  <div className='space-y-6'>
+                    {MODE_VALUES.map(modeKey => {
+                      const selected = newUser.featuresByMode[modeKey] || [];
+                      return (
+                        <div
+                          key={modeKey}
+                          className='border border-gray-200 rounded-2xl shadow-sm overflow-hidden'
+                        >
+                          <div
+                            className={`px-4 py-3 flex items-center justify-between text-white bg-gradient-to-r ${MODE_BADGES[modeKey].gradient}`}
                           >
-                            <input
-                              id={`feature-${f.key}`}
-                              type='checkbox'
-                              checked={isSelected}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                console.log('🔘 Checkbox clicked:', f.key, 'Current checked:', isSelected);
-                                handleModalFeatureToggle(f.key);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className='accent-blue-600 w-5 h-5 cursor-pointer'
-                            />
-                            <span className='cursor-pointer'>{f.name}</span>
-                          </label>
-                        );
-                      }) : (
-                        <div className='text-gray-500 text-sm p-4'>Loading features...</div>
-                      )}
-                    </div>
-                    <div className='mt-3 text-xs text-gray-500'>
-                      <strong>Note:</strong> Select the features this user should have access to. They will only see the selected features in their sidebar.
-                    </div>
-                  </>
+                            <div className='flex items-center gap-2 text-base font-semibold'>
+                              {modeKey === 'itr' ? (
+                                <FileCheck className='w-5 h-5' />
+                              ) : (
+                                <Briefcase className='w-5 h-5' />
+                              )}
+                              {MODE_LABELS[modeKey]}
+                            </div>
+                            <span className='text-sm font-medium bg-white/20 px-3 py-1 rounded-full'>
+                              {selected.length} selected
+                            </span>
+                          </div>
+                          <div className='p-4'>
+                            <div className='flex flex-wrap gap-2 sm:gap-3'>
+                              {features.map(f => {
+                                const isSelected = selected.includes(f.key);
+                                return (
+                                  <label
+                                    key={`${modeKey}-${f.key}`}
+                                    className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
+                                    ${
+                                      isSelected
+                                        ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                                        : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
+                                    }
+                                  `}
+                                  >
+                                    <input
+                                      type='checkbox'
+                                      checked={isSelected}
+                                      onChange={e => {
+                                        e.stopPropagation();
+                                        handleModalFeatureToggle(modeKey, f.key);
+                                      }}
+                                      onClick={e => e.stopPropagation()}
+                                      className='accent-blue-600 w-5 h-5 cursor-pointer'
+                                    />
+                                    <span className='cursor-pointer'>{f.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className='mt-3 text-xs text-gray-500'>
+                              Select the features this user should have in {MODE_LABELS[modeKey]}. They will only see these options when using this mode.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
               <Button
@@ -949,7 +1179,11 @@ const UserManagement: React.FC = () => {
                 Admins ({users.filter(u => u.is_admin).length})
               </h2>
               <div className='flex flex-col gap-4'>
-                {users.filter(u => u.is_admin).map(u => (
+                {users.filter(u => u.is_admin).map(u => {
+                  const regularFeatureCount = u.featuresByMode?.regular?.length || 0;
+                  const itrFeatureCount = u.featuresByMode?.itr?.length || 0;
+
+                  return (
             <div
               key={u.id}
               className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
@@ -1006,28 +1240,17 @@ const UserManagement: React.FC = () => {
                           )}
                         </span>
                       )}
+                      <div className='flex flex-wrap gap-2 mt-1'>
+                        {renderModeBadge('regular', regularFeatureCount, 'summary')}
+                        {renderModeBadge('itr', itrFeatureCount, 'summary')}
+                      </div>
                     </div>
                     <div className='flex flex-wrap gap-2 items-center'>
                       {/* Mode Access Badge */}
-                      {u.mode && (
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${
-                          u.mode === 'itr'
-                            ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 border-orange-300'
-                            : 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-300'
-                        }`}>
-                          {u.mode === 'itr' ? (
-                            <>
-                              <FileCheck className='w-3 h-3' />
-                              ITR Access
-                            </>
-                          ) : (
-                            <>
-                              <Briefcase className='w-3 h-3' />
-                              Regular Access
-                            </>
-                          )}
-                        </span>
-                      )}
+                      <div className='flex flex-wrap gap-2'>
+                        {renderModeBadge('regular', regularFeatureCount, 'detail')}
+                        {renderModeBadge('itr', itrFeatureCount, 'detail')}
+                      </div>
                       {u.is_admin ? (
                         <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
                           All Access (Admin)
@@ -1123,18 +1346,9 @@ const UserManagement: React.FC = () => {
                     <div className='mb-1 text-xs text-gray-500'>
                       Mode Access
                     </div>
-                    <div className='text-gray-800 font-medium'>
-                      {u.mode ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
-                          u.mode === 'itr'
-                            ? 'bg-orange-100 text-orange-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {u.mode === 'itr' ? 'ITR Access' : 'Regular Access'}
-                        </span>
-                      ) : (
-                        <span className='text-gray-400'>Not assigned</span>
-                      )}
+                    <div className='flex flex-wrap gap-2'>
+                      {renderModeBadge('regular', regularFeatureCount, 'detail')}
+                      {renderModeBadge('itr', itrFeatureCount, 'detail')}
                     </div>
                   </div>
                   <div className='md:col-span-2'>
@@ -1159,6 +1373,7 @@ const UserManagement: React.FC = () => {
                                 // Save feature access changes
                                 setLoading(true);
                                 try {
+                                  const supportsMode = await ensureUserAccessModeSupport();
                                   // Remove duplicates and filter
                                   const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
                                   
@@ -1197,10 +1412,12 @@ const UserManagement: React.FC = () => {
                                   }
                                   
                                   // STEP 2: Remove all current access
-                                  await supabase
+                                  let deleteQuery = supabase
                                     .from('user_access')
                                     .delete()
                                     .eq('user_id', u.id);
+                                  deleteQuery = applyModeFilter(deleteQuery, supportsMode, currentMode);
+                                  await deleteQuery;
                                   
                                   // STEP 3: Add new access with proper error handling
                                   let successCount = 0;
@@ -1225,15 +1442,17 @@ const UserManagement: React.FC = () => {
                                       }
                                       
                                       // Use upsert to handle duplicates gracefully
-                                      const { error: insertError, data: insertData } = await supabase
-                                        .from('user_access')
-                                        .upsert({
-                                          user_id: u.id,
-                                          feature_key: trimmedKey,
-                                        }, {
-                                          onConflict: 'user_id,feature_key'
-                                        })
-                                        .select();
+                                      const editPayload: Record<string, any> = {
+                                        user_id: u.id,
+                                        feature_key: trimmedKey,
+                                      };
+                                      if (supportsMode) {
+                                        editPayload.mode = currentMode;
+                                      }
+                                      const { error: insertError, data: insertData } = await upsertUserAccess(
+                                        editPayload,
+                                        supportsMode
+                                      );
                                       
                                       if (insertData && insertData.length > 0) {
                                         console.log(`✅ Feature "${trimmedKey}" saved successfully`);
@@ -1260,12 +1479,13 @@ const UserManagement: React.FC = () => {
                                         
                                         if (isDuplicate || httpStatus === 409) {
                                           // 409 or duplicate means it might already exist - verify
-                                          const { data: verifyExists } = await supabase
+                                          let verifyExistsQuery = supabase
                                             .from('user_access')
                                             .select('id')
                                             .eq('user_id', u.id)
-                                            .eq('feature_key', trimmedKey)
-                                            .maybeSingle();
+                                            .eq('feature_key', trimmedKey);
+                                          verifyExistsQuery = applyModeFilter(verifyExistsQuery, supportsMode, currentMode);
+                                          const { data: verifyExists } = await verifyExistsQuery.maybeSingle();
                                           
                                           if (verifyExists) {
                                             console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
@@ -1285,12 +1505,13 @@ const UserManagement: React.FC = () => {
                                         }
                                       } else {
                                         // No error and no data - verify it exists or treat as success
-                                        const { data: verifyNoError } = await supabase
+                                        let verifyNoErrorQuery = supabase
                                           .from('user_access')
                                           .select('id')
                                           .eq('user_id', u.id)
-                                          .eq('feature_key', trimmedKey)
-                                          .maybeSingle();
+                                          .eq('feature_key', trimmedKey);
+                                        verifyNoErrorQuery = applyModeFilter(verifyNoErrorQuery, supportsMode, currentMode);
+                                        const { data: verifyNoError } = await verifyNoErrorQuery.maybeSingle();
                                         
                                         if (verifyNoError) {
                                           console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
@@ -1408,7 +1629,8 @@ const UserManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-                ))}
+                );
+                })}
               </div>
             </div>
           )}
@@ -1421,7 +1643,11 @@ const UserManagement: React.FC = () => {
                 Users ({users.filter(u => !u.is_admin).length})
               </h2>
               <div className='flex flex-col gap-4'>
-                {users.filter(u => !u.is_admin).map(u => (
+                {users.filter(u => !u.is_admin).map(u => {
+                  const regularFeatureCount = u.featuresByMode?.regular?.length || 0;
+                  const itrFeatureCount = u.featuresByMode?.itr?.length || 0;
+
+                  return (
             <div
               key={u.id}
               className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
@@ -1478,28 +1704,17 @@ const UserManagement: React.FC = () => {
                           )}
                         </span>
                       )}
+                      <div className='flex flex-wrap gap-2 mt-1'>
+                        {renderModeBadge('regular', regularFeatureCount, 'summary')}
+                        {renderModeBadge('itr', itrFeatureCount, 'summary')}
+                      </div>
                     </div>
                     <div className='flex flex-wrap gap-2 items-center'>
                       {/* Mode Access Badge */}
-                      {u.mode && (
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border shadow-sm ${
-                          u.mode === 'itr'
-                            ? 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 border-orange-300'
-                            : 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-300'
-                        }`}>
-                          {u.mode === 'itr' ? (
-                            <>
-                              <FileCheck className='w-3 h-3' />
-                              ITR Access
-                            </>
-                          ) : (
-                            <>
-                              <Briefcase className='w-3 h-3' />
-                              Regular Access
-                            </>
-                          )}
-                        </span>
-                      )}
+                      <div className='flex flex-wrap gap-2'>
+                        {renderModeBadge('regular', regularFeatureCount, 'detail')}
+                        {renderModeBadge('itr', itrFeatureCount, 'detail')}
+                      </div>
                       {u.is_admin ? (
                         <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
                           All Access (Admin)
@@ -1595,18 +1810,9 @@ const UserManagement: React.FC = () => {
                     <div className='mb-1 text-xs text-gray-500'>
                       Mode Access
                     </div>
-                    <div className='text-gray-800 font-medium'>
-                      {u.mode ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
-                          u.mode === 'itr'
-                            ? 'bg-orange-100 text-orange-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {u.mode === 'itr' ? 'ITR Access' : 'Regular Access'}
-                        </span>
-                      ) : (
-                        <span className='text-gray-400'>Not assigned</span>
-                      )}
+                    <div className='flex flex-wrap gap-2'>
+                      {renderModeBadge('regular', regularFeatureCount, 'detail')}
+                      {renderModeBadge('itr', itrFeatureCount, 'detail')}
                     </div>
                   </div>
                   <div className='md:col-span-2'>
@@ -1631,6 +1837,7 @@ const UserManagement: React.FC = () => {
                                 // Save feature access changes
                                 setLoading(true);
                                 try {
+                                  const supportsMode = await ensureUserAccessModeSupport();
                                   // Remove duplicates and filter
                                   const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
                                   
@@ -1669,10 +1876,12 @@ const UserManagement: React.FC = () => {
                                   }
                                   
                                   // STEP 2: Remove all current access
-                                  await supabase
+                                  let deleteQuery = supabase
                                     .from('user_access')
                                     .delete()
                                     .eq('user_id', u.id);
+                                  deleteQuery = applyModeFilter(deleteQuery, supportsMode, currentMode);
+                                  await deleteQuery;
                                   
                                   // STEP 3: Add new access with proper error handling
                                   let successCount = 0;
@@ -1697,15 +1906,17 @@ const UserManagement: React.FC = () => {
                                       }
                                       
                                       // Use upsert to handle duplicates gracefully
-                                      const { error: insertError, data: insertData } = await supabase
-                                        .from('user_access')
-                                        .upsert({
-                                          user_id: u.id,
-                                          feature_key: trimmedKey,
-                                        }, {
-                                          onConflict: 'user_id,feature_key'
-                                        })
-                                        .select();
+                                      const editPayload: Record<string, any> = {
+                                        user_id: u.id,
+                                        feature_key: trimmedKey,
+                                      };
+                                      if (supportsMode) {
+                                        editPayload.mode = currentMode;
+                                      }
+                                      const { error: insertError, data: insertData } = await upsertUserAccess(
+                                        editPayload,
+                                        supportsMode
+                                      );
                                       
                                       if (insertData && insertData.length > 0) {
                                         console.log(`✅ Feature "${trimmedKey}" saved successfully`);
@@ -1732,12 +1943,13 @@ const UserManagement: React.FC = () => {
                                         
                                         if (isDuplicate || httpStatus === 409) {
                                           // 409 or duplicate means it might already exist - verify
-                                          const { data: verifyExists } = await supabase
+                                          let verifyExistsQuery = supabase
                                             .from('user_access')
                                             .select('id')
                                             .eq('user_id', u.id)
-                                            .eq('feature_key', trimmedKey)
-                                            .maybeSingle();
+                                            .eq('feature_key', trimmedKey);
+                                          verifyExistsQuery = applyModeFilter(verifyExistsQuery, supportsMode, currentMode);
+                                          const { data: verifyExists } = await verifyExistsQuery.maybeSingle();
                                           
                                           if (verifyExists) {
                                             console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
@@ -1757,12 +1969,13 @@ const UserManagement: React.FC = () => {
                                         }
                                       } else {
                                         // No error and no data - verify it exists or treat as success
-                                        const { data: verifyNoError } = await supabase
+                                        let verifyNoErrorQuery = supabase
                                           .from('user_access')
                                           .select('id')
                                           .eq('user_id', u.id)
-                                          .eq('feature_key', trimmedKey)
-                                          .maybeSingle();
+                                          .eq('feature_key', trimmedKey);
+                                        verifyNoErrorQuery = applyModeFilter(verifyNoErrorQuery, supportsMode, currentMode);
+                                        const { data: verifyNoError } = await verifyNoErrorQuery.maybeSingle();
                                         
                                         if (verifyNoError) {
                                           console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
@@ -1880,7 +2093,8 @@ const UserManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-                ))}
+                );
+                })}
               </div>
             </div>
           )}

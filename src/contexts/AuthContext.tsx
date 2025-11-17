@@ -4,11 +4,65 @@ import { supabaseDB } from '../lib/supabaseDatabase';
 import toast from 'react-hot-toast';
 import bcrypt from 'bcryptjs';
 
+type ModeKey = 'regular' | 'itr';
+const MODE_VALUES: ModeKey[] = ['regular', 'itr'];
+const getStoredMode = (): ModeKey =>
+  (localStorage.getItem('table_mode') as ModeKey) === 'itr' ? 'itr' : 'regular';
+const createEmptyModeFeatureMap = () =>
+  MODE_VALUES.reduce(
+    (acc, mode) => {
+      acc[mode] = [];
+      return acc;
+    },
+    {} as Record<ModeKey, string[]>
+  );
+const isModeColumnError = (error?: { message?: string; code?: string }) => {
+  if (!error) return false;
+  const msg = error.message?.toLowerCase() ?? '';
+  return (
+    msg.includes('column "mode"') ||
+    msg.includes('mode') ||
+    msg.includes('does not exist') ||
+    error.code === '42703'
+  );
+};
+const ADMIN_FEATURES = [
+  'dashboard',
+  'new_entry',
+  'edit_entry',
+  'daily_report',
+  'detailed_ledger',
+  'ledger_summary',
+  'approve_records',
+  'edited_records',
+  'deleted_records',
+  'replace_form',
+  'balance_sheet',
+  'export',
+  'csv_upload',
+  'vehicles',
+  'drivers',
+  'bank_guarantees',
+  'users',
+];
+const getFeaturesForMode = (
+  featuresByMode: Record<ModeKey, string[]>,
+  requestedMode: ModeKey
+) => {
+  const requested = featuresByMode[requestedMode];
+  if (requested && requested.length > 0) {
+    return requested;
+  }
+  const fallback = featuresByMode.regular ?? [];
+  return fallback;
+};
+
 interface User {
   id: string;
   username: string;
   is_admin: boolean;
   features: string[];
+  featuresByMode?: Record<ModeKey, string[]>;
 }
 
 interface AuthContextType {
@@ -42,6 +96,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadFeaturesForUser = async (
+    userId: string,
+    isAdminUser: boolean
+  ): Promise<{
+    featuresByMode: Record<ModeKey, string[]>;
+    modeColumnExists: boolean;
+  }> => {
+    if (isAdminUser) {
+      const map = createEmptyModeFeatureMap();
+      MODE_VALUES.forEach(mode => {
+        map[mode] = [...ADMIN_FEATURES];
+      });
+      return { featuresByMode: map, modeColumnExists: true };
+    }
+
+    let rows:
+      | { feature_key: string | null; mode?: ModeKey | null }[]
+      | null = null;
+    let modeColumnExists = true;
+    const { data, error } = await supabase
+      .from('user_access')
+      .select('feature_key, mode')
+      .eq('user_id', userId);
+
+    if (error) {
+      if (isModeColumnError(error)) {
+        modeColumnExists = false;
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('user_access')
+          .select('feature_key')
+          .eq('user_id', userId);
+        if (fallbackError) {
+          throw fallbackError;
+        }
+        rows =
+          fallbackData?.map(item => ({
+            feature_key: item.feature_key,
+            mode: 'regular' as ModeKey,
+          })) ?? [];
+      } else {
+        throw error;
+      }
+    } else {
+      rows = data ?? [];
+    }
+
+    const map = createEmptyModeFeatureMap();
+    rows?.forEach(item => {
+      const featureKey = item?.feature_key;
+      if (!featureKey) return;
+      const mode = item?.mode === 'itr' ? 'itr' : 'regular';
+      if (!map[mode].includes(featureKey)) {
+        map[mode].push(featureKey);
+      }
+    });
+
+    return { featuresByMode: map, modeColumnExists };
+  };
 
   useEffect(() => {
     // Check for existing session on app load
@@ -50,59 +162,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const savedUser = localStorage.getItem('thirumala_user');
         const sessionTime = localStorage.getItem('thirumala_session_time');
         if (savedUser && sessionTime) {
-          const parsedUser = JSON.parse(savedUser);
+          const parsedUser: User = JSON.parse(savedUser);
           const sessionAge = Date.now() - parseInt(sessionTime);
           const SESSION_DURATION = 24 * 60 * 60 * 1000;
           if (sessionAge < SESSION_DURATION) {
-            // Reload user features from database to ensure they're up to date
-            if (!parsedUser.is_admin) {
-              console.log('🔄 Reloading features for existing session:', {
-                userId: parsedUser.id,
-                username: parsedUser.username
-              });
-              
-              const { data: accessData, error: accessError } = await supabase
-                .from('user_access')
-                .select('feature_key')
-                .eq('user_id', parsedUser.id);
-              
-              if (accessError) {
-                console.error('❌ Error reloading features for session:', {
-                  error: accessError,
-                  userId: parsedUser.id
-                });
-                parsedUser.features = parsedUser.features || []; // Keep existing if reload fails
+            try {
+              const { featuresByMode } = await loadFeaturesForUser(
+                parsedUser.id,
+                Boolean(parsedUser.is_admin)
+              );
+              const activeMode = getStoredMode();
+              parsedUser.featuresByMode = featuresByMode;
+              if (parsedUser.is_admin) {
+                parsedUser.features = [...ADMIN_FEATURES];
               } else {
-                console.log('📦 Session restore - Raw access data:', {
-                  accessData,
-                  dataType: Array.isArray(accessData) ? 'array' : typeof accessData,
-                  length: Array.isArray(accessData) ? accessData.length : 'N/A'
-                });
-                
-                // Extract feature keys and filter out any null/undefined values
-                if (Array.isArray(accessData)) {
-                  parsedUser.features = accessData
-                    .map(a => a?.feature_key)
-                    .filter((key): key is string => key !== null && key !== undefined && typeof key === 'string');
-                } else {
-                  console.warn('⚠️ Session restore - accessData is not an array:', accessData);
-                  parsedUser.features = [];
-                }
-                
-                console.log('🔄 Session restored - features reloaded:', {
-                  userId: parsedUser.id,
-                  username: parsedUser.username,
-                  featuresCount: parsedUser.features.length,
-                  features: parsedUser.features
-                });
+                parsedUser.features = getFeaturesForMode(featuresByMode, activeMode);
+              }
+              localStorage.setItem('thirumala_user', JSON.stringify(parsedUser));
+            } catch (featureError) {
+              console.error('❌ Error reloading features for session:', featureError);
+              if (!Array.isArray(parsedUser.features)) {
+                parsedUser.features = [];
               }
             }
-            
-            // Always ensure features is an array
-            if (!Array.isArray(parsedUser.features)) {
-              console.warn('⚠️ Session features is not an array, fixing:', parsedUser.features);
-              parsedUser.features = parsedUser.is_admin ? [] : [];
-            }
+
             setUser(parsedUser);
           } else {
             localStorage.removeItem('thirumala_user');
@@ -116,6 +199,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
     checkSession();
+  }, []);
+
+  useEffect(() => {
+    const handleModeChange = (event: Event) => {
+      const detail = (event as CustomEvent<ModeKey>).detail;
+      const nextMode = detail === 'itr' ? 'itr' : 'regular';
+      setUser(prev => {
+        if (!prev) return prev;
+        if (prev.is_admin) {
+          return prev;
+        }
+        if (!prev.featuresByMode) {
+          return prev;
+        }
+        const nextFeatures = getFeaturesForMode(prev.featuresByMode, nextMode);
+        const updatedUser = { ...prev, features: nextFeatures };
+        localStorage.setItem('thirumala_user', JSON.stringify(updatedUser));
+        return updatedUser;
+      });
+    };
+
+    window.addEventListener('table-mode-changed', handleModeChange as EventListener);
+    return () => {
+      window.removeEventListener(
+        'table-mode-changed',
+        handleModeChange as EventListener
+      );
+    };
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -161,95 +272,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // 4. Determine if user is admin based on user type
       const isAdmin = dbUser.user_types?.user_type === 'Admin';
 
-      // 5. Load features: Admins get all features, non-admins get from user_access table
-      let features: string[] = [];
-      
-      if (isAdmin) {
-        // Admins have access to all features
-        features = [
-          'dashboard',
-          'new_entry',
-          'edit_entry',
-          'daily_report',
-          'detailed_ledger',
-          'ledger_summary',
-          'approve_records',
-          'edited_records',
-          'deleted_records',
-          'replace_form',
-          'balance_sheet',
-          'export',
-          'csv_upload',
-          'vehicles',
-          'drivers',
-          'bank_guarantees',
-          'users',
-        ];
-        console.log('✅ Admin user - granted all features:', features);
-      } else {
-        // Load features from user_access table for non-admin users
-        console.log('🔍 Loading features for non-admin user:', {
-          userId: dbUser.id,
-          username: dbUser.username,
-          userType: dbUser.user_types?.user_type
-        });
-        
-        const { data: accessData, error: accessError } = await supabase
-          .from('user_access')
-          .select('feature_key')
-          .eq('user_id', dbUser.id);
-        
-        if (accessError) {
-          console.error('❌ Error loading user features:', {
-            error: accessError,
-            userId: dbUser.id,
-            username: dbUser.username
-          });
-          features = []; // Ensure it's an array even on error
-        } else {
-          console.log('📦 Raw access data from database:', {
-            accessData,
-            dataType: Array.isArray(accessData) ? 'array' : typeof accessData,
-            length: Array.isArray(accessData) ? accessData.length : 'N/A'
-          });
-          
-          // Extract feature keys and filter out any null/undefined values
-          if (Array.isArray(accessData)) {
-            features = accessData
-              .map(a => a?.feature_key)
-              .filter((key): key is string => key !== null && key !== undefined && typeof key === 'string');
-          } else {
-            console.warn('⚠️ accessData is not an array:', accessData);
-            features = [];
-          }
-          
-          console.log('📋 Non-admin user features loaded:', {
-            userId: dbUser.id,
-            username: dbUser.username,
-            featuresCount: features.length,
-            features: features,
-            rawAccessData: accessData
-          });
-        }
-        
-        // Always ensure features is an array
-        if (!Array.isArray(features)) {
-          console.warn('⚠️ Features is not an array, fixing:', features);
-          features = [];
-        }
+      // 5. Load features grouped by mode
+      let featuresByMode: Record<ModeKey, string[]> = createEmptyModeFeatureMap();
+      try {
+        const results = await loadFeaturesForUser(dbUser.id, isAdmin);
+        featuresByMode = results.featuresByMode;
+      } catch (featureError) {
+        console.error('❌ Error loading user features:', featureError);
       }
-
-      // Ensure features is always an array before creating userData
-      if (!Array.isArray(features)) {
-        console.warn('⚠️ Features is not an array before creating userData, fixing:', features);
-        features = [];
-      }
+      const activeMode = getStoredMode();
+      const features = isAdmin
+        ? [...ADMIN_FEATURES]
+        : getFeaturesForMode(featuresByMode, activeMode);
       
       const userData: User = {
         id: dbUser.id,
         username: dbUser.username,
         is_admin: isAdmin,
-        features: features || [], // Double ensure it's an array
+        features: features || [],
+        featuresByMode,
       };
       
       console.log('🔐 Login successful - User data:', {
