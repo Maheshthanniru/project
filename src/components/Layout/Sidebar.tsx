@@ -127,23 +127,10 @@ const Sidebar: React.FC = () => {
       {/* Top: Logo/Brand and User Info */}
       <div className='flex flex-col gap-0'>
         {/* Logo/Brand */}
-        <div className='p-5 border-b border-blue-200 bg-gradient-to-br from-orange-50 to-red-50 shadow-sm flex flex-col items-center'>
-          <div className='w-14 h-16 bg-gradient-to-b from-orange-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg mb-2'>
-            <div className='w-10 h-12 bg-gradient-to-b from-yellow-300 to-orange-500 rounded-md flex items-center justify-center relative'>
-              <div className='w-7 h-9 bg-gradient-to-b from-amber-200 to-orange-400 rounded-full relative'>
-                <div className='absolute top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-600 rounded-full'></div>
-                <div className='absolute top-3 left-1/2 transform -translate-x-1/2 w-4 h-1 bg-red-700 rounded'></div>
-                <div className='absolute bottom-1 left-1/2 transform -translate-x-1/2 w-6 h-3 bg-gradient-to-t from-red-600 to-orange-500 rounded-b-full'></div>
-              </div>
-              <div className='absolute -top-1 left-1/2 transform -translate-x-1/2 w-8 h-2 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-t-full'></div>
-            </div>
-          </div>
+        <div className='p-4 border-b border-blue-200 bg-gradient-to-br from-orange-50 to-red-50 shadow-sm flex flex-col items-center'>
           <h1 className='text-lg font-bold text-gray-900 tracking-wide'>
             Thirumala Group
           </h1>
-          <p className='text-xs text-orange-700 font-medium'>
-            Business Management
-          </p>
         </div>
         {/* User Info */}
         <div className='p-4 border-b border-blue-100 bg-blue-50 flex items-center gap-3'>

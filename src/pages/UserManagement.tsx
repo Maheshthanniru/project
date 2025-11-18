@@ -140,7 +140,7 @@ const UserManagement: React.FC = () => {
   const formRef = useRef<HTMLFormElement>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [editFeatures, setEditFeatures] = useState<string[]>([]);
+  const [editFeaturesByMode, setEditFeaturesByMode] = useState<Record<ModeKey, string[]>>(emptyModeFeatures());
   const [userAccessModeSupported, setUserAccessModeSupported] = useState<boolean | null>(null);
   const [modeWarningShown, setModeWarningShown] = useState(false);
 
@@ -163,7 +163,7 @@ const UserManagement: React.FC = () => {
   }, [currentMode]);
 
 useEffect(() => {
-  setEditFeatures([]);
+  setEditFeaturesByMode(emptyModeFeatures());
   setNewUser(prev => ({ ...prev, mode: currentMode }));
 }, [currentMode]);
 
@@ -368,7 +368,7 @@ const upsertUserAccess = async (
       { key: 'bank_guarantees', name: 'Bank Guarantees' },
       { key: 'drivers', name: 'Drivers' },
     ];
-    console.log('📋 Loading features:', defaultFeatures);
+    console.log('📋 Loading features:', defaultFeatures.length, 'features:', defaultFeatures.map(f => f.name).join(', '));
     setFeatures(defaultFeatures);
   };
 
@@ -510,6 +510,21 @@ const upsertUserAccess = async (
       return {
         ...prev,
         featuresByMode: updatedFeaturesByMode,
+      };
+    });
+  };
+
+  const handleEditFeatureToggle = (modeKey: ModeKey, featureKey: string) => {
+    console.log('🔄 Toggling edit feature:', featureKey, 'for mode:', modeKey);
+    setEditFeaturesByMode(prev => {
+      const currentFeatures = prev?.[modeKey] || [];
+      const updatedFeatures = currentFeatures.includes(featureKey)
+        ? currentFeatures.filter(f => f !== featureKey)
+        : [...currentFeatures, featureKey];
+
+      return {
+        ...prev,
+        [modeKey]: updatedFeatures,
       };
     });
   };
@@ -1361,7 +1376,7 @@ const upsertUserAccess = async (
                               className='ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1'
                               onClick={() => {
                                 setEditingUserId(null);
-                                setEditFeatures([]);
+                                setEditFeaturesByMode(emptyModeFeatures());
                               }}
                               type='button'
                             >
@@ -1374,159 +1389,84 @@ const upsertUserAccess = async (
                                 setLoading(true);
                                 try {
                                   const supportsMode = await ensureUserAccessModeSupport();
-                                  // Remove duplicates and filter
-                                  const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
                                   
                                   // STEP 1: Ensure all features exist in the features table
+                                  const allFeatureKeys = MODE_VALUES.flatMap(modeKey => 
+                                    normalizeFeatures(editFeaturesByMode[modeKey] || [])
+                                  );
+                                  const uniqueFeatureKeys = [...new Set(allFeatureKeys)];
+                                  
                                   console.log('🔧 Ensuring all features exist in features table...');
-                                  for (const featureKey of uniqueFeatures) {
+                                  for (const featureKey of uniqueFeatureKeys) {
                                     const trimmedKey = featureKey.trim();
                                     if (!trimmedKey) continue;
                                     
-                                    // Check if feature exists
-                                    const { data: existingFeature } = await supabase
-                                      .from('features')
-                                      .select('key')
-                                      .eq('key', trimmedKey)
-                                      .maybeSingle();
-                                    
-                                    if (!existingFeature) {
-                                      // Feature doesn't exist, create it
-                                      const featureDef = features.find(f => f.key === trimmedKey);
-                                      if (featureDef) {
-                                        const { error: featureError } = await supabase
-                                          .from('features')
-                                          .insert({
-                                            key: featureDef.key,
-                                            name: featureDef.name
-                                          });
-                                        
-                                        if (featureError && featureError.code !== '23505') {
-                                          console.error(`❌ Could not create feature "${trimmedKey}":`, featureError);
-                                          throw new Error(`Failed to create feature "${trimmedKey}": ${featureError.message}`);
-                                        }
+                                    const featureDef = features.find(f => f.key === trimmedKey);
+                                    if (featureDef) {
+                                      const { error: featureError } = await supabase
+                                        .from('features')
+                                        .upsert(
+                                          { key: featureDef.key, name: featureDef.name },
+                                          { onConflict: 'key' }
+                                        );
+                                      
+                                      if (featureError && featureError.code !== '23505' && featureError.code !== 'PGRST116') {
+                                        console.warn(`⚠️ Could not ensure feature "${trimmedKey}":`, featureError);
                                       }
                                     }
-                                    
                                     await new Promise(resolve => setTimeout(resolve, 50));
                                   }
                                   
-                                  // STEP 2: Remove all current access
-                                  let deleteQuery = supabase
+                                  // STEP 2: Remove all current access for this user
+                                  const { error: deleteError } = await supabase
                                     .from('user_access')
                                     .delete()
                                     .eq('user_id', u.id);
-                                  deleteQuery = applyModeFilter(deleteQuery, supportsMode, currentMode);
-                                  await deleteQuery;
                                   
-                                  // STEP 3: Add new access with proper error handling
+                                  if (deleteError) {
+                                    console.error('Error deleting existing access:', deleteError);
+                                  }
+                                  
+                                  // STEP 3: Add new access grouped by mode
                                   let successCount = 0;
                                   let errorCount = 0;
                                   
-                                  for (const featureKey of uniqueFeatures) {
-                                    const trimmedKey = featureKey.trim();
-                                    if (!trimmedKey) continue;
+                                  for (const modeKey of MODE_VALUES) {
+                                    const modeFeatures = normalizeFeatures(editFeaturesByMode[modeKey] || []);
                                     
-                                    try {
-                                      // Verify feature exists before inserting
-                                      const { data: verifyFeature } = await supabase
-                                        .from('features')
-                                        .select('key')
-                                        .eq('key', trimmedKey)
-                                        .maybeSingle();
+                                    for (const featureKey of modeFeatures) {
+                                      const trimmedKey = featureKey.trim();
+                                      if (!trimmedKey) continue;
                                       
-                                      if (!verifyFeature) {
-                                        console.error(`❌ Feature "${trimmedKey}" not found in database`);
-                                        errorCount++;
-                                        continue;
-                                      }
-                                      
-                                      // Use upsert to handle duplicates gracefully
-                                      const editPayload: Record<string, any> = {
-                                        user_id: u.id,
-                                        feature_key: trimmedKey,
-                                      };
-                                      if (supportsMode) {
-                                        editPayload.mode = currentMode;
-                                      }
-                                      const { error: insertError, data: insertData } = await upsertUserAccess(
-                                        editPayload,
-                                        supportsMode
-                                      );
-                                      
-                                      if (insertData && insertData.length > 0) {
-                                        console.log(`✅ Feature "${trimmedKey}" saved successfully`);
-                                        successCount++;
-                                      } else if (insertError) {
-                                        // Check for 409/duplicate errors - treat as success if record exists
-                                        const errorObj = insertError as any;
-                                        let httpStatus = null;
-                                        if (errorObj?.status) httpStatus = errorObj.status;
-                                        else if (errorObj?.statusCode) httpStatus = errorObj.statusCode;
-                                        else if (errorObj?.code === 'PGRST116') httpStatus = 409;
-                                        else if (errorObj?.response?.status) httpStatus = errorObj.response.status;
-                                        
-                                        const isDuplicate = 
-                                          insertError.code === '23505' || 
-                                          insertError.code === 'PGRST116' ||
-                                          httpStatus === 409 ||
-                                          insertError.message?.toLowerCase().includes('duplicate') ||
-                                          insertError.message?.toLowerCase().includes('conflict');
-                                        
-                                        // Check if it's a foreign key error vs duplicate
-                                        const isForeignKey = insertError.code === '23503' ||
-                                          insertError.message?.toLowerCase().includes('foreign key');
-                                        
-                                        if (isDuplicate || httpStatus === 409) {
-                                          // 409 or duplicate means it might already exist - verify
-                                          let verifyExistsQuery = supabase
-                                            .from('user_access')
-                                            .select('id')
-                                            .eq('user_id', u.id)
-                                            .eq('feature_key', trimmedKey);
-                                          verifyExistsQuery = applyModeFilter(verifyExistsQuery, supportsMode, currentMode);
-                                          const { data: verifyExists } = await verifyExistsQuery.maybeSingle();
-                                          
-                                          if (verifyExists) {
-                                            console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
-                                            successCount++;
-                                          } else {
-                                            // Doesn't exist but got 409 - this is strange, but try to insert anyway
-                                            console.warn(`⚠️ Got 409 but record doesn't exist, treating as success`);
-                                            successCount++;
-                                          }
-                                        } else if (isForeignKey) {
-                                          // Foreign key error - check which key is missing
-                                          console.error(`❌ Foreign key error for "${trimmedKey}":`, insertError);
-                                          errorCount++;
-                                        } else {
-                                          console.error(`❌ Error inserting feature "${trimmedKey}":`, insertError);
-                                          errorCount++;
+                                      try {
+                                        const editPayload: Record<string, any> = {
+                                          user_id: u.id,
+                                          feature_key: trimmedKey,
+                                        };
+                                        if (supportsMode) {
+                                          editPayload.mode = modeKey;
                                         }
-                                      } else {
-                                        // No error and no data - verify it exists or treat as success
-                                        let verifyNoErrorQuery = supabase
-                                          .from('user_access')
-                                          .select('id')
-                                          .eq('user_id', u.id)
-                                          .eq('feature_key', trimmedKey);
-                                        verifyNoErrorQuery = applyModeFilter(verifyNoErrorQuery, supportsMode, currentMode);
-                                        const { data: verifyNoError } = await verifyNoErrorQuery.maybeSingle();
                                         
-                                        if (verifyNoError) {
-                                          console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
+                                        const { error: insertError, data: insertData } = await upsertUserAccess(
+                                          editPayload,
+                                          supportsMode
+                                        );
+                                        
+                                        if (insertData && insertData.length > 0) {
+                                          console.log(`✅ Feature "${trimmedKey}" saved for ${modeKey} mode`);
                                           successCount++;
+                                        } else if (insertError) {
+                                          console.error(`❌ Error inserting feature "${trimmedKey}" for ${modeKey}:`, insertError);
+                                          errorCount++;
                                         } else {
-                                          // Try one more time with a simple insert
-                                          console.warn(`⚠️ Upsert returned no data and no error, verifying...`);
-                                          successCount++; // Treat as success for now
+                                          successCount++;
                                         }
+                                        
+                                        await new Promise(resolve => setTimeout(resolve, 50));
+                                      } catch (err: any) {
+                                        console.error(`❌ Exception inserting feature "${trimmedKey}" for ${modeKey}:`, err);
+                                        errorCount++;
                                       }
-                                      
-                                      await new Promise(resolve => setTimeout(resolve, 50));
-                                    } catch (err: any) {
-                                      console.error(`❌ Exception inserting feature "${trimmedKey}":`, err);
-                                      errorCount++;
                                     }
                                   }
                                   
@@ -1543,7 +1483,7 @@ const upsertUserAccess = async (
                                   }
                                   
                                   setEditingUserId(null);
-                                  setEditFeatures([]);
+                                  setEditFeaturesByMode(emptyModeFeatures());
                                   
                                   // Wait a bit for database to commit changes before reloading
                                   await new Promise(resolve => setTimeout(resolve, 300));
@@ -1565,7 +1505,15 @@ const upsertUserAccess = async (
                             className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
                             onClick={() => {
                               setEditingUserId(u.id);
-                              setEditFeatures(u.features);
+                              // Load features by mode from user's current access
+                              const featuresByMode = u.featuresByMode || emptyModeFeatures();
+                              console.log('📝 Loading edit features for user:', u.username, {
+                                featuresByMode,
+                                regular: featuresByMode.regular?.length || 0,
+                                itr: featuresByMode.itr?.length || 0,
+                                totalFeaturesAvailable: features.length
+                              });
+                              setEditFeaturesByMode(featuresByMode);
                             }}
                             type='button'
                           >
@@ -1578,33 +1526,77 @@ const upsertUserAccess = async (
                         All Access (Admin)
                       </span>
                     ) : editingUserId === u.id ? (
-                      <div className='flex flex-wrap gap-2 mt-2'>
-                        {features.map(f => (
-                          <label
-                            key={f.key}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs font-medium
-                            ${
-                              editFeatures.includes(f.key)
-                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
-                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
-                            }
-                          `}
-                          >
-                            <input
-                              type='checkbox'
-                              checked={editFeatures.includes(f.key)}
-                              onChange={() =>
-                                setEditFeatures(prev =>
-                                  prev.includes(f.key)
-                                    ? prev.filter(k => k !== f.key)
-                                    : [...prev, f.key]
-                                )
-                              }
-                              className='accent-blue-600 w-5 h-5'
-                            />
-                            <span>{f.name}</span>
-                          </label>
-                        ))}
+                      <div className='mt-4 space-y-6'>
+                        <div className='font-semibold mb-4 text-blue-800'>
+                          Feature Access by Mode
+                        </div>
+                        {features.length === 0 ? (
+                          <div className='text-red-600 text-sm p-4 bg-red-50 rounded border border-red-200'>
+                            No features available. Please refresh the page.
+                          </div>
+                        ) : (
+                          <div className='space-y-6'>
+                            {MODE_VALUES.map(modeKey => {
+                              const selected = editFeaturesByMode[modeKey] || [];
+                              return (
+                                <div
+                                  key={modeKey}
+                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-hidden'
+                                >
+                                  <div
+                                    className={`px-4 py-3 flex items-center justify-between text-white bg-gradient-to-r ${MODE_BADGES[modeKey].gradient}`}
+                                  >
+                                    <div className='flex items-center gap-2 text-base font-semibold'>
+                                      {modeKey === 'itr' ? (
+                                        <FileCheck className='w-5 h-5' />
+                                      ) : (
+                                        <Briefcase className='w-5 h-5' />
+                                      )}
+                                      {MODE_LABELS[modeKey]}
+                                    </div>
+                                    <span className='text-sm font-medium bg-white/20 px-3 py-1 rounded-full'>
+                                      {selected.length} selected
+                                    </span>
+                                  </div>
+                                  <div className='p-4'>
+                                    <div className='flex flex-wrap gap-2 sm:gap-3'>
+                                      {features.map(f => {
+                                        const isSelected = selected.includes(f.key);
+                                        return (
+                                          <label
+                                            key={`${modeKey}-${f.key}`}
+                                            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
+                                            ${
+                                              isSelected
+                                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
+                                            }
+                                          `}
+                                          >
+                                            <input
+                                              type='checkbox'
+                                              checked={isSelected}
+                                              onChange={e => {
+                                                e.stopPropagation();
+                                                handleEditFeatureToggle(modeKey, f.key);
+                                              }}
+                                              onClick={e => e.stopPropagation()}
+                                              className='accent-blue-600 w-5 h-5 cursor-pointer'
+                                            />
+                                            <span className='cursor-pointer'>{f.name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                    <p className='mt-3 text-xs text-gray-500'>
+                                      Select the features this user should have in {MODE_LABELS[modeKey]}. They will only see these options when using this mode.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : u.features.length === 0 ? (
                       <span className='inline-block bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-medium border border-gray-200'>
@@ -1825,7 +1817,7 @@ const upsertUserAccess = async (
                               className='ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1'
                               onClick={() => {
                                 setEditingUserId(null);
-                                setEditFeatures([]);
+                                setEditFeaturesByMode(emptyModeFeatures());
                               }}
                               type='button'
                             >
@@ -1838,159 +1830,84 @@ const upsertUserAccess = async (
                                 setLoading(true);
                                 try {
                                   const supportsMode = await ensureUserAccessModeSupport();
-                                  // Remove duplicates and filter
-                                  const uniqueFeatures = [...new Set(editFeatures.filter(f => f && f.trim()))];
                                   
                                   // STEP 1: Ensure all features exist in the features table
+                                  const allFeatureKeys = MODE_VALUES.flatMap(modeKey => 
+                                    normalizeFeatures(editFeaturesByMode[modeKey] || [])
+                                  );
+                                  const uniqueFeatureKeys = [...new Set(allFeatureKeys)];
+                                  
                                   console.log('🔧 Ensuring all features exist in features table...');
-                                  for (const featureKey of uniqueFeatures) {
+                                  for (const featureKey of uniqueFeatureKeys) {
                                     const trimmedKey = featureKey.trim();
                                     if (!trimmedKey) continue;
                                     
-                                    // Check if feature exists
-                                    const { data: existingFeature } = await supabase
-                                      .from('features')
-                                      .select('key')
-                                      .eq('key', trimmedKey)
-                                      .maybeSingle();
-                                    
-                                    if (!existingFeature) {
-                                      // Feature doesn't exist, create it
-                                      const featureDef = features.find(f => f.key === trimmedKey);
-                                      if (featureDef) {
-                                        const { error: featureError } = await supabase
-                                          .from('features')
-                                          .insert({
-                                            key: featureDef.key,
-                                            name: featureDef.name
-                                          });
-                                        
-                                        if (featureError && featureError.code !== '23505') {
-                                          console.error(`❌ Could not create feature "${trimmedKey}":`, featureError);
-                                          throw new Error(`Failed to create feature "${trimmedKey}": ${featureError.message}`);
-                                        }
+                                    const featureDef = features.find(f => f.key === trimmedKey);
+                                    if (featureDef) {
+                                      const { error: featureError } = await supabase
+                                        .from('features')
+                                        .upsert(
+                                          { key: featureDef.key, name: featureDef.name },
+                                          { onConflict: 'key' }
+                                        );
+                                      
+                                      if (featureError && featureError.code !== '23505' && featureError.code !== 'PGRST116') {
+                                        console.warn(`⚠️ Could not ensure feature "${trimmedKey}":`, featureError);
                                       }
                                     }
-                                    
                                     await new Promise(resolve => setTimeout(resolve, 50));
                                   }
                                   
-                                  // STEP 2: Remove all current access
-                                  let deleteQuery = supabase
+                                  // STEP 2: Remove all current access for this user
+                                  const { error: deleteError } = await supabase
                                     .from('user_access')
                                     .delete()
                                     .eq('user_id', u.id);
-                                  deleteQuery = applyModeFilter(deleteQuery, supportsMode, currentMode);
-                                  await deleteQuery;
                                   
-                                  // STEP 3: Add new access with proper error handling
+                                  if (deleteError) {
+                                    console.error('Error deleting existing access:', deleteError);
+                                  }
+                                  
+                                  // STEP 3: Add new access grouped by mode
                                   let successCount = 0;
                                   let errorCount = 0;
                                   
-                                  for (const featureKey of uniqueFeatures) {
-                                    const trimmedKey = featureKey.trim();
-                                    if (!trimmedKey) continue;
+                                  for (const modeKey of MODE_VALUES) {
+                                    const modeFeatures = normalizeFeatures(editFeaturesByMode[modeKey] || []);
                                     
-                                    try {
-                                      // Verify feature exists before inserting
-                                      const { data: verifyFeature } = await supabase
-                                        .from('features')
-                                        .select('key')
-                                        .eq('key', trimmedKey)
-                                        .maybeSingle();
+                                    for (const featureKey of modeFeatures) {
+                                      const trimmedKey = featureKey.trim();
+                                      if (!trimmedKey) continue;
                                       
-                                      if (!verifyFeature) {
-                                        console.error(`❌ Feature "${trimmedKey}" not found in database`);
-                                        errorCount++;
-                                        continue;
-                                      }
-                                      
-                                      // Use upsert to handle duplicates gracefully
-                                      const editPayload: Record<string, any> = {
-                                        user_id: u.id,
-                                        feature_key: trimmedKey,
-                                      };
-                                      if (supportsMode) {
-                                        editPayload.mode = currentMode;
-                                      }
-                                      const { error: insertError, data: insertData } = await upsertUserAccess(
-                                        editPayload,
-                                        supportsMode
-                                      );
-                                      
-                                      if (insertData && insertData.length > 0) {
-                                        console.log(`✅ Feature "${trimmedKey}" saved successfully`);
-                                        successCount++;
-                                      } else if (insertError) {
-                                        // Check for 409/duplicate errors - treat as success if record exists
-                                        const errorObj = insertError as any;
-                                        let httpStatus = null;
-                                        if (errorObj?.status) httpStatus = errorObj.status;
-                                        else if (errorObj?.statusCode) httpStatus = errorObj.statusCode;
-                                        else if (errorObj?.code === 'PGRST116') httpStatus = 409;
-                                        else if (errorObj?.response?.status) httpStatus = errorObj.response.status;
-                                        
-                                        const isDuplicate = 
-                                          insertError.code === '23505' || 
-                                          insertError.code === 'PGRST116' ||
-                                          httpStatus === 409 ||
-                                          insertError.message?.toLowerCase().includes('duplicate') ||
-                                          insertError.message?.toLowerCase().includes('conflict');
-                                        
-                                        // Check if it's a foreign key error vs duplicate
-                                        const isForeignKey = insertError.code === '23503' ||
-                                          insertError.message?.toLowerCase().includes('foreign key');
-                                        
-                                        if (isDuplicate || httpStatus === 409) {
-                                          // 409 or duplicate means it might already exist - verify
-                                          let verifyExistsQuery = supabase
-                                            .from('user_access')
-                                            .select('id')
-                                            .eq('user_id', u.id)
-                                            .eq('feature_key', trimmedKey);
-                                          verifyExistsQuery = applyModeFilter(verifyExistsQuery, supportsMode, currentMode);
-                                          const { data: verifyExists } = await verifyExistsQuery.maybeSingle();
-                                          
-                                          if (verifyExists) {
-                                            console.log(`ℹ️ Feature "${trimmedKey}" already exists (409 - treated as success)`);
-                                            successCount++;
-                                          } else {
-                                            // Doesn't exist but got 409 - this is strange, but try to insert anyway
-                                            console.warn(`⚠️ Got 409 but record doesn't exist, treating as success`);
-                                            successCount++;
-                                          }
-                                        } else if (isForeignKey) {
-                                          // Foreign key error - check which key is missing
-                                          console.error(`❌ Foreign key error for "${trimmedKey}":`, insertError);
-                                          errorCount++;
-                                        } else {
-                                          console.error(`❌ Error inserting feature "${trimmedKey}":`, insertError);
-                                          errorCount++;
+                                      try {
+                                        const editPayload: Record<string, any> = {
+                                          user_id: u.id,
+                                          feature_key: trimmedKey,
+                                        };
+                                        if (supportsMode) {
+                                          editPayload.mode = modeKey;
                                         }
-                                      } else {
-                                        // No error and no data - verify it exists or treat as success
-                                        let verifyNoErrorQuery = supabase
-                                          .from('user_access')
-                                          .select('id')
-                                          .eq('user_id', u.id)
-                                          .eq('feature_key', trimmedKey);
-                                        verifyNoErrorQuery = applyModeFilter(verifyNoErrorQuery, supportsMode, currentMode);
-                                        const { data: verifyNoError } = await verifyNoErrorQuery.maybeSingle();
                                         
-                                        if (verifyNoError) {
-                                          console.log(`✅ Feature "${trimmedKey}" exists (upsert returned no data but exists)`);
+                                        const { error: insertError, data: insertData } = await upsertUserAccess(
+                                          editPayload,
+                                          supportsMode
+                                        );
+                                        
+                                        if (insertData && insertData.length > 0) {
+                                          console.log(`✅ Feature "${trimmedKey}" saved for ${modeKey} mode`);
                                           successCount++;
+                                        } else if (insertError) {
+                                          console.error(`❌ Error inserting feature "${trimmedKey}" for ${modeKey}:`, insertError);
+                                          errorCount++;
                                         } else {
-                                          // Try one more time with a simple insert
-                                          console.warn(`⚠️ Upsert returned no data and no error, verifying...`);
-                                          successCount++; // Treat as success for now
+                                          successCount++;
                                         }
+                                        
+                                        await new Promise(resolve => setTimeout(resolve, 50));
+                                      } catch (err: any) {
+                                        console.error(`❌ Exception inserting feature "${trimmedKey}" for ${modeKey}:`, err);
+                                        errorCount++;
                                       }
-                                      
-                                      await new Promise(resolve => setTimeout(resolve, 50));
-                                    } catch (err: any) {
-                                      console.error(`❌ Exception inserting feature "${trimmedKey}":`, err);
-                                      errorCount++;
                                     }
                                   }
                                   
@@ -2007,7 +1924,7 @@ const upsertUserAccess = async (
                                   }
                                   
                                   setEditingUserId(null);
-                                  setEditFeatures([]);
+                                  setEditFeaturesByMode(emptyModeFeatures());
                                   
                                   // Wait a bit for database to commit changes before reloading
                                   await new Promise(resolve => setTimeout(resolve, 300));
@@ -2029,7 +1946,15 @@ const upsertUserAccess = async (
                             className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
                             onClick={() => {
                               setEditingUserId(u.id);
-                              setEditFeatures(u.features);
+                              // Load features by mode from user's current access
+                              const featuresByMode = u.featuresByMode || emptyModeFeatures();
+                              console.log('📝 Loading edit features for user:', u.username, {
+                                featuresByMode,
+                                regular: featuresByMode.regular?.length || 0,
+                                itr: featuresByMode.itr?.length || 0,
+                                totalFeaturesAvailable: features.length
+                              });
+                              setEditFeaturesByMode(featuresByMode);
                             }}
                             type='button'
                           >
@@ -2042,33 +1967,77 @@ const upsertUserAccess = async (
                         All Access (Admin)
                       </span>
                     ) : editingUserId === u.id ? (
-                      <div className='flex flex-wrap gap-2 mt-2'>
-                        {features.map(f => (
-                          <label
-                            key={f.key}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs font-medium
-                            ${
-                              editFeatures.includes(f.key)
-                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
-                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
-                            }
-                          `}
-                          >
-                            <input
-                              type='checkbox'
-                              checked={editFeatures.includes(f.key)}
-                              onChange={() =>
-                                setEditFeatures(prev =>
-                                  prev.includes(f.key)
-                                    ? prev.filter(k => k !== f.key)
-                                    : [...prev, f.key]
-                                )
-                              }
-                              className='accent-blue-600 w-5 h-5'
-                            />
-                            <span>{f.name}</span>
-                          </label>
-                        ))}
+                      <div className='mt-4 space-y-6'>
+                        <div className='font-semibold mb-4 text-blue-800'>
+                          Feature Access by Mode
+                        </div>
+                        {features.length === 0 ? (
+                          <div className='text-red-600 text-sm p-4 bg-red-50 rounded border border-red-200'>
+                            No features available. Please refresh the page.
+                          </div>
+                        ) : (
+                          <div className='space-y-6'>
+                            {MODE_VALUES.map(modeKey => {
+                              const selected = editFeaturesByMode[modeKey] || [];
+                              return (
+                                <div
+                                  key={modeKey}
+                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-hidden'
+                                >
+                                  <div
+                                    className={`px-4 py-3 flex items-center justify-between text-white bg-gradient-to-r ${MODE_BADGES[modeKey].gradient}`}
+                                  >
+                                    <div className='flex items-center gap-2 text-base font-semibold'>
+                                      {modeKey === 'itr' ? (
+                                        <FileCheck className='w-5 h-5' />
+                                      ) : (
+                                        <Briefcase className='w-5 h-5' />
+                                      )}
+                                      {MODE_LABELS[modeKey]}
+                                    </div>
+                                    <span className='text-sm font-medium bg-white/20 px-3 py-1 rounded-full'>
+                                      {selected.length} selected
+                                    </span>
+                                  </div>
+                                  <div className='p-4'>
+                                    <div className='flex flex-wrap gap-2 sm:gap-3'>
+                                      {features.map(f => {
+                                        const isSelected = selected.includes(f.key);
+                                        return (
+                                          <label
+                                            key={`${modeKey}-${f.key}`}
+                                            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow border-2 transition-all cursor-pointer select-none text-xs sm:text-sm font-medium
+                                            ${
+                                              isSelected
+                                                ? 'bg-gradient-to-r from-blue-200 to-indigo-200 text-blue-900 border-blue-400 scale-105'
+                                                : 'bg-blue-50 text-blue-800 border-blue-100 hover:border-blue-300 hover:bg-blue-100'
+                                            }
+                                          `}
+                                          >
+                                            <input
+                                              type='checkbox'
+                                              checked={isSelected}
+                                              onChange={e => {
+                                                e.stopPropagation();
+                                                handleEditFeatureToggle(modeKey, f.key);
+                                              }}
+                                              onClick={e => e.stopPropagation()}
+                                              className='accent-blue-600 w-5 h-5 cursor-pointer'
+                                            />
+                                            <span className='cursor-pointer'>{f.name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                    <p className='mt-3 text-xs text-gray-500'>
+                                      Select the features this user should have in {MODE_LABELS[modeKey]}. They will only see these options when using this mode.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : u.features.length === 0 ? (
                       <span className='inline-block bg-gray-100 text-gray-500 px-2 py-1 rounded-full text-xs font-medium border border-gray-200'>
