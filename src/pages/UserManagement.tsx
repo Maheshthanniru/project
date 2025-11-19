@@ -989,7 +989,7 @@ const upsertUserAccess = async (
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex flex-col'>
-      <div className='max-w-5xl w-full mx-auto py-8 px-4'>
+      <div className='max-w-7xl w-full mx-auto py-8 px-4'>
         {/* Header */}
         <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8'>
           <div>
@@ -1193,7 +1193,7 @@ const upsertUserAccess = async (
                 <Shield className='w-5 h-5 text-green-600' />
                 Admins ({users.filter(u => u.is_admin).length})
               </h2>
-              <div className='flex flex-col gap-4'>
+              <div className='flex flex-col gap-6'>
                 {users.filter(u => u.is_admin).map(u => {
                   const regularFeatureCount = u.featuresByMode?.regular?.length || 0;
                   const itrFeatureCount = u.featuresByMode?.itr?.length || 0;
@@ -1201,7 +1201,7 @@ const upsertUserAccess = async (
                   return (
             <div
               key={u.id}
-              className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
+              className={`group flex flex-col border rounded-xl shadow-md px-10 py-8 transition-shadow hover:shadow-lg bg-white relative w-full overflow-visible ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
               onMouseEnter={() =>
                 setExpandedUserId(expandedUserId === u.id ? null : u.id)
               }
@@ -1214,14 +1214,14 @@ const upsertUserAccess = async (
                   setExpandedUserId(expandedUserId === u.id ? null : u.id)
                 }
               >
-                <div className='flex items-center gap-4 flex-1 min-w-0'>
+                <div className='flex items-center gap-5 flex-1 min-w-0'>
                   {/* Avatar */}
-                  <div className='w-14 h-14 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg border-4 border-white'>
+                  <div className='w-20 h-20 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-3xl font-bold text-white shadow-lg border-4 border-white'>
                     {u.username.charAt(0).toUpperCase()}
                   </div>
                   <div className='flex flex-col min-w-0'>
-                    <div className='flex items-center gap-2 mb-1'>
-                      <span className='text-lg font-semibold text-blue-900 truncate max-w-[120px]'>
+                    <div className='flex items-center gap-2 mb-2'>
+                      <span className='text-xl font-semibold text-blue-900 truncate max-w-[200px]'>
                         {u.username}
                       </span>
                       {u.is_admin && (
@@ -1337,12 +1337,12 @@ const upsertUserAccess = async (
               </div>
               {/* Expanded Details (on click) */}
               <div
-                className={`transition-all duration-200 overflow-hidden ${expandedUserId === u.id ? 'max-h-96 opacity-100 py-3 px-0' : 'max-h-0 opacity-0 py-0 px-0'} w-full bg-gray-50 rounded-b-2xl border-t border-gray-100`}
+                className={`transition-all duration-200 ${editingUserId === u.id ? 'overflow-visible' : 'overflow-hidden'} ${expandedUserId === u.id ? (editingUserId === u.id ? 'max-h-none opacity-100 py-3 px-0' : 'max-h-96 opacity-100 py-3 px-0') : 'max-h-0 opacity-0 py-0 px-0'} w-full bg-gray-50 rounded-b-2xl border-t border-gray-100`}
                 style={{
                   pointerEvents: expandedUserId === u.id ? 'auto' : 'none',
                 }}
               >
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4 px-2 md:px-6'>
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 px-2 md:px-6 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                   <div>
                     <div className='mb-1 text-xs text-gray-500'>Username</div>
                     <div className='text-gray-800 font-medium'>
@@ -1366,7 +1366,7 @@ const upsertUserAccess = async (
                       {renderModeBadge('itr', itrFeatureCount, 'detail')}
                     </div>
                   </div>
-                  <div className='md:col-span-2'>
+                  <div className={`md:col-span-2 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                     <div className='mb-1 text-xs text-gray-500 flex items-center gap-2'>
                       Feature Access
                       {!u.is_admin &&
@@ -1506,14 +1506,30 @@ const upsertUserAccess = async (
                             onClick={() => {
                               setEditingUserId(u.id);
                               // Load features by mode from user's current access
-                              const featuresByMode = u.featuresByMode || emptyModeFeatures();
+                              // Ensure both regular and itr keys exist by merging with emptyModeFeatures
+                              const baseFeatures = emptyModeFeatures();
+                              const userFeatures = u.featuresByMode || {};
+                              // Ensure both keys exist and are arrays
+                              const featuresByMode: Record<ModeKey, string[]> = {
+                                regular: Array.isArray(userFeatures.regular) ? userFeatures.regular : baseFeatures.regular,
+                                itr: Array.isArray(userFeatures.itr) ? userFeatures.itr : baseFeatures.itr,
+                              };
                               console.log('📝 Loading edit features for user:', u.username, {
                                 featuresByMode,
                                 regular: featuresByMode.regular?.length || 0,
                                 itr: featuresByMode.itr?.length || 0,
-                                totalFeaturesAvailable: features.length
+                                totalFeaturesAvailable: features.length,
+                                hasRegularKey: 'regular' in featuresByMode,
+                                hasItrKey: 'itr' in featuresByMode,
+                                MODE_VALUES: MODE_VALUES
                               });
-                              setEditFeaturesByMode(featuresByMode);
+                              // Force ensure both keys exist before setting state
+                              const finalFeaturesByMode: Record<ModeKey, string[]> = {
+                                regular: Array.isArray(featuresByMode.regular) ? featuresByMode.regular : [],
+                                itr: Array.isArray(featuresByMode.itr) ? featuresByMode.itr : [],
+                              };
+                              console.log('✅ Setting editFeaturesByMode with both modes:', finalFeaturesByMode);
+                              setEditFeaturesByMode(finalFeaturesByMode);
                             }}
                             type='button'
                           >
@@ -1526,7 +1542,7 @@ const upsertUserAccess = async (
                         All Access (Admin)
                       </span>
                     ) : editingUserId === u.id ? (
-                      <div className='mt-4 space-y-6'>
+                      <div className='mt-4 space-y-6 w-full overflow-visible'>
                         <div className='font-semibold mb-4 text-blue-800'>
                           Feature Access by Mode
                         </div>
@@ -1535,13 +1551,18 @@ const upsertUserAccess = async (
                             No features available. Please refresh the page.
                           </div>
                         ) : (
-                          <div className='space-y-6'>
+                          <div className='space-y-6 w-full overflow-visible'>
                             {MODE_VALUES.map(modeKey => {
-                              const selected = editFeaturesByMode[modeKey] || [];
+                              // Ensure both regular and itr keys exist in editFeaturesByMode
+                              const safeEditFeatures = {
+                                regular: editFeaturesByMode?.regular || [],
+                                itr: editFeaturesByMode?.itr || [],
+                              };
+                              const selected = safeEditFeatures[modeKey] || [];
                               return (
                                 <div
                                   key={modeKey}
-                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-hidden'
+                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-visible'
                                 >
                                   <div
                                     className={`px-4 py-3 flex items-center justify-between text-white bg-gradient-to-r ${MODE_BADGES[modeKey].gradient}`}
@@ -1634,7 +1655,7 @@ const upsertUserAccess = async (
                 <UserIcon className='w-5 h-5 text-blue-600' />
                 Users ({users.filter(u => !u.is_admin).length})
               </h2>
-              <div className='flex flex-col gap-4'>
+              <div className='flex flex-col gap-6'>
                 {users.filter(u => !u.is_admin).map(u => {
                   const regularFeatureCount = u.featuresByMode?.regular?.length || 0;
                   const itrFeatureCount = u.featuresByMode?.itr?.length || 0;
@@ -1642,7 +1663,7 @@ const upsertUserAccess = async (
                   return (
             <div
               key={u.id}
-              className={`group flex flex-col border rounded-xl shadow-md px-6 py-4 transition-shadow hover:shadow-lg bg-white relative ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
+              className={`group flex flex-col border rounded-xl shadow-md px-10 py-8 transition-shadow hover:shadow-lg bg-white relative w-full overflow-visible ${expandedUserId === u.id ? 'ring-2 ring-blue-200' : 'bg-white border-gray-200'}`}
               onMouseEnter={() =>
                 setExpandedUserId(expandedUserId === u.id ? null : u.id)
               }
@@ -1655,14 +1676,14 @@ const upsertUserAccess = async (
                   setExpandedUserId(expandedUserId === u.id ? null : u.id)
                 }
               >
-                <div className='flex items-center gap-4 flex-1 min-w-0'>
+                <div className='flex items-center gap-5 flex-1 min-w-0'>
                   {/* Avatar */}
-                  <div className='w-14 h-14 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg border-4 border-white'>
+                  <div className='w-20 h-20 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-3xl font-bold text-white shadow-lg border-4 border-white'>
                     {u.username.charAt(0).toUpperCase()}
                   </div>
                   <div className='flex flex-col min-w-0'>
-                    <div className='flex items-center gap-2 mb-1'>
-                      <span className='text-lg font-semibold text-blue-900 truncate max-w-[120px]'>
+                    <div className='flex items-center gap-2 mb-2'>
+                      <span className='text-xl font-semibold text-blue-900 truncate max-w-[200px]'>
                         {u.username}
                       </span>
                       {u.is_admin && (
@@ -1778,12 +1799,12 @@ const upsertUserAccess = async (
               </div>
               {/* Expanded Details (on click) */}
               <div
-                className={`transition-all duration-200 overflow-hidden ${expandedUserId === u.id ? 'max-h-96 opacity-100 py-3 px-0' : 'max-h-0 opacity-0 py-0 px-0'} w-full bg-gray-50 rounded-b-2xl border-t border-gray-100`}
+                className={`transition-all duration-200 ${editingUserId === u.id ? 'overflow-visible' : 'overflow-hidden'} ${expandedUserId === u.id ? (editingUserId === u.id ? 'max-h-none opacity-100 py-3 px-0' : 'max-h-96 opacity-100 py-3 px-0') : 'max-h-0 opacity-0 py-0 px-0'} w-full bg-gray-50 rounded-b-2xl border-t border-gray-100`}
                 style={{
                   pointerEvents: expandedUserId === u.id ? 'auto' : 'none',
                 }}
               >
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4 px-2 md:px-6'>
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 px-2 md:px-6 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                   <div>
                     <div className='mb-1 text-xs text-gray-500'>Username</div>
                     <div className='text-gray-800 font-medium'>
@@ -1807,7 +1828,7 @@ const upsertUserAccess = async (
                       {renderModeBadge('itr', itrFeatureCount, 'detail')}
                     </div>
                   </div>
-                  <div className='md:col-span-2'>
+                  <div className={`md:col-span-2 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                     <div className='mb-1 text-xs text-gray-500 flex items-center gap-2'>
                       Feature Access
                       {!u.is_admin &&
@@ -1947,14 +1968,30 @@ const upsertUserAccess = async (
                             onClick={() => {
                               setEditingUserId(u.id);
                               // Load features by mode from user's current access
-                              const featuresByMode = u.featuresByMode || emptyModeFeatures();
+                              // Ensure both regular and itr keys exist by merging with emptyModeFeatures
+                              const baseFeatures = emptyModeFeatures();
+                              const userFeatures = u.featuresByMode || {};
+                              // Ensure both keys exist and are arrays
+                              const featuresByMode: Record<ModeKey, string[]> = {
+                                regular: Array.isArray(userFeatures.regular) ? userFeatures.regular : baseFeatures.regular,
+                                itr: Array.isArray(userFeatures.itr) ? userFeatures.itr : baseFeatures.itr,
+                              };
                               console.log('📝 Loading edit features for user:', u.username, {
                                 featuresByMode,
                                 regular: featuresByMode.regular?.length || 0,
                                 itr: featuresByMode.itr?.length || 0,
-                                totalFeaturesAvailable: features.length
+                                totalFeaturesAvailable: features.length,
+                                hasRegularKey: 'regular' in featuresByMode,
+                                hasItrKey: 'itr' in featuresByMode,
+                                MODE_VALUES: MODE_VALUES
                               });
-                              setEditFeaturesByMode(featuresByMode);
+                              // Force ensure both keys exist before setting state
+                              const finalFeaturesByMode: Record<ModeKey, string[]> = {
+                                regular: Array.isArray(featuresByMode.regular) ? featuresByMode.regular : [],
+                                itr: Array.isArray(featuresByMode.itr) ? featuresByMode.itr : [],
+                              };
+                              console.log('✅ Setting editFeaturesByMode with both modes:', finalFeaturesByMode);
+                              setEditFeaturesByMode(finalFeaturesByMode);
                             }}
                             type='button'
                           >
@@ -1967,7 +2004,7 @@ const upsertUserAccess = async (
                         All Access (Admin)
                       </span>
                     ) : editingUserId === u.id ? (
-                      <div className='mt-4 space-y-6'>
+                      <div className='mt-4 space-y-6 w-full overflow-visible'>
                         <div className='font-semibold mb-4 text-blue-800'>
                           Feature Access by Mode
                         </div>
@@ -1976,13 +2013,18 @@ const upsertUserAccess = async (
                             No features available. Please refresh the page.
                           </div>
                         ) : (
-                          <div className='space-y-6'>
+                          <div className='space-y-6 w-full overflow-visible'>
                             {MODE_VALUES.map(modeKey => {
-                              const selected = editFeaturesByMode[modeKey] || [];
+                              // Ensure both regular and itr keys exist in editFeaturesByMode
+                              const safeEditFeatures = {
+                                regular: editFeaturesByMode?.regular || [],
+                                itr: editFeaturesByMode?.itr || [],
+                              };
+                              const selected = safeEditFeatures[modeKey] || [];
                               return (
                                 <div
                                   key={modeKey}
-                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-hidden'
+                                  className='border border-gray-200 rounded-2xl shadow-sm overflow-visible'
                                 >
                                   <div
                                     className={`px-4 py-3 flex items-center justify-between text-white bg-gradient-to-r ${MODE_BADGES[modeKey].gradient}`}
