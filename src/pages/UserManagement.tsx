@@ -1017,14 +1017,6 @@ const upsertUserAccess = async (
               <span>
                 Total Users: <span className='font-semibold text-gray-700'>{users.length}</span>
               </span>
-              <span className='text-gray-300'>|</span>
-              <span>
-                Regular Access: <span className='font-semibold text-blue-700'>{users.filter(u => u.mode === 'regular').length}</span>
-              </span>
-              <span className='text-gray-300'>|</span>
-              <span>
-                ITR Access: <span className='font-semibold text-orange-700'>{users.filter(u => u.mode === 'itr').length}</span>
-              </span>
             </div>
           </div>
           <Button
@@ -1255,17 +1247,8 @@ const upsertUserAccess = async (
                           )}
                         </span>
                       )}
-                      <div className='flex flex-wrap gap-2 mt-1'>
-                        {renderModeBadge('regular', regularFeatureCount, 'summary')}
-                        {renderModeBadge('itr', itrFeatureCount, 'summary')}
-                      </div>
                     </div>
                     <div className='flex flex-wrap gap-2 items-center'>
-                      {/* Mode Access Badge */}
-                      <div className='flex flex-wrap gap-2'>
-                        {renderModeBadge('regular', regularFeatureCount, 'detail')}
-                        {renderModeBadge('itr', itrFeatureCount, 'detail')}
-                      </div>
                       {u.is_admin ? (
                         <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
                           All Access (Admin)
@@ -1357,15 +1340,6 @@ const upsertUserAccess = async (
                       {u.is_admin ? 'Admin' : 'User'}
                     </div>
                   </div>
-                  <div>
-                    <div className='mb-1 text-xs text-gray-500'>
-                      Mode Access
-                    </div>
-                    <div className='flex flex-wrap gap-2'>
-                      {renderModeBadge('regular', regularFeatureCount, 'detail')}
-                      {renderModeBadge('itr', itrFeatureCount, 'detail')}
-                    </div>
-                  </div>
                   <div className={`md:col-span-2 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                     <div className='mb-1 text-xs text-gray-500 flex items-center gap-2'>
                       Feature Access
@@ -1374,9 +1348,17 @@ const upsertUserAccess = async (
                           <>
                             <button
                               className='ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1'
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // Save current scroll position
+                                const scrollY = window.scrollY;
                                 setEditingUserId(null);
                                 setEditFeaturesByMode(emptyModeFeatures());
+                                // Restore scroll position after state update
+                                requestAnimationFrame(() => {
+                                  window.scrollTo(0, scrollY);
+                                });
                               }}
                               type='button'
                             >
@@ -1503,7 +1485,11 @@ const upsertUserAccess = async (
                         ) : (
                           <button
                             className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // Save current scroll position
+                              const scrollY = window.scrollY;
                               setEditingUserId(u.id);
                               // Load features by mode from user's current access
                               // Ensure both regular and itr keys exist by merging with emptyModeFeatures
@@ -1530,6 +1516,10 @@ const upsertUserAccess = async (
                               };
                               console.log('✅ Setting editFeaturesByMode with both modes:', finalFeaturesByMode);
                               setEditFeaturesByMode(finalFeaturesByMode);
+                              // Restore scroll position after state update
+                              requestAnimationFrame(() => {
+                                window.scrollTo(0, scrollY);
+                              });
                             }}
                             type='button'
                           >
@@ -1717,17 +1707,8 @@ const upsertUserAccess = async (
                           )}
                         </span>
                       )}
-                      <div className='flex flex-wrap gap-2 mt-1'>
-                        {renderModeBadge('regular', regularFeatureCount, 'summary')}
-                        {renderModeBadge('itr', itrFeatureCount, 'summary')}
-                      </div>
                     </div>
                     <div className='flex flex-wrap gap-2 items-center'>
-                      {/* Mode Access Badge */}
-                      <div className='flex flex-wrap gap-2'>
-                        {renderModeBadge('regular', regularFeatureCount, 'detail')}
-                        {renderModeBadge('itr', itrFeatureCount, 'detail')}
-                      </div>
                       {u.is_admin ? (
                         <span className='inline-block bg-gradient-to-r from-green-100 to-green-300 text-green-900 px-3 py-1 rounded-full text-xs font-semibold border border-green-200 shadow-sm'>
                           All Access (Admin)
@@ -1819,15 +1800,6 @@ const upsertUserAccess = async (
                       {u.is_admin ? 'Admin' : 'User'}
                     </div>
                   </div>
-                  <div>
-                    <div className='mb-1 text-xs text-gray-500'>
-                      Mode Access
-                    </div>
-                    <div className='flex flex-wrap gap-2'>
-                      {renderModeBadge('regular', regularFeatureCount, 'detail')}
-                      {renderModeBadge('itr', itrFeatureCount, 'detail')}
-                    </div>
-                  </div>
                   <div className={`md:col-span-2 ${editingUserId === u.id ? 'overflow-visible' : ''}`}>
                     <div className='mb-1 text-xs text-gray-500 flex items-center gap-2'>
                       Feature Access
@@ -1836,9 +1808,17 @@ const upsertUserAccess = async (
                           <>
                             <button
                               className='ml-2 text-gray-500 hover:text-blue-700 text-xs flex items-center gap-1'
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // Save current scroll position
+                                const scrollY = window.scrollY;
                                 setEditingUserId(null);
                                 setEditFeaturesByMode(emptyModeFeatures());
+                                // Restore scroll position after state update
+                                requestAnimationFrame(() => {
+                                  window.scrollTo(0, scrollY);
+                                });
                               }}
                               type='button'
                             >
@@ -1965,7 +1945,11 @@ const upsertUserAccess = async (
                         ) : (
                           <button
                             className='ml-2 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1'
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // Save current scroll position
+                              const scrollY = window.scrollY;
                               setEditingUserId(u.id);
                               // Load features by mode from user's current access
                               // Ensure both regular and itr keys exist by merging with emptyModeFeatures
@@ -1992,6 +1976,10 @@ const upsertUserAccess = async (
                               };
                               console.log('✅ Setting editFeaturesByMode with both modes:', finalFeaturesByMode);
                               setEditFeaturesByMode(finalFeaturesByMode);
+                              // Restore scroll position after state update
+                              requestAnimationFrame(() => {
+                                window.scrollTo(0, scrollY);
+                              });
                             }}
                             type='button'
                           >
